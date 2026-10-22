@@ -45,3 +45,17 @@ test('adjacent legacy timestamps and the same filenames never fabricate a shared
   assert.equal(parseReceiptBatchRequestId('image-analysis-batch-1790000000000-token--0-6'), null)
   assert.equal(parseReceiptBatchRequestId('image-analysis-batch-1790000000000-token--7-6'), null)
 })
+
+test('retries retain their original date, batch and positions when the same histories are updated later', () => {
+  const rows = batch(3, Date.parse('2026-10-20T11:34:12Z'), 'retries')
+  rows[1].status = 'FAILED'
+  rows[2].status = 'FAILED'
+  const before = groupReceiptHistoryRequests(rows, options)[0]
+  for (const row of rows.slice(1)) Object.assign(row, { status: 'COMPLETED', updatedAt: '2026-10-22T12:00:00', summary: 'retried result' })
+  const after = groupReceiptHistoryRequests(rows, options)[0]
+  assert.equal(after.key, before.key)
+  assert.equal(after.batches.length, 1)
+  assert.equal(after.batches[0].key, before.batches[0].key)
+  assert.equal(after.batches[0].totalCount, 3)
+  assert.deepEqual(after.batches[0].items.map(row => row.id), [1, 2, 3])
+})

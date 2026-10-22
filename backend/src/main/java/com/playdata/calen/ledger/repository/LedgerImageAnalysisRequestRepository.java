@@ -20,6 +20,22 @@ public interface LedgerImageAnalysisRequestRepository extends JpaRepository<Ledg
 
     Optional<LedgerImageAnalysisRequest> findByClientRequestIdAndOwnerId(String clientRequestId, Long ownerId);
 
+    /** Restart the same history without changing its original identity, image or batch metadata. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LedgerImageAnalysisRequest request
+            set request.status = com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.PROCESSING,
+                request.version = request.version + 1, request.updatedAt = :now,
+                request.documentType = :documentType, request.effectivePrompt = :prompt,
+                request.summary = 'AI 이미지 분석을 다시 요청했습니다.', request.errorMessage = null,
+                request.resultJson = null, request.rawText = null, request.completedAt = null, request.cancelledAt = null
+            where request.id = :id and request.owner.id = :ownerId and request.version = :version
+              and request.status <> com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.PROCESSING
+            """)
+    int restart(@Param("id") Long id, @Param("ownerId") Long ownerId, @Param("version") Long version,
+            @Param("documentType") String documentType, @Param("prompt") String prompt, @Param("now") LocalDateTime now);
+
     interface CompletedReviewRow {
         Long getId();
         String getResultJson();
@@ -68,6 +84,21 @@ public interface LedgerImageAnalysisRequestRepository extends JpaRepository<Ledg
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update LedgerImageAnalysisRequest request
+            set request.status = com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.COMPLETED,
+                request.version = request.version + 1, request.completedAt = :now, request.updatedAt = :now,
+                request.documentType = :documentType, request.rawText = :rawText,
+                request.summary = :summary, request.resultJson = :resultJson, request.errorMessage = null
+            where request.id = :id and request.owner.id = :ownerId and request.version = :version
+              and request.status = com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.PROCESSING
+            """)
+    int completeAttempt(@Param("id") Long id, @Param("ownerId") Long ownerId, @Param("version") Long version,
+            @Param("documentType") String documentType, @Param("rawText") String rawText,
+            @Param("summary") String summary, @Param("resultJson") String resultJson, @Param("now") LocalDateTime now);
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LedgerImageAnalysisRequest request
             set request.status = com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.FAILED,
                 request.version = request.version + 1, request.completedAt = :now, request.updatedAt = :now,
                 request.errorMessage = :errorMessage, request.summary = :summary
@@ -75,6 +106,19 @@ public interface LedgerImageAnalysisRequestRepository extends JpaRepository<Ledg
               and request.status = com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.PROCESSING
             """)
     int failProcessing(@Param("id") Long id, @Param("ownerId") Long ownerId,
+            @Param("errorMessage") String errorMessage, @Param("summary") String summary, @Param("now") LocalDateTime now);
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LedgerImageAnalysisRequest request
+            set request.status = com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.FAILED,
+                request.version = request.version + 1, request.completedAt = :now, request.updatedAt = :now,
+                request.errorMessage = :errorMessage, request.summary = :summary
+            where request.id = :id and request.owner.id = :ownerId and request.version = :version
+              and request.status = com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.PROCESSING
+            """)
+    int failAttempt(@Param("id") Long id, @Param("ownerId") Long ownerId, @Param("version") Long version,
             @Param("errorMessage") String errorMessage, @Param("summary") String summary, @Param("now") LocalDateTime now);
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

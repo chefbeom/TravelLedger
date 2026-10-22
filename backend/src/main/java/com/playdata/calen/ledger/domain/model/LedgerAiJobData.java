@@ -7,7 +7,10 @@ public final class LedgerAiJobData {
     private LedgerAiJobData() {}
     public sealed interface Job permits AnalysisJob, ImageJob, ExcelJob {}
     public record AnalysisJob(Long ownerId, Long id) implements Job {}
-    public record ImageJob(Long ownerId, Long id) implements Job {}
+    /** Reusing an image history requires rejecting responses from an earlier attempt. */
+    public record ImageJob(Long ownerId, Long id, Long version) implements Job {
+        public ImageJob(Long ownerId, Long id) { this(ownerId, id, null); }
+    }
     /** The version read before inference must accompany every Excel terminal write. */
     public record ExcelJob(Long ownerId, String id, Long version) implements Job {}
     public record ImageText(String documentType, String rawText) {}

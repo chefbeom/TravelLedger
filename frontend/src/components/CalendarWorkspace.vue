@@ -5315,7 +5315,7 @@ defineExpose({
             <div v-else class="receipt-ocr-detail-tools">
               <div class="receipt-ocr-detail-tools__copy">
                 <strong>재요청 검수</strong>
-                <span>현재 세션에 원본 이미지가 남아 있을 때만 같은 이미지로 다시 검수할 수 있습니다.</span>
+                <span>같은 이미지로 다시 검수하며, 기존 요청 묶음과 항목은 유지하고 분석 결과만 갱신합니다.</span>
               </div>
               <div class="receipt-ocr-detail-tools__controls" aria-label="재요청 옵션">
                 <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle" title="기존 가계부 입력 형식을 참고합니다. 정확하지 않으면 끄세요.">
@@ -5394,7 +5394,7 @@ defineExpose({
                       <div><strong>{{ batch.isLegacy ? '개별 요청 1건' : `${batch.totalCount}건 요청 묶음` }}</strong><time>{{ formatReceiptBatchTime(batch) }}</time></div>
                       <span>{{ batch.items.length < batch.totalCount ? '현재 페이지 · ' : '' }}{{ receiptBatchStatusLabel(batch) }}</span>
                     </header>
-                    <p v-if="batch.isLegacy" class="receipt-ocr-history__request-note">묶음 정보가 없는 이전 내역 또는 개별 재요청입니다.</p>
+                    <p v-if="batch.isLegacy" class="receipt-ocr-history__request-note">묶음 정보가 없는 이전 내역 또는 개별 요청입니다.</p>
                     <p v-else-if="batch.items.length < batch.totalCount" class="receipt-ocr-history__request-note">이 페이지에 {{ batch.items.length }}/{{ batch.totalCount }}건 표시 · 나머지는 요청 대기·다른 페이지·삭제/취소 내역일 수 있습니다.</p>
                   <template v-if="receiptHistoryView.mode === 'list'">
                   <article

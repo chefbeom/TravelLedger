@@ -875,6 +875,95 @@ class LedgerAiJobPersistenceTest {
         verify(storage).delete("fixture/wrong-owner-input");
     }
 
+    @Test void retryingTwoFailedImagesReusesTheOriginalThreeImageBatchAndItsStoredInputs() throws Exception {
+        var batch = "image-analysis-batch-1792454400000-fixture--";
+        var first = failedStoredImage(batch + "1-3");
+        first.setStatus(com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.COMPLETED);
+        images.saveAndFlush(first);
+        var second = failedStoredImage(batch + "2-3");
+        var third = failedStoredImage(batch + "3-3");
+        long count = images.count();
+        var storage = mock(LedgerImageStoragePort.class);
+        when(storage.load(anyString(), any(), any())).thenReturn(
+                new LedgerImageStorageData.StoredImageContent(jpegBytes(), "image/jpeg", "receipt.jpg"));
+        installStorage(storage);
+        var leases = new WorkLeaseService(dataSource, transactionManager);
+        ReflectionTestUtils.setField(imageService, "workLeases", leases);
+
+        for (var original : List.of(second, third)) {
+            var accepted = imageService.startReanalyzeHistoryImage(owner.getId(), original.getId(), "RECEIPT", "retry prompt", false);
+            assertThat(accepted.analysisId()).isEqualTo(original.getId());
+            assertThat(accepted.clientRequestId()).isEqualTo(original.getClientRequestId());
+            assertThat(accepted.analysisStatus()).isEqualTo("PROCESSING");
+            var pending = images.findById(original.getId()).orElseThrow();
+            assertThat(pending.getResultJson()).isNull(); assertThat(pending.getErrorMessage()).isNull();
+            assertThat(pending.getCompletedAt()).isNull(); assertThat(pending.getCancelledAt()).isNull();
+            // Repeated clicks while processing join the same attempt rather than queueing a duplicate.
+            assertThat(imageService.startReanalyzeHistoryImage(owner.getId(), original.getId(), "AUTO", "again", false).analysisId())
+                    .isEqualTo(original.getId());
+        }
+        assertThat(imageExecutor.tasks).hasSize(2);
+        for (var task : imageExecutor.tasks) runWorker(task);
+        assertThat(images.count()).isEqualTo(count);
+        for (var original : List.of(second, third)) {
+            var completed = images.findById(original.getId()).orElseThrow();
+            assertThat(completed.getStatus().name()).isEqualTo("COMPLETED");
+            assertThat(completed.getCreatedAt()).isEqualTo(original.getCreatedAt());
+            assertThat(completed.getClientRequestId()).isEqualTo(original.getClientRequestId());
+            assertThat(completed.getImageObjectKey()).isEqualTo(original.getImageObjectKey());
+            assertThat(completed.getEffectivePrompt()).contains("retry prompt");
+            try (var released = leases.tryAcquire("image-job:" + completed.getId(), Duration.ofMinutes(2))) {
+                assertThat(released).isNotNull();
+            }
+        }
+        verify(storage, never()).store(any(), any(), any());
+    }
+
+    @Test void failedRerunCanRetryAgainInPlaceUsingTheLocalFileIfTheOriginalWasNotStored() throws Exception {
+        var original = failedStoredImage("retry-local-file");
+        original.setImageObjectKey(null); original = images.saveAndFlush(original);
+        long count = images.count();
+        when(imageRemote.analyze(any(), anyString(), any())).thenThrow(new BadRequestException("fixture failed again"))
+                .thenReturn(new LedgerImageData.ImageExtraction(true, null, "AUTO", "retried result", null, List.of(), Map.of()));
+        for (int attempt = 0; attempt < 2; attempt++) {
+            var accepted = imageService.startReanalyzeHistoryImage(owner.getId(), original.getId(), "AUTO", "", false, null, null, image());
+            assertThat(accepted.analysisId()).isEqualTo(original.getId());
+            runWorker(imageExecutor.tasks.get(attempt));
+            assertThat(images.findById(original.getId()).orElseThrow().getStatus().name()).isEqualTo(attempt == 0 ? "FAILED" : "COMPLETED");
+            assertThat(images.count()).isEqualTo(count);
+        }
+    }
+
+    @Test void aPriorImageAttemptCannotCompleteOrFailTheReplacementAfterCancellationAndRestart() {
+        var original = failedStoredImage("attempt-fence");
+        assertThat(images.restart(original.getId(), owner.getId(), original.getVersion(), "AUTO", "first", LocalDateTime.now())).isEqualTo(1);
+        var prior = images.findById(original.getId()).orElseThrow();
+        images.cancelProcessing(original.getId(), owner.getId(), "cancelled", LocalDateTime.now());
+        var cancelled = images.findById(original.getId()).orElseThrow();
+        assertThat(images.restart(original.getId(), owner.getId() + 100000, cancelled.getVersion(), "AUTO", "wrong owner", LocalDateTime.now())).isZero();
+        assertThat(images.restart(original.getId(), owner.getId(), prior.getVersion(), "AUTO", "stale restart", LocalDateTime.now())).isZero();
+        assertThat(images.restart(original.getId(), owner.getId(), cancelled.getVersion(), "AUTO", "replacement", LocalDateTime.now())).isEqualTo(1);
+        var replacement = images.findById(original.getId()).orElseThrow();
+        assertThat(finalizer.complete(new Completion(new ImageJob(owner.getId(), original.getId(), prior.getVersion()),
+                "stale completion", "{}", new ImageText("AUTO", "stale"), LocalDateTime.now()))).isFalse();
+        assertThat(finalizer.fail(new Failure(new ImageJob(owner.getId(), original.getId(), prior.getVersion()),
+                "stale failure", "stale", LocalDateTime.now()))).isFalse();
+        assertThat(images.findById(original.getId()).orElseThrow().getVersion()).isEqualTo(replacement.getVersion());
+        assertThat(finalizer.complete(new Completion(new ImageJob(owner.getId(), original.getId(), replacement.getVersion()),
+                "replacement completed", "{}", new ImageText("AUTO", "replacement"), LocalDateTime.now()))).isTrue();
+    }
+
+    private com.playdata.calen.ledger.domain.LedgerImageAnalysisRequest failedStoredImage(String requestId) {
+        var history = new com.playdata.calen.ledger.domain.LedgerImageAnalysisRequest();
+        history.setOwner(owner); history.setClientRequestId(requestId); history.setFileName("receipt.jpg");
+        history.setContentType("image/jpeg"); history.setFileSizeBytes(4); history.setImageObjectKey("fixture/" + requestId);
+        history.setStatus(com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.FAILED);
+        history.setErrorMessage("fixture failure"); history.setResultJson("{}");
+        history.setCreatedAt(LocalDateTime.of(2026, 10, 20, 12, 0));
+        history.setCompletedAt(LocalDateTime.now()); history.setCancelledAt(LocalDateTime.now());
+        return images.saveAndFlush(history);
+    }
+
     private void installStorage(LedgerImageStoragePort storage) {
         ReflectionTestUtils.setField(imageService,"imageStorageService",storage);
         ReflectionTestUtils.setField(imageService,"imageInputWriter",

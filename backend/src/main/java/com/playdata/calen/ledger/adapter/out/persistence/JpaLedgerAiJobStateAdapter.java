@@ -17,7 +17,7 @@ public class JpaLedgerAiJobStateAdapter implements LedgerAiJobStatePort {
         if (command.job() instanceof AnalysisJob job)
             return analyses.completeProcessing(job.id(), job.ownerId(), command.summary(), command.resultJson());
         if (command.job() instanceof ImageJob job)
-            return images.completeProcessing(job.id(), job.ownerId(), command.image().documentType(), command.image().rawText(),
+            return images.completeAttempt(job.id(), job.ownerId(), job.version(), command.image().documentType(), command.image().rawText(),
                     command.summary(), command.resultJson(), command.at());
         var job = (ExcelJob) command.job();
         return excel.completeProcessing(job.id(), job.ownerId(), job.version(), command.resultJson());
@@ -25,7 +25,7 @@ public class JpaLedgerAiJobStateAdapter implements LedgerAiJobStatePort {
     @Override public int failProcessing(Failure command) {
         if (command.job() instanceof AnalysisJob job) return analyses.failProcessing(job.id(), job.ownerId(), command.errorMessage());
         if (command.job() instanceof ImageJob job)
-            return images.failProcessing(job.id(), job.ownerId(), command.errorMessage(), command.summary(), command.at());
+            return images.failAttempt(job.id(), job.ownerId(), job.version(), command.errorMessage(), command.summary(), command.at());
         var job = (ExcelJob) command.job();
         return excel.failProcessing(job.id(), job.ownerId(), job.version(), command.errorMessage());
     }

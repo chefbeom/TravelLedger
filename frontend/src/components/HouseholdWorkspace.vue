@@ -40,6 +40,7 @@ import {
   fetchLedgerAiAnalysisHistories,
   fetchLedgerImageAnalysisHistories,
   fetchLedgerImageAnalysisHistory,
+  fetchLedgerImageAnalysisHistoryByClientRequestId,
   fetchLedgerImageReviewSummary,
   fetchLedgerImageConcurrency,
   markLedgerImageAnalysisEntryApproved,
@@ -3464,43 +3465,10 @@ function createReceiptOcrItem(file, documentType) {
     storedImageAvailable: false,
   }
 }
-function createReceiptOcrStoredImageItem(sourceItem, documentType) {
-  receiptOcrItemSequence += 1
-  const clientRequestId = `image-analysis-rerun-${Date.now()}-${receiptOcrItemSequence}`
-  const sourceAnalysisId = sourceItem?.analysisId || null
-  return {
-    id: clientRequestId,
-    clientRequestId,
-    fileName: sourceItem?.fileName || `transaction-image-${receiptOcrItemSequence}`,
-    previewUrl: sourceItem?.previewUrl || (sourceAnalysisId ? buildLedgerImageAnalysisImageUrl(sourceAnalysisId) : ''),
-    documentType,
-    status: 'queued',
-    error: '',
-    rawText: '',
-    requestPrompt: '',
-    analysisPrompt: '',
-    suggestedEntries: [],
-    lineItems: [],
-    warnings: [],
-    confidence: null,
-    vendor: '',
-    paymentMethodText: '',
-    categoryText: '',
-    timing: null,
-    analysisId: null,
-    analysisStatus: 'PROCESSING',
-    fromHistory: false,
-    cancelled: false,
-    abortController: null,
-    sourceFile: null,
-    storedImageAvailable: Boolean(sourceItem?.storedImageAvailable || sourceItem?.previewUrl),
-    sourceAnalysisId,
-  }
-}
 function beginReceiptOcrBatch(items, visibleItemIds = items.map(item => item.id)) {
   const requestIds = createReceiptBatchRequestIds(items.length)
   items.forEach((item, index) => {
-    if (item.sourceFile && !item.analysisId) item.clientRequestId = requestIds[index]
+    if (item.sourceFile && !item.analysisId && !item.analysisOptions?.rerun) item.clientRequestId = requestIds[index]
   })
   receiptOcr.batchItemIds = visibleItemIds
   receiptOcrBatchItems = items.map(item => ({ item, outcome: null }))
@@ -3842,6 +3810,14 @@ async function loadReceiptOcrHistories(page = receiptOcr.historyPage || 0, optio
     const response = await fetchLedgerImageAnalysisHistories({ page, size: receiptOcr.historySize }, options.fresh ? { cache: 'no-store' } : {})
     if (sequence !== receiptOcrHistoryLoadSequence) return true
     receiptOcr.historyItems = Array.isArray(response?.content) ? response.content : []
+    // Recover IDs lost with an HTTP error without replacing successful, user-edited results.
+    const identities = new Map(receiptOcr.historyItems.filter(history => history.clientRequestId).map(history => [history.clientRequestId, history]))
+    for (const item of receiptOcr.items) {
+      const history = identities.get(item.clientRequestId)
+      if (!history) continue
+      if (!item.analysisId) item.analysisId = history.id
+      item.storedImageAvailable = Boolean(history.imageAvailable || history.imageUrl)
+    }
     receiptOcr.historyPage = Number(response?.number ?? page)
     receiptOcr.historyTotalPages = Number(response?.totalPages ?? 0)
     receiptOcr.historyTotalElements = Number(response?.totalElements ?? receiptOcr.historyItems.length)
@@ -4007,7 +3983,7 @@ function updateLegacyReceiptOcrFields(result, firstSuggestion, fileName) {
   receiptOcr.timing = result?.timing || null
 }
 
-async function analyzeReceiptFile(file, documentType, existingItem = null, prompt = '', useExistingEntryStyle = false, existingEntryStyleMode = 'LATEST_OVERALL', referenceDate = entryForm.entryDate || null) {
+async function analyzeReceiptFile(file, documentType, existingItem = null, prompt = '', useExistingEntryStyle = false, existingEntryStyleMode = 'LATEST_OVERALL', referenceDate = entryForm.entryDate || null, rerun = false) {
   const item = existingItem || createReceiptOcrItem(file, documentType)
   if (!existingItem) {
     receiptOcr.items.unshift(item)
@@ -4015,12 +3991,23 @@ async function analyzeReceiptFile(file, documentType, existingItem = null, promp
   item.status = 'analyzing'
   item.analysisStatus = 'PROCESSING'
   item.analysisPrompt = prompt
-  item.analysisOptions = { prompt, useExistingEntryStyle, existingEntryStyleMode, referenceDate }
+  item.analysisOptions = { prompt, useExistingEntryStyle, existingEntryStyleMode, referenceDate, rerun }
   item.abortController = new AbortController()
   syncReceiptOcrBusyState()
 
   try {
-    let result = await analyzeLedgerReceipt(file, {
+    // A failed HTTP response may not include the history ID, even though the server saved it.
+    // Resolve by its stable per-image request ID, including histories outside the current page.
+    if (rerun && !item.analysisId && item.clientRequestId) {
+      try {
+        const history = await fetchLedgerImageAnalysisHistoryByClientRequestId(item.clientRequestId, { cache: 'no-store', signal: item.abortController.signal })
+        item.analysisId = history.id
+        item.storedImageAvailable = Boolean(history.imageAvailable || history.imageUrl)
+      } catch (error) {
+        if (error.status !== 404) throw error
+      }
+    }
+    const options = {
       documentType,
       clientRequestId: item.clientRequestId,
       prompt,
@@ -4028,7 +4015,10 @@ async function analyzeReceiptFile(file, documentType, existingItem = null, promp
       existingEntryStyleMode,
       existingEntryStyleReferenceDate: referenceDate,
       signal: item.abortController.signal,
-    })
+    }
+    let result = rerun && item.analysisId
+      ? await rerunLedgerImageAnalysisHistory(item.analysisId, { ...options, file: item.storedImageAvailable ? null : file })
+      : await analyzeLedgerReceipt(file, options)
     if (!isReceiptOcrItemActive(item)) {
       if (result?.analysisId) {
         try {
@@ -4175,7 +4165,7 @@ async function executeReceiptOcrJobs(jobs, visibleItemIds) {
       if (sequence !== receiptOcrBatchSequence || !isReceiptOcrItemActive(item) || item.status !== 'queued') return
       try {
         await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item,
-          options.prompt, options.useExistingEntryStyle, options.existingEntryStyleMode, options.referenceDate)
+          options.prompt, options.useExistingEntryStyle, options.existingEntryStyleMode, options.referenceDate, Boolean(options.rerun))
       } catch (error) {
         // Isolate unexpected client-side errors as well as normal HTTP failures.
         if (isReceiptOcrItemActive(item)) {
@@ -4206,11 +4196,9 @@ async function retryFailedReceiptOcrItems(payload = {}) {
     && !item.cancelled && !item.fromHistory && typeof File !== 'undefined' && item.sourceFile instanceof File)
   if (!items.length) return
   const jobs = items.map(item => {
-    item.analysisId = null
-    item.clientRequestId = '' // beginReceiptOcrBatch assigns a NEW id, never replay a failed server job.
-    return { item, options: item.analysisOptions || { prompt: item.analysisPrompt || '',
+    return { item, options: { ...(item.analysisOptions || { prompt: item.analysisPrompt || '',
       useExistingEntryStyle: receiptOcr.useExistingEntryStyle, existingEntryStyleMode: receiptOcr.existingEntryStyleMode,
-      referenceDate: entryForm.entryDate || null } }
+      referenceDate: entryForm.entryDate || null }), rerun: true } }
   })
   receiptOcr.error = ''
   await executeReceiptOcrJobs(jobs, visibleIds)
@@ -4266,108 +4254,19 @@ async function rerunReceiptOcrItem(payload = {}) {
   const documentType = normalizeOcrDocumentType(item.documentType || receiptOcr.documentType)
   const prompt = buildReceiptOcrPrompt(requestPrompt)
 
-  if (canUseSourceFile) {
-    const nextItem = createReceiptOcrItem(sourceFile, documentType)
-    nextItem.fileName = item.fileName || nextItem.fileName
-    receiptOcr.items.unshift(nextItem)
-    const batchSequence = beginReceiptOcrBatch([nextItem])
+  // Keep the existing local item and server identity instead of adding a rerun card.
+  const nextItem = receiptOcr.items.find(candidate => candidate.id === item.id) || item
+  if (!receiptOcr.items.some(candidate => candidate.id === nextItem.id)) receiptOcr.items.unshift(nextItem)
+  nextItem.cancelled = false
+  nextItem.error = ''
+  nextItem.documentType = documentType
+  if (receiptOcr.activeView !== 'history') {
     receiptOcr.activeView = 'analyze'
     receiptOcr.historyDetailAnalysisId = ''
-    syncReceiptOcrBusyState()
-    await analyzeReceiptFile(sourceFile, documentType, nextItem, prompt, useExistingEntryStyle, existingEntryStyleMode)
-    if (nextItem.status === 'done') {
-      receiptOcr.activeView = 'history'
-      receiptOcr.historyDetailAnalysisId = nextItem.analysisId ? String(nextItem.analysisId) : ''
-    }
-    await finishReceiptOcrBatch(batchSequence)
-    return
   }
-
-  const nextItem = createReceiptOcrStoredImageItem(item, documentType)
-  receiptOcr.items.unshift(nextItem)
-  const batchSequence = beginReceiptOcrBatch([nextItem])
-  receiptOcr.activeView = 'analyze'
-  receiptOcr.historyDetailAnalysisId = ''
-  nextItem.status = 'analyzing'
-  nextItem.analysisStatus = 'PROCESSING'
-  nextItem.abortController = new AbortController()
-  syncReceiptOcrBusyState()
-
-  try {
-    let result = await rerunLedgerImageAnalysisHistory(item.analysisId, {
-      documentType,
-      prompt,
-      useExistingEntryStyle,
-      existingEntryStyleMode,
-      existingEntryStyleReferenceDate: entryForm.entryDate || null,
-      signal: nextItem.abortController.signal,
-    })
-    if (!isReceiptOcrItemActive(nextItem)) {
-      if (result?.analysisId) {
-        try {
-          await cancelLedgerImageAnalysisHistory(result.analysisId)
-        } catch (cancelError) {
-          console.warn('Failed to cancel removed image analysis history', cancelError)
-        }
-      }
-      return
-    }
-    if (String(result?.analysisStatus || '').toUpperCase() === 'PROCESSING') {
-      result = await waitForReceiptOcrHistoryResult(nextItem, result)
-      if (!result || !isReceiptOcrItemActive(nextItem)) {
-        return
-      }
-    }
-    if (String(result?.analysisStatus || '').toUpperCase() === 'CANCELLED') {
-      nextItem.status = 'cancelled'
-      nextItem.analysisId = result?.analysisId || nextItem.analysisId
-      nextItem.clientRequestId = result?.clientRequestId || nextItem.clientRequestId
-      nextItem.analysisStatus = 'CANCELLED'
-      nextItem.cancelled = true
-      nextItem.error = '취소된 이미지 분석 요청입니다.'
-      return
-    }
-    const suggestions = Array.isArray(result?.suggestedEntries) && result.suggestedEntries.length
-      ? result.suggestedEntries
-      : [result?.suggestedEntry].filter(Boolean)
-    nextItem.status = 'done'
-    nextItem.documentType = normalizeOcrDocumentType(result?.documentType || documentType)
-    nextItem.analysisId = result?.analysisId || null
-    nextItem.clientRequestId = result?.clientRequestId || nextItem.clientRequestId
-    nextItem.analysisStatus = result?.analysisStatus || 'COMPLETED'
-    nextItem.rawText = result?.rawText || ''
-    nextItem.suggestedEntries = suggestions.map((suggestion, entryIndex) => attachReceiptOcrSuggestionMeta(suggestion, nextItem, entryIndex))
-    nextItem.lineItems = Array.isArray(result?.lineItems) ? result.lineItems : []
-    nextItem.warnings = Array.isArray(result?.warnings) ? result.warnings : []
-    nextItem.confidence = result?.confidence ?? null
-    nextItem.vendor = result?.vendor || ''
-    nextItem.paymentMethodText = result?.paymentMethodText || ''
-    nextItem.categoryText = result?.categoryText || ''
-    nextItem.timing = result?.timing || null
-    nextItem.storedImageAvailable = true
-    updateLegacyReceiptOcrFields(result, nextItem.suggestedEntries[0] || null, nextItem.fileName)
-    setFeedback('저장된 원본 이미지로 다시 검수했습니다. 결과를 확인한 뒤 입력칸에 적용해 주세요.')
-  } catch (error) {
-    if (!isReceiptOcrItemActive(nextItem)) {
-      return
-    }
-    if (error?.name === 'AbortError') {
-      nextItem.status = 'cancelled'
-      nextItem.analysisStatus = 'CANCELLED'
-      nextItem.cancelled = true
-      nextItem.error = '사용자가 취소한 이미지 분석 요청입니다.'
-      return
-    }
-    nextItem.status = 'error'
-    nextItem.analysisStatus = 'FAILED'
-    nextItem.error = error.message
-    receiptOcr.error = error.message
-    setFeedback('', error.message)
-  } finally {
-    nextItem.abortController = null
-    syncReceiptOcrBusyState()
-    await finishReceiptOcrBatch(batchSequence)
-  }
+  receiptOcr.historyError = ''
+  await executeReceiptOcrJobs([{ item: nextItem, options: { prompt, useExistingEntryStyle,
+    existingEntryStyleMode, referenceDate: entryForm.entryDate || null, rerun: true } }])
 
   if (nextItem.status === 'done') {
     receiptOcr.activeView = 'history'

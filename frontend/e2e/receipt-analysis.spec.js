@@ -5,9 +5,9 @@ const image = { name: 'same-name.png', mimeType: 'image/png', buffer: Buffer.fro
 
 async function setup(page, { entryCount = 1, holdFourth = false, initialHistories = [], landing = false,
   holdRequests = [], failRequests = [], holdFinalRefresh = 0, failRefreshOnce = false, holdInitialSummary = false, brokenImages = [],
-  asyncResponses = false, holdHistoryIds = [], distinctResults = false, maxConcurrent = 6, failSettings = false, admin = false } = {}) {
+  asyncResponses = false, holdHistoryIds = [], distinctResults = false, maxConcurrent = 6, failSettings = false, admin = false, failReruns = [] } = {}) {
   const policy = { maxConcurrent, fail: failSettings }
-  const requests = [], histories = [...initialHistories], errors = [], reads = [], imageReads = []
+  const requests = [], reruns = [], histories = [...initialHistories], errors = [], reads = [], imageReads = []
   const requestGates = new Map(holdRequests.map(number => {
     let release
     const promise = new Promise(resolve => { release = resolve })
@@ -42,15 +42,34 @@ async function setup(page, { entryCount = 1, holdFourth = false, initialHistorie
       if (requestGates.has(number)) await requestGates.get(number).promise
       if (holdFourth && number === 5) return route.fulfill({ status: 500, json: { message: '검증용 이미지 실패' } })
       if (failRequests.includes(number)) {
-        histories.push({ id: number, clientRequestId, status: 'FAILED', createdAt: '2026-10-21T12:00:00', fileName, errorMessage: '검증용 이미지 실패' })
+        histories.push({ id: number, clientRequestId, status: 'FAILED', createdAt: '2026-10-21T12:00:00', fileName, imageAvailable: true, errorMessage: '검증용 이미지 실패' })
         return route.fulfill({ status: 500, json: { message: '검증용 이미지 실패' } })
       }
       const result = {
         analysisId: number, clientRequestId, analysisStatus: 'COMPLETED', documentType: 'AUTO', rawText: '검증용 추출문',
         suggestedEntries: Array.from({ length: entryCount }, (_, index) => ({ title: distinctResults ? `결과 ${fileName}` : `거래 ${index + 1}`, amount: 1000 + index, entryType: 'EXPENSE', entryDate: '2026-10-21', entryTime: '12:00', categoryGroupId: 101, categoryDetailId: 102, paymentMethodId: 103 })),
       }
-      histories.push({ id: number, clientRequestId, status: 'COMPLETED', createdAt: '2026-10-21T12:00:00', fileName, result })
+      histories.push({ id: number, clientRequestId, status: 'COMPLETED', createdAt: '2026-10-21T12:00:00', fileName, imageAvailable: true, result })
       return route.fulfill({ json: asyncResponses || number === 3 ? { analysisId: number, analysisStatus: 'PROCESSING' } : result })
+    }
+    if (/\/image-analysis\/history\/client\/[^/]+$/.test(path)) {
+      const clientRequestId = decodeURIComponent(path.split('/').at(-1))
+      const history = histories.find(item => item.clientRequestId === clientRequestId)
+      return history ? route.fulfill({ json: history }) : route.fulfill({ status: 404, json: { message: '기록 없음' } })
+    }
+    if (/\/image-analysis\/history\/\d+\/rerun$/.test(path)) {
+      const id = Number(path.split('/').at(-2))
+      const history = histories.find(item => item.id === id)
+      const number = reruns.push({ id, body: route.request().postDataBuffer().toString() })
+      if (!history) return route.fulfill({ status: 404, json: { message: '기록 없음' } })
+      if (failReruns.includes(number)) {
+        Object.assign(history, { status: 'FAILED', result: null, errorMessage: '재요청 실패' })
+        return route.fulfill({ status: 500, json: { message: '재요청 실패' } })
+      }
+      const result = { analysisId: id, clientRequestId: history.clientRequestId, analysisStatus: 'COMPLETED', documentType: 'AUTO', rawText: '재요청 추출문',
+        suggestedEntries: [{ title: distinctResults ? `결과 ${history.fileName}` : '재요청 결과', amount: 15000, entryType: 'EXPENSE', entryDate: '2026-10-21', categoryGroupId: 101, categoryDetailId: 102, paymentMethodId: 103 }] }
+      Object.assign(history, { status: 'COMPLETED', result, errorMessage: null })
+      return route.fulfill({ json: { analysisId: id, clientRequestId: history.clientRequestId, analysisStatus: 'PROCESSING' } })
     }
     let json = []
     if (path === '/api/auth/me') json = { id: 2, loginId: 'fixture', displayName: '검증용 사용자', active: true, admin }
@@ -111,7 +130,7 @@ async function setup(page, { entryCount = 1, holdFourth = false, initialHistorie
   await page.getByRole('button', { name: '분석 모달 열기', exact: true }).click()
   const modal = page.getByRole('dialog', { name: '이미지 분석 및 검수', exact: true })
   if (!landing) await modal.getByRole('button', { name: '이미지 분석하기', exact: true }).click()
-  return { modal, requests, histories, policy, errors, reads, imageReads, releaseFourth, releaseRefresh, releaseInitialSummary,
+  return { modal, requests, reruns, histories, policy, errors, reads, imageReads, releaseFourth, releaseRefresh, releaseInitialSummary,
     releaseRequest: number => requestGates.get(number)?.release(), releaseHistory: id => historyGates.get(id)?.release() }
 }
 
@@ -197,8 +216,8 @@ test('six jobs occupy their slots through async polling and a freed slot admits 
   } finally { for (let id = 1; id <= 8; id++) releaseHistory(id) }
 })
 
-test('retrying failed files sends only those files with new ids and preserves successful edits', async ({ page }, testInfo) => {
-  const { modal, requests, errors } = await setup(page, { failRequests: [2, 5], distinctResults: true })
+test('retrying failed files reuses history ids and the original batch while preserving successful edits', async ({ page }, testInfo) => {
+  const { modal, requests, reruns, histories, errors } = await setup(page, { failRequests: [2, 5], distinctResults: true })
   const files = Array.from({ length: 6 }, (_, index) => ({ ...image, name: `retry-${index + 1}.png` }))
   await modal.locator('input[type=file][multiple]').setInputFiles(files)
   await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
@@ -209,14 +228,15 @@ test('retrying failed files sends only those files with new ids and preserves su
   const successfulName = await successful.locator('.receipt-ocr-review-card__header strong').textContent()
   await successful.getByRole('textbox', { name: '제목', exact: true }).fill('성공 결과에서 수정한 내용')
   const failedNames = await modal.locator('.receipt-ocr-review-card').filter({ has: page.locator('.receipt-ocr-review-card__status', { hasText: '실패' }) }).locator('.receipt-ocr-review-card__header strong').allTextContents()
-  const oldIds = new Set(requests.map(body => /name="clientRequestId"\r\n\r\n([^\r]+)/.exec(body)?.[1]))
+  const oldIds = histories.map(history => history.clientRequestId)
   await modal.getByRole('button', { name: '실패 건만 재시도 (2건)', exact: true }).click()
   await expect(progress).toContainText('요청 처리 2 / 2건')
   await expect(progress).toContainText('새로고침했습니다')
-  expect(requests).toHaveLength(8)
-  const retried = requests.slice(6)
-  expect(retried.map(body => /name="file"; filename="([^"]+)"/.exec(body)?.[1]).sort()).toEqual(failedNames.sort())
-  expect(retried.every(body => !oldIds.has(/name="clientRequestId"\r\n\r\n([^\r]+)/.exec(body)?.[1]))).toBe(true)
+  expect(requests).toHaveLength(6)
+  expect(reruns.map(rerun => rerun.id).sort()).toEqual([2, 5])
+  expect(reruns.map(rerun => histories.find(history => history.id === rerun.id).fileName).sort()).toEqual(failedNames.sort())
+  expect(histories).toHaveLength(6)
+  expect(histories.map(history => history.clientRequestId)).toEqual(oldIds)
   await expect(modal.locator('.receipt-ocr-review-card')).toHaveCount(6)
   await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '실패' })).toHaveCount(0)
   const preserved = modal.locator('.receipt-ocr-review-card').filter({ has: page.locator('.receipt-ocr-review-card__header strong', { hasText: successfulName }) })
@@ -239,6 +259,63 @@ test('an administrator concurrency of two is respected even when more images are
     expect(requests).toHaveLength(4)
     expect(errors).toEqual([])
   } finally { for (let id = 1; id <= 4; id++) releaseRequest(id) }
+})
+
+test('rerunning two stored failures from detail replaces their rows inside the original three-image batch', async ({ page }, testInfo) => {
+  const ids = createReceiptBatchRequestIds(3, { timestamp: Date.parse('2026-10-20T11:34:12Z'), token: 'retry-detail' })
+  const initialHistories = ids.map((clientRequestId, index) => ({ id: index + 1, clientRequestId,
+    createdAt: '2026-10-20T11:34:12', fileName: `original-${index + 1}.png`, imageAvailable: true,
+    status: index ? 'FAILED' : 'COMPLETED', errorMessage: index ? '원래 실패' : null,
+    result: index ? null : { suggestedEntries: [{ title: '먼저 성공한 결과', amount: 1000 }] } }))
+  const originalIdentities = initialHistories.map(({ id, clientRequestId, createdAt }) => ({ id, clientRequestId, createdAt }))
+  const { modal, requests, reruns, histories, errors } = await setup(page, { initialHistories, landing: true })
+  await modal.getByRole('button', { name: '분석 내용 확인 및 불러오기', exact: true }).click()
+  for (const id of [2, 3]) {
+    await modal.locator('.receipt-ocr-history__item', { hasText: `original-${id}.png` }).getByRole('button', { name: '내용 보기', exact: true }).click()
+    await modal.getByRole('button', { name: '재요청 검수', exact: true }).click()
+    await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('새로고침했습니다')
+    await expect(modal.locator('.receipt-ocr-history-detail__header')).toContainText('완료')
+    await modal.getByRole('button', { name: '< 뒤로가기', exact: true }).click()
+    await expect(modal.locator('.receipt-ocr-history__item')).toHaveCount(3)
+    await expect(modal.locator('.receipt-ocr-history__request-group')).toHaveCount(1)
+    await expect(modal.locator('.receipt-ocr-history__request-group')).toHaveAttribute('data-request-count', '3')
+  }
+  expect(requests).toHaveLength(0)
+  expect(reruns.map(rerun => rerun.id)).toEqual([2, 3])
+  expect(histories.map(({ id, clientRequestId, createdAt }) => ({ id, clientRequestId, createdAt }))).toEqual(originalIdentities)
+  expect(histories.every(history => history.status === 'COMPLETED')).toBe(true)
+  await modal.screenshot({ path: testInfo.outputPath('same-three-image-batch-after-rerun.png') })
+  expect(errors).toEqual([])
+})
+
+test('another failed stored rerun can be retried again without creating histories', async ({ page }) => {
+  const { modal, requests, reruns, histories, errors } = await setup(page, { landing: true, failReruns: [1],
+    initialHistories: [{ id: 41, status: 'FAILED', imageAvailable: true, fileName: 'repeat.png', clientRequestId: 'old-request' }] })
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await modal.getByRole('button', { name: '분석 내용 확인 및 불러오기', exact: true }).click()
+    await modal.locator('.receipt-ocr-history__item').getByRole('button', { name: '내용 보기', exact: true }).click()
+    await modal.getByRole('button', { name: '재요청 검수', exact: true }).click()
+    await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('새로고침했습니다')
+  }
+  expect(requests).toHaveLength(0)
+  expect(reruns.map(rerun => rerun.id)).toEqual([41, 41])
+  expect(histories).toHaveLength(1)
+  expect(histories[0].status).toBe('COMPLETED')
+  expect(errors).toEqual([])
+})
+
+test('retry finds a failed request beyond the first history page by its original client id', async ({ page }) => {
+  const { modal, requests, reruns, histories, errors } = await setup(page, { failRequests: [10], maxConcurrent: 3 })
+  await modal.locator('input[type=file][multiple]').setInputFiles(Array.from({ length: 10 }, (_, index) => ({ ...image, name: `paged-${index + 1}.png` })))
+  await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
+  await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('새로고침했습니다')
+  await modal.getByRole('button', { name: '실패 건만 재시도 (1건)', exact: true }).click()
+  await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('완료 1건 · 실패 0건')
+  await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('새로고침했습니다')
+  expect(requests).toHaveLength(10)
+  expect(reruns.map(rerun => rerun.id)).toEqual([10])
+  expect(histories).toHaveLength(10)
+  expect(errors).toEqual([])
 })
 
 test('default three is server controlled and a changed administrator policy applies to the next batch', async ({ page }) => {

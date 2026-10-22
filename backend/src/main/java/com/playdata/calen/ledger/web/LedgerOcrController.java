@@ -72,6 +72,12 @@ public class LedgerOcrController {
         return ledgerOcrService.getHistory(currentUser.userId(), historyId);
     }
 
+    @GetMapping("/history/client/{clientRequestId}")
+    public LedgerImageAnalysisHistoryResponse getHistoryByClientRequestId(
+            @AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable String clientRequestId) {
+        return ledgerOcrService.getHistoryByClientRequestId(currentUser.userId(), clientRequestId);
+    }
+
     @PostMapping("/history/client/{clientRequestId}/cancel")
     public LedgerImageAnalysisHistoryResponse cancelHistoryByClientRequestId(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
@@ -109,6 +115,7 @@ public class LedgerOcrController {
     public LedgerOcrAnalyzeResponse reanalyzeHistory(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long historyId,
+            @RequestPart(name = "file", required = false) MultipartFile fallbackImage,
             @RequestParam(name = "documentType", required = false) String documentType,
             @RequestParam(name = "prompt", required = false) String prompt,
             @RequestParam(name = "useExistingEntryStyle", defaultValue = "false") boolean useExistingEntryStyle,
@@ -117,7 +124,7 @@ public class LedgerOcrController {
     ) {
         return ledgerOcrService.startReanalyzeHistoryImage(
                 currentUser.userId(), historyId, documentType, prompt,
-                useExistingEntryStyle, existingEntryStyleMode, existingEntryStyleReferenceDate
+                useExistingEntryStyle, existingEntryStyleMode, existingEntryStyleReferenceDate, fallbackImage
         );
     }
 

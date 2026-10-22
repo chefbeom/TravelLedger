@@ -732,6 +732,10 @@ export function fetchLedgerImageAnalysisHistory(historyId, options = {}) {
   return request(`/ledger/image-analysis/history/${historyId}`, options)
 }
 
+export function fetchLedgerImageAnalysisHistoryByClientRequestId(clientRequestId, options = {}) {
+  return request(`/ledger/image-analysis/history/client/${encodeURIComponent(clientRequestId)}`, options)
+}
+
 export function fetchLedgerImageReviewSummary(options = {}) {
   return request('/ledger/image-analysis/history/review-summary', options)
 }
@@ -754,6 +758,7 @@ export function buildLedgerImageAnalysisImageUrl(historyId) {
 
 export function rerunLedgerImageAnalysisHistory(historyId, options = {}) {
   const formData = new FormData()
+  if (options.file) formData.append('file', options.file)
   if (options.documentType) {
     formData.append('documentType', options.documentType)
   }

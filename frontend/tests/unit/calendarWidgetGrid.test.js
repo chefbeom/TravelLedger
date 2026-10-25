@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { widgetGridSize, widgetGridStyle, resizedWidgetGrid } from '../../src/lib/calendarWidgetGrid.js'
+import { widgetGridSize, widgetGridStyle, resizedWidgetGrid, resolvedWidgetGrid, widgetGridRowCount } from '../../src/lib/calendarWidgetGrid.js'
 
 test('missing grid sizes preserve legacy pixel and automatic dimensions without inferring a new layout', () => {
   assert.deepEqual(widgetGridSize({ cardWidth: 310, cardHeight: 230 }), { cardColumns: 0, cardRows: 0 })
@@ -24,4 +24,20 @@ test('pointer resizing snaps at cell boundaries rather than saving pixel deltas'
   assert.deepEqual(resizedWidgetGrid({ width: 312, height: 248 }, 160, 128, 1432, 128), { cardColumns: 3, cardRows: 3 })
   assert.deepEqual(resizedWidgetGrid({ width: 312, height: 248 }, -9999, -9999, 1432, 128, true), { cardColumns: 2, cardRows: 1 })
   assert.deepEqual(resizedWidgetGrid({ width: 312, height: 248 }, 99999, 99999, 1432, 128), { cardColumns: 9, cardRows: 12 })
+})
+
+test('legacy and explicit sizes resolve to the same cells without changing their saved pixels', () => {
+  const legacy = { kind: 'TOTAL', cardWidth: 247, cardHeight: 190 }, original = structuredClone(legacy)
+  assert.deepEqual(resolvedWidgetGrid(legacy, 1432, 128), { cardColumns: 2, cardRows: 2 })
+  assert.deepEqual(resolvedWidgetGrid({ ...legacy, cardColumns: 3, cardRows: 1 }, 1432, 128), { cardColumns: 3, cardRows: 1 })
+  assert.deepEqual(resolvedWidgetGrid({ ...legacy, kind: 'MONTHLY_CUMULATIVE_CHART', cardWidth: 200 }, 1432, 128), { cardColumns: 2, cardRows: 2 })
+  assert.deepEqual(legacy, original)
+  assert.deepEqual(resolvedWidgetGrid({ kind: 'TOTAL' }, 0, 0), { cardColumns: 2, cardRows: 2 })
+})
+
+test('guides cover whole wrapped rows, including different heights and full-width mobile cards', () => {
+  const frames = [{ cardColumns: 3, cardRows: 2 }, { cardColumns: 2, cardRows: 1 }, { cardColumns: 4, cardRows: 3 }, { cardColumns: 2, cardRows: 2 }]
+  assert.equal(widgetGridRowCount(frames), 5)
+  assert.equal(widgetGridRowCount(frames, true), 8)
+  assert.equal(widgetGridRowCount([]), 0)
 })

@@ -192,13 +192,14 @@ test('chart corner resize previews the real chart and survives saving', async ({
   const chart = widget(page, 3)
   const before = await chart.boundingBox()
   const touch = page.viewportSize().width < 760
-  await dragPointer(page, chart.getByRole('button', { name: /위젯 크기 조절/ }), touch ? -20 : 60, 40, touch)
   const rowHeight = await canvas(page).evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-layout-cell-height')))
-  await expect.poll(async () => Math.round((await chart.boundingBox()).height)).toBe(rowHeight * 2 - 8)
+  const rows = Math.round((before.height + 8) / rowHeight) + 1
+  await dragPointer(page, chart.getByRole('button', { name: /위젯 크기 조절/ }), touch ? -20 : 60, rowHeight * 0.7, touch)
+  await expect.poll(async () => Math.round((await chart.boundingBox()).height)).toBe(rowHeight * rows - 8)
   const after = await chart.boundingBox()
   await page.locator('.calendar-draft-toolbar').getByRole('button', { name: '변경사항 저장', exact: true }).click()
   await expect(canvas(page)).not.toHaveClass(/calendar-dashboard--editing/)
-  expect(state.saved.widgets[3].cardRows).toBe(2)
+  expect(state.saved.widgets[3].cardRows).toBe(rows)
   expect(state.saved.widgets[3].cardColumns).toBe(touch ? 0 : Math.round((after.width + 8) / (((await chart.locator('..').boundingBox()).width + 8) / 9)))
   expect(Math.abs((await chart.boundingBox()).height - after.height)).toBeLessThan(1)
   expect(state.errors).toEqual([])

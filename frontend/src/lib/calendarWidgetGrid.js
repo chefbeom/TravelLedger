@@ -1,3 +1,5 @@
+import { widgetFrame } from './calendarDirectEditing.js'
+
 export const WIDGET_GRID_COLUMNS = 9
 export const WIDGET_GRID_MAX_ROWS = 12
 export const WIDGET_GRID_GAP = 8
@@ -27,4 +29,27 @@ export function resizedWidgetGrid(origin, dx, dy, availableWidth, rowHeight, cha
     cardColumns: Math.max(1, Math.round((origin.width + dx + WIDGET_GRID_GAP) / columnPitch)),
     cardRows: Math.max(1, Math.round((origin.height + dy + WIDGET_GRID_GAP) / Math.max(1, rowHeight))),
   })
+}
+// Legacy pixels remain stored, but their rendered frame must obey the very same
+// cells as explicitly configured cards. Reading never migrates account data.
+export function resolvedWidgetGrid(config, availableWidth, rowHeight) {
+  const saved = widgetGridSize(config), legacy = widgetFrame(config)
+  const width = legacy.cardWidth || (config.kind === 'MONTHLY_CUMULATIVE_CHART'
+    ? 480 + Math.max(0, (Number(config.layoutW) || 2) - 2) * 120
+    : { SMALL: 240, MEDIUM: 260, LARGE: 360 }[config.displaySize] || 260)
+  const inferred = resizedWidgetGrid({ width, height: legacy.cardHeight || 160 }, 0, 0,
+    Number(availableWidth) > 0 ? availableWidth : 1200, Number(rowHeight) > 0 ? rowHeight : 112,
+    config.kind === 'MONTHLY_CUMULATIVE_CHART')
+  return { cardColumns: saved.cardColumns || inferred.cardColumns, cardRows: saved.cardRows || inferred.cardRows }
+}
+
+export function widgetGridRowCount(frames, mobile = false) {
+  let used = 0, rowHeight = 0, rows = 0
+  for (const frame of frames) {
+    const width = mobile ? WIDGET_GRID_COLUMNS : frame.cardColumns
+    if (used + width > WIDGET_GRID_COLUMNS) { rows += rowHeight; used = 0; rowHeight = 0 }
+    used += width
+    rowHeight = Math.max(rowHeight, frame.cardRows)
+  }
+  return rows + rowHeight
 }

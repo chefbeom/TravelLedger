@@ -213,8 +213,19 @@ test('desktop tablet and mobile keep cards and all editor sections readable in b
       if ((current === 'toss') !== (theme === 'toss')) await page.getByRole('button', { name: theme === 'toss' ? '다크 테마' : '기본 테마', exact: true }).click()
       const overflow = await page.locator('.household-aggregate-card').evaluateAll(cards => cards.filter(card => card.scrollWidth > card.clientWidth + 2).length)
       expect(overflow).toBe(0)
-      const sizes = await page.locator('.household-aggregate-card').evaluateAll(cards => cards.map(card => { const r = card.getBoundingClientRect(); return { width: r.width, height: r.height } }))
-      for (const size of sizes) { expect(size.width).toBeGreaterThanOrEqual(220); expect(size.height).toBeLessThan(500) }
+      // A whole cell can be narrower than the former 220px minimum. Verify the
+      // explicit cell contract, while retaining the content overflow check above.
+      const sizes = await page.locator('.household-aggregate-card').evaluateAll(cards => cards.map(card => {
+        const r = card.getBoundingClientRect(), rowPitch = parseFloat(getComputedStyle(card.closest('.calendar-dashboard')).getPropertyValue('--calendar-layout-cell-height'))
+        return { width: r.width, height: r.height, columns: Number(card.dataset.widgetGridColumns), expectedWidth: (card.parentElement.clientWidth + 8) / 9 * Number(card.dataset.widgetGridColumns) - 8, expectedHeight: rowPitch * Number(card.dataset.widgetGridRows) - 8 }
+      }))
+      for (const size of sizes) {
+        expect(size.columns).toBeGreaterThanOrEqual(1)
+        expect(size.columns).toBeLessThanOrEqual(9)
+        expect(Math.abs(size.width - size.expectedWidth)).toBeLessThan(1)
+        expect(Math.abs(size.height - size.expectedHeight)).toBeLessThan(1)
+        expect(size.height).toBeLessThan(500)
+      }
       if (width === 390) {
         const panels = await page.locator('[data-calendar-panel-id]').evaluateAll(items => items.map(item => ({ id: item.dataset.calendarPanelId, y: item.getBoundingClientRect().y })))
         expect(panels.find(item => item.id === 'aggregate').y).toBeLessThan(panels.find(item => item.id === 'calendar').y)

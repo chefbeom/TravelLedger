@@ -147,21 +147,22 @@ test('pointer and touch resizing preview only the selected widget and cancel res
   const handle = widget(page, 0).getByRole('button', { name: /위젯 크기 조절/ })
   await handle.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
   const rect = await handle.boundingBox(), x = rect.x + rect.width / 2, y = rect.y + rect.height / 2
+  const rowHeight = await board(page).evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-layout-cell-height')))
   if (page.viewportSize().width < 760) {
     const client = await page.context().newCDPSession(page)
     await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] })
-    for (let step = 1; step <= 8; step++) await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + step * 5, y: y + step * 5, id: 1 }] })
+    for (let step = 1; step <= 8; step++) await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + step * 5, y: y + step * rowHeight * 0.7 / 8, id: 1 }] })
     await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     await client.detach()
   } else {
     await page.mouse.move(x, y)
     await page.mouse.down()
-    await page.mouse.move(x + 40, y + 40, { steps: 12 })
+    await page.mouse.move(x + 40, y + rowHeight * 0.7, { steps: 12 })
     for (let index = 1; index < 5; index++) expect(await appearance(widget(page, index))).toEqual(before[index])
     await page.mouse.up()
   }
-  const rowHeight = await board(page).evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-layout-cell-height')))
-  await expect.poll(async () => (await appearance(widget(page, 0))).height).toBe(rowHeight * 2 - 8)
+  const expectedRows = Math.round((before[0].height + 8) / rowHeight) + 1
+  await expect.poll(async () => (await appearance(widget(page, 0))).height).toBe(rowHeight * expectedRows - 8)
   for (let index = 1; index < 5; index++) expect(await appearance(widget(page, index))).toEqual(before[index])
   await expect(handle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
   await expect(handle).toHaveCSS('box-shadow', 'none')

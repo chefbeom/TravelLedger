@@ -8,7 +8,7 @@ import { useTableSelection } from '../lib/tableSelection'
 import { fetchLayoutSetting, fetchHouseholdPersonalization, saveHouseholdPersonalization } from '../lib/api'
 import { clonePersonalization, personalizationChanged, packDashboardPanels } from '../lib/calendarPersonalization'
 import { widgetFrame, reorderItem } from '../lib/calendarDirectEditing'
-import { widgetGridSize, widgetGridStyle, resizedWidgetGrid } from '../lib/calendarWidgetGrid'
+import { widgetGridSize, widgetGridStyle, resizedWidgetGrid, resolvedWidgetGrid, widgetGridRowCount } from '../lib/calendarWidgetGrid'
 import { CALENDAR_QUERY_ITEM_ID, calendarQueryRow, withCalendarQueryRow, withoutCalendarQueryRow } from '../lib/calendarQueryLayout'
 import HouseholdPersonalizationDialog from './HouseholdPersonalizationDialog.vue'
 import CalendarInlineEditor from './CalendarInlineEditor.vue'
@@ -413,6 +413,8 @@ const isMobileLayoutMode = ref(false)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
 const aggregatePanelRef = ref(null)
+const aggregateGridRef = ref(null)
+const aggregateGridWidth = ref(0)
 const quickEntryScrollTargetRef = ref(null)
 const ledgerSheetScrollTargetRef = ref(null)
 const calendarShellRef = ref(null)
@@ -429,6 +431,7 @@ const layoutCellHeight = ref(112)
 const calendarPanelLayout = ref(createDefaultCalendarPanelLayout())
 const entryTimeText = ref('00:00')
 let calendarResizeObserver = null
+let aggregateGridResizeObserver = null
 let layoutGrid = null
 let layoutGridResizeObserver = null
 let layoutModeObserver = null
@@ -1233,6 +1236,11 @@ const hasReceiptAnalysis = computed(() => Boolean(
 
 const personalizationCards = computed(() => normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map((config, index) => buildAggregateCard(config, index)))
 const aggregateCards = computed(() => personalizationCards.value.filter(card => card.config.kind !== 'NONE' && !card.config.hidden))
+const aggregateGridFrames = computed(() => new Map(aggregateCards.value.map(card => {
+  const preview = directGesture.value?.type === 'widget-resize' && directGesture.value.index === card.index ? directGesture.value.size : null
+  return [card.index, resolvedWidgetGrid({ ...card.config, ...preview }, aggregateGridWidth.value, layoutCellHeight.value)]
+})))
+const aggregateGridGuideCellCount = computed(() => 9 * widgetGridRowCount([...aggregateGridFrames.value.values()], isMobileLayoutMode.value))
 const personalizationDirty = computed(() => Boolean(personalizationSnapshot.value && personalizationChanged(personalizationSnapshot.value.baseline || personalizationSnapshot.value.settings, currentPersonalization())))
 const personalizationPreferences = computed(calendarViewPreferencePayload)
 const directGhostStyle = computed(() => ({
@@ -1475,6 +1483,16 @@ watch(() => aggregateWidgetDraftConfigs.value.map(item => `${item.kind}:${item.p
   if (isAggregateEditMode.value) emit('preview-aggregate-widget-configs', serializeAggregateWidgetConfigs(aggregateWidgetDraftConfigs.value))
 })
 
+watch(aggregateGridRef, (element, previous) => {
+  if (previous) aggregateGridResizeObserver?.unobserve(previous)
+  if (!element) return
+  updateAggregateGridWidth()
+  if (typeof ResizeObserver !== 'undefined') {
+    aggregateGridResizeObserver ||= new ResizeObserver(updateAggregateGridWidth)
+    aggregateGridResizeObserver.observe(element)
+  }
+}, { flush: 'post' })
+
 onMounted(() => {
   if (typeof window === 'undefined') {
     return
@@ -1536,6 +1554,7 @@ onBeforeUnmount(() => {
     window.clearTimeout(layoutGridRebuildTimer)
   }
   layoutGridResizeObserver?.disconnect()
+  aggregateGridResizeObserver?.disconnect()
   destroyLayoutGrid()
 
   if (layoutModeObserver) {
@@ -1886,24 +1905,25 @@ function trackDirectPointer(event, handlers) {
 function resizeWidget(event, card) {
   const element = event.currentTarget.closest('.household-aggregate-card'), rect = element.getBoundingClientRect()
   const available = element.parentElement.clientWidth
-  const initial = widgetGridSize(card.config)
-  const properties = ['--calendar-widget-width', '--calendar-widget-height', '--calendar-widget-min-width', '--calendar-widget-min-height']
-  const original = Object.fromEntries(properties.map(key => [key, element.style.getPropertyValue(key)]))
+  const initial = { ...aggregateGridFrames.value.get(card.index) }
+  // A mobile full-width frame cannot infer a legacy desktop column count.
+  if (isMobileLayoutMode.value) initial.cardColumns = widgetGridSize(card.config).cardColumns
   const sizeFor = (dx, dy) => {
     const snapped = resizedWidgetGrid(rect, dx, dy, available, layoutCellHeight.value, Boolean(card.chart))
     return { cardColumns: !isMobileLayoutMode.value && Math.abs(dx) > 4 ? snapped.cardColumns : initial.cardColumns, cardRows: Math.abs(dy) > 4 ? snapped.cardRows : initial.cardRows }
   }
   inlineEditor.value = null
   trackDirectPointer(event, {
-    move(dx, dy) {
-      const size = sizeFor(dx, dy), style = getAggregateCardGridStyle({ ...card, config: { ...card.config, ...size } })
-      for (const key of properties) element.style.setProperty(key, style[key])
-      element.dataset.widgetColumns = String(size.cardColumns)
-      element.dataset.widgetRows = String(size.cardRows)
-      directGesture.value = { type: 'widget-resize', index: card.index, label: `${size.cardColumns ? `${size.cardColumns}열` : '기존 너비'} × ${size.cardRows ? `${size.cardRows}행` : '기존 높이'}` }
+    move(dx, dy, point) {
+      const size = sizeFor(dx, dy)
+      // Vue owns the preview styles too. Imperative style mutations were reset
+      // by this gesture's next render, leaving only pointerup visibly effective.
+      directGesture.value = { type: 'widget-resize', index: card.index, size, x: point.x, y: point.y, label: `${isMobileLayoutMode.value ? '화면 너비' : `${size.cardColumns}열`} × ${size.cardRows}행` }
     },
-    finish(dx, dy) { updateAggregateWidgetLayout(card.index, sizeFor(dx, dy)) },
-    cancel() { for (const key of properties) element.style.setProperty(key, original[key]); element.dataset.widgetColumns = String(initial.cardColumns); element.dataset.widgetRows = String(initial.cardRows) },
+    finish(dx, dy) {
+      const size = sizeFor(dx, dy)
+      if (size.cardColumns !== initial.cardColumns || size.cardRows !== initial.cardRows) updateAggregateWidgetLayout(card.index, size)
+    },
   })
 }
 
@@ -2541,9 +2561,19 @@ async function toggleLayoutEditMode() {
 
 function refreshCalendarMeasurements() {
   nextTick(() => {
+    updateAggregateGridWidth()
     updateCalendarShellWidth()
     updateCalendarContentSize()
   })
+}
+
+function updateAggregateGridWidth() {
+  const width = resolveElementRef(aggregateGridRef.value)?.clientWidth
+  if (width > 0) aggregateGridWidth.value = width
+}
+
+function setAggregateGridElement(element) {
+  aggregateGridRef.value = resolveElementRef(element)
 }
 
 function updateCalendarContentSize() {
@@ -2773,24 +2803,11 @@ function parseAggregateWidgetSize(value, fallbackConfig = {}) {
 }
 function getAggregateCardGridStyle(card) {
   const config = card?.config ?? {}
-  const width = normalizeAggregateGridSpan(config.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
-  const height = normalizeAggregateGridSpan(config.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
-  const fallbackColumn = Math.min(((card?.index ?? 0) % aggregateGridColumnCount) + 1, getAggregateMaxColumnForWidth(width))
-  const fallbackRow = Math.min(Math.floor((card?.index ?? 0) / aggregateGridColumnCount) + 1, getAggregateMaxRowForHeight(height))
-  const column = normalizeAggregateGridPosition(config.layoutX, fallbackColumn, getAggregateMaxColumnForWidth(width))
-  const row = normalizeAggregateGridPosition(config.layoutY, fallbackRow, getAggregateMaxRowForHeight(height))
+  const frame = aggregateGridFrames.value.get(card.index)
   const order = normalizeAggregateLayoutOrder(config.layoutOrder, (card?.index ?? 0) + 1)
   return {
-    '--calendar-widget-width': `${widgetFrame(config).cardWidth || (config.kind === 'MONTHLY_CUMULATIVE_CHART' ? 480 + Math.max(0, config.layoutW - 2) * 120 : { SMALL: 240, MEDIUM: 260, LARGE: 360 }[config.displaySize] || 260)}px`,
-    '--calendar-widget-height': widgetFrame(config).cardHeight ? `${widgetFrame(config).cardHeight}px` : config.kind === 'MONTHLY_CUMULATIVE_CHART' ? '160px' : 'auto',
-    '--calendar-widget-min-width': config.kind === 'MONTHLY_CUMULATIVE_CHART' ? '280px' : '200px',
-    '--calendar-widget-min-height': '160px',
-    ...widgetGridStyle(config, layoutCellHeight.value),
-    ...(isMobileLayoutMode.value && widgetGridSize(config).cardColumns ? { '--calendar-widget-width': '100%' } : {}),
-    '--aggregate-card-col-span': String(width),
-    '--aggregate-card-row-span': String(height),
-    '--aggregate-card-grid-column': `${column} / span ${width}`,
-    '--aggregate-card-grid-row': `${row} / span ${height}`,
+    ...widgetGridStyle(frame, layoutCellHeight.value),
+    ...(isMobileLayoutMode.value ? { '--calendar-widget-width': '100%' } : {}),
     order,
   }
 }
@@ -4160,7 +4177,10 @@ defineExpose({
       @close="inlineEditor = null" @widget="updatePersonalizationWidget" @preference="updatePersonalizationPreference" @panel="updatePersonalizationPanel" @hide="hidePalette"
       @duplicate="addPersonalizationWidget(true); inlineEditor = null" @delete="deletePersonalizationWidget(); inlineEditor = null"
       @move="movePersonalizationWidget($event); inlineEditor = null" />
-    <Teleport to="body"><div v-if="directGesture?.type?.endsWith('move')" class="calendar-direct-ghost" :style="directGhostStyle" aria-hidden="true">{{ directGesture.label }}</div></Teleport>
+    <Teleport to="body">
+      <div v-if="directGesture?.type?.endsWith('move')" class="calendar-direct-ghost" :style="directGhostStyle" aria-hidden="true">{{ directGesture.label }}</div>
+      <div v-if="directGesture?.type === 'widget-resize'" class="calendar-widget-resize-hint" :style="directGhostStyle" role="status"><strong>{{ directGesture.label }}</strong><small>놓으면 적용 · Esc 취소</small></div>
+    </Teleport>
 
     <section class="calendar-overview-toolbar" aria-label="대시보드 설정">
       <div class="calendar-overview-toolbar__intro">
@@ -4648,9 +4668,10 @@ defineExpose({
         </div>
         <div
           v-else-if="aggregateCards.length"
+          :ref="setAggregateGridElement"
           class="household-aggregate-grid"
-          
         >
+          <div v-if="isLayoutEditMode" class="calendar-widget-grid-guide" aria-hidden="true"><span v-for="cell in aggregateGridGuideCellCount" :key="cell"></span></div>
           <article
             v-for="card in aggregateCards"
             :key="card.id"
@@ -4674,6 +4695,9 @@ defineExpose({
             :data-aggregate-display-size="card.config.displaySize"
             :data-widget-columns="card.config.cardColumns"
             :data-widget-rows="card.config.cardRows"
+            :data-widget-grid-columns="isMobileLayoutMode ? 9 : aggregateGridFrames.get(card.index).cardColumns"
+            :data-widget-grid-rows="aggregateGridFrames.get(card.index).cardRows"
+            :data-widget-resizing="directGesture?.type === 'widget-resize' && directGesture.index === card.index"
             :data-widget-drop-target="directGesture?.type === 'widget-move' && directGesture.targetIndex === card.index"
           >
             <span v-if="isLayoutEditMode" class="calendar-widget-move-handle" role="button" tabindex="0" :aria-label="`${card.config.title || card.title} 위젯 이동`" data-no-drag="true" @pointerdown="moveWidgetDirect($event, card)" @keydown.left.prevent="personalizationSelectedIndex = card.index; movePersonalizationWidget(-1)" @keydown.up.prevent="personalizationSelectedIndex = card.index; movePersonalizationWidget(-1)" @keydown.right.prevent="personalizationSelectedIndex = card.index; movePersonalizationWidget(1)" @keydown.down.prevent="personalizationSelectedIndex = card.index; movePersonalizationWidget(1)">⠿</span>

@@ -114,7 +114,7 @@ test('mouse and touch snap to cells, Escape restores the preview, and keyboard r
   expect(state.errors).toEqual([])
 })
 
-test('clearing grid overrides restores the original saved pixel size without losing it', async ({ page }) => {
+test('clearing grid overrides keeps original pixels and snaps their display to the common grid', async ({ page }) => {
   const state = await mockPersonalization(page, { saved: gridSettings() })
   await edit(page)
   await card(page).getByRole('button', { name: /위젯 설정/ }).click()
@@ -122,11 +122,13 @@ test('clearing grid overrides restores the original saved pixel size without los
   await inline(page).getByRole('combobox', { name: '카드 높이 (칸)', exact: true }).selectOption('')
   await inline(page).getByRole('button', { name: '편집 계속하기' }).click()
   await save(page)
-  await expect(card(page)).toHaveCSS('height', '230px')
+  const original = await frame(page), rows = Math.round((230 + 8) / original.rowPitch)
+  await expect(card(page)).toHaveCSS('height', `${rows * original.rowPitch - 8}px`)
+  await expect(card(page)).toHaveAttribute('data-widget-grid-rows', String(rows))
   expect(state.saved.widgets[0]).toMatchObject({ cardColumns: 0, cardRows: 0, cardWidth: 310, cardHeight: 230 })
   await page.reload()
   await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
-  await expect(card(page)).toHaveCSS('height', '230px')
+  await expect(card(page)).toHaveCSS('height', `${rows * original.rowPitch - 8}px`)
   expect(state.errors).toEqual([])
 })
 

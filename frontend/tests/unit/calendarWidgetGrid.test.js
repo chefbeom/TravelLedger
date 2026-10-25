@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { widgetGridSize, widgetGridStyle, resizedWidgetGrid, resolvedWidgetGrid, widgetGridRowCount } from '../../src/lib/calendarWidgetGrid.js'
+import { widgetGridSize, widgetGridStyle, resizedWidgetGrid, resolvedWidgetGrid, widgetGridRowCount, packWidgetGrid } from '../../src/lib/calendarWidgetGrid.js'
 
 test('missing grid sizes preserve legacy pixel and automatic dimensions without inferring a new layout', () => {
   assert.deepEqual(widgetGridSize({ cardWidth: 310, cardHeight: 230 }), { cardColumns: 0, cardRows: 0 })
@@ -37,7 +37,20 @@ test('legacy and explicit sizes resolve to the same cells without changing their
 
 test('guides cover whole wrapped rows, including different heights and full-width mobile cards', () => {
   const frames = [{ cardColumns: 3, cardRows: 2 }, { cardColumns: 2, cardRows: 1 }, { cardColumns: 4, cardRows: 3 }, { cardColumns: 2, cardRows: 2 }]
-  assert.equal(widgetGridRowCount(frames), 5)
+  assert.equal(widgetGridRowCount(frames), 3)
   assert.equal(widgetGridRowCount(frames, true), 8)
   assert.equal(widgetGridRowCount([]), 0)
+})
+
+test('a 2x2 card occupies only its own cells and does not push an entire following row down', () => {
+  const frames = Array.from({ length: 5 }, (_, index) => ({ cardColumns: 2, cardRows: index === 3 ? 2 : 1 }))
+  const original = structuredClone(frames), cells = packWidgetGrid(frames)
+  assert.deepEqual(cells, [{ x: 0, y: 0, w: 2, h: 1 }, { x: 2, y: 0, w: 2, h: 1 }, { x: 4, y: 0, w: 2, h: 1 }, { x: 6, y: 0, w: 2, h: 2 }, { x: 0, y: 1, w: 2, h: 1 }])
+  assert.equal(widgetGridRowCount(frames), 2)
+  const occupied = new Set()
+  for (const cell of cells) for (let y = cell.y; y < cell.y + cell.h; y++) for (let x = cell.x; x < cell.x + cell.w; x++) {
+    assert.equal(occupied.has(`${x}:${y}`), false)
+    occupied.add(`${x}:${y}`)
+  }
+  assert.deepEqual(frames, original)
 })

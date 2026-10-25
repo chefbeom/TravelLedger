@@ -265,6 +265,42 @@ class HouseholdPersonalizationIntegrationTest {
         assertThat(read(owner)).isEqualTo(before);
     }
 
+    @Test void queryPalettePositionRoundTripsAndSurvivesLegacyLayoutWrites() throws Exception {
+        ObjectNode request = draft(owner);
+        var query = mapper.createObjectNode().put("id", "calendar-query").put("x", 0).put("y", 9).put("w", 9).put("h", 1);
+        ((com.fasterxml.jackson.databind.node.ArrayNode) request.path("layout")).add(query);
+        JsonNode saved = write(owner, request, 200);
+        assertThat(saved.at("/layout/4")).isEqualTo(query);
+        assertThat(read(owner).path("layout")).isEqualTo(saved.path("layout"));
+        var legacyLayout = (com.fasterxml.jackson.databind.node.ArrayNode) saved.path("layout").deepCopy();
+        legacyLayout.remove(4);
+        var legacy = mapper.createObjectNode().put("version", 3);
+        legacy.set("payload", legacyLayout);
+        mvc.perform(put("/api/account/preferences/layout-settings/household-calendar")
+                        .with(user(AppUserPrincipal.from(owner))).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(legacy))).andExpect(status().isOk());
+        assertThat(read(owner).at("/layout/4")).isEqualTo(query);
+        // The older unified editor also sends four panels; it must not delete the fifth.
+        JsonNode compatible = write(owner, draft(owner), 200);
+        assertThat(compatible.at("/layout/4")).isEqualTo(query);
+    }
+
+    @Test void malformedQueryPalettesCannotChangeSavedSettings() throws Exception {
+        JsonNode before = read(owner);
+        for (String field : List.of("x", "w", "h", "y")) {
+            ObjectNode request = draft(owner);
+            var query = mapper.createObjectNode().put("id", "calendar-query").put("x", 0).put("y", 9).put("w", 9).put("h", 1);
+            query.put(field, switch (field) { case "w" -> 8; case "h" -> 13; case "y" -> -1; default -> 1; });
+            ((com.fasterxml.jackson.databind.node.ArrayNode) request.path("layout")).add(query);
+            write(owner, request, 400);
+        }
+        ObjectNode duplicate = draft(owner);
+        var query = mapper.createObjectNode().put("id", "calendar-query").put("x", 0).put("y", 9).put("w", 9).put("h", 1);
+        ((com.fasterxml.jackson.databind.node.ArrayNode) duplicate.path("layout")).add(query).add(query.deepCopy());
+        write(owner, duplicate, 400);
+        assertThat(read(owner)).isEqualTo(before);
+    }
+
     private AppUser createUser() {
         AppUser user = new AppUser();
         user.setLoginId("personal-" + UUID.randomUUID()); user.setDisplayName("개인화 검증"); user.setPasswordHash("test-only");

@@ -15,7 +15,7 @@ const cardColumnOptions = computed(() => Array.from({ length: widget.value.kind 
 const card = computed(() => props.cards[props.selectedIndex])
 const panel = computed(() => props.panels.find(item => item.id === panelId.value) || {})
 const panelWidths = computed(() => Array.from({ length: (panel.value.maxW || 9) - (panel.value.minW || 1) + 1 }, (_, index) => index + (panel.value.minW || 1)))
-const panelNames = { aggregate: '집계 영역', calendar: '달력', 'quick-entry': '빠른 거래 입력', sheet: '거래 시트' }
+const panelNames = { aggregate: '집계 영역', calendar: '달력', 'quick-entry': '빠른 거래 입력', sheet: '거래 시트', 'calendar-query': '날짜·조회' }
 const field = (key, value) => emit('widget', { index: props.selectedIndex, field: key, value })
 const preference = (key, value) => emit('preference', { key, value })
 const amount = value => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(Number(value) || 0)

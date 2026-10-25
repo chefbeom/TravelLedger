@@ -1,5 +1,5 @@
-// The common query strip is a presentation row, not an extra user-owned palette.
-// Keep saved palette coordinates unchanged and use the same projection in view/edit.
+// Old four-panel settings omitted the query strip. Upgrade once to an editable
+// fifth palette; never project an extra row into an already upgraded layout.
 export const CALENDAR_QUERY_ITEM_ID = 'calendar-query'
 
 export function calendarQueryRow(panels) {
@@ -19,4 +19,11 @@ export function withCalendarQueryRow(panel, row, rows = 1) {
 
 export function withoutCalendarQueryRow(panel, row, rows = 1) {
   return { ...panel, y: panel.y >= row + rows ? panel.y - rows : panel.y }
+}
+
+export function ensureCalendarQueryPalette(panels) {
+  if (panels.some(panel => panel.id === CALENDAR_QUERY_ITEM_ID)) return panels.map(panel => ({ ...panel }))
+  const row = calendarQueryRow(panels)
+  return [...panels.map(panel => withCalendarQueryRow({ ...panel, y: Number(panel.y) || 0 }, row)),
+    { id: CALENDAR_QUERY_ITEM_ID, x: 0, y: row, w: 9, h: 1 }]
 }

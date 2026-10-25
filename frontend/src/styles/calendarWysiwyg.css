@@ -34,14 +34,15 @@ html body .app-shell.app-shell .calendar-dashboard .ui-resizable-se, .calendar-m
 
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card.calendar-widget {
   position: relative; z-index: 1; flex: 0 0 min(var(--calendar-widget-width), 100%) !important;
-  width: min(var(--calendar-widget-width), 100%) !important; min-width: min(var(--calendar-widget-min-width, 200px), 100%) !important; max-width: 100% !important;
+  grid-column: var(--aggregate-card-grid-column) !important; grid-row: var(--aggregate-card-grid-row) !important;
+  width: 100% !important; min-width: 0 !important; max-width: 100% !important;
   height: var(--calendar-widget-height, auto) !important; min-height: var(--calendar-widget-min-height, 160px) !important; align-self: flex-start !important;
   align-content: start !important; justify-content: flex-start !important;
   overflow: auto !important; scroll-margin-top: 120px; box-shadow: none !important; transform: none !important; transition: none !important;
 }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card.calendar-widget.household-aggregate-card--chart { min-width: min(var(--calendar-widget-min-width, 280px), 100%) !important; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel { scrollbar-gutter: stable; }
-html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid { position: relative; isolation: isolate; gap: 8px !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid { position: relative; isolation: isolate; display: grid !important; grid-template-columns: repeat(9, minmax(0, 1fr)) !important; grid-template-rows: none !important; grid-auto-rows: calc(var(--calendar-layout-cell-height) - 8px) !important; align-items: start !important; gap: 8px !important; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .calendar-widget[data-widget-grid-rows='1'] { padding: 10px !important; gap: 8px !important; }
 html body .app-shell.app-shell .calendar-dashboard .calendar-widget-grid-guide { position: absolute; inset: 0; z-index: 0; display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); grid-auto-rows: calc(var(--calendar-layout-cell-height) - 8px); gap: 8px; overflow: hidden; pointer-events: none; }
 .calendar-widget-grid-guide > span { box-sizing: border-box; border: 1px dashed var(--grid-guide-border); background: var(--brand-soft); opacity: .6; }

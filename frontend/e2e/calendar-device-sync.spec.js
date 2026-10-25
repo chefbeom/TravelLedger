@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { ensureCalendarQueryPalette } from '../src/lib/calendarQueryLayout.js'
 import { calendarSettings, mockPersonalization } from './fixtures/calendarPersonalization.js'
 
 const widget = page => page.locator('.calendar-widget[data-aggregate-index="0"]')
@@ -113,14 +114,14 @@ test('legacy browser-only palettes require an explicit account save before anoth
   expect(state.writes).toEqual([])
   await expect(editor(page).getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled()
   await saveSettings(page)
-  expect(state.saved.layout).toEqual(legacyLayout)
+  expect(state.saved.layout).toEqual(ensureCalendarQueryPalette(legacyLayout))
   const otherComputer = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   try {
     const otherPage = await otherComputer.newPage()
     await mockPersonalization(otherPage, { sharedStore: state })
     await openSettings(otherPage)
     await editor(otherPage).getByText('고급 배치 좌표', { exact: true }).click()
-    await expect(editor(otherPage).getByLabel('세로 위치 (0부터)', { exact: true })).toHaveValue('7')
+    await expect(editor(otherPage).getByLabel('세로 위치 (0부터)', { exact: true })).toHaveValue(String(state.saved.layout.find(panel => panel.id === 'calendar').y))
     await expect(editor(otherPage).getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled()
     expect(state.writes).toHaveLength(1)
     expect(state.errors).toEqual([])
@@ -143,7 +144,13 @@ test('failed server reads leave the local fallback usable but cannot save it ove
   })
   await page.reload()
   await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
-  await expect.poll(() => page.locator('[data-calendar-panel-id="calendar"]').evaluate(element => element.style.getPropertyValue('--mobile-calendar-panel-order'))).toBe('45')
+  const calendar = ensureCalendarQueryPalette(localLayout).find(panel => panel.id === 'calendar')
+  await expect.poll(() => page.locator('.calendar-dashboard-grid').evaluate(grid => {
+    const queryRows = Number(grid.querySelector('.calendar-query-item').style.getPropertyValue('--calendar-panel-rows'))
+    const calendarOrder = Number(grid.querySelector('[data-calendar-panel-id="calendar"]').style.getPropertyValue('--mobile-calendar-panel-order'))
+    // Mobile controls wrap into an extra display row without changing the cached layout.
+    return calendarOrder - Math.max(0, queryRows - 1) * 9
+  })).toBe(calendar.y * 9 + calendar.x)
   await openSettings(page)
   await expect(editor(page).getByRole('alert')).toContainText('검증용 설정 조회 실패')
   await expect(editor(page).getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled()

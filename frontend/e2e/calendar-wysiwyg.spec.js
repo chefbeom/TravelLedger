@@ -58,7 +58,7 @@ test('view and edit share palette geometry, and modal transaction sheets never b
     await page.setViewportSize({ width, height: 900 })
     for (const theme of ['default', 'toss']) {
       if (((await page.locator('html').getAttribute('data-theme')) === 'toss') !== (theme === 'toss')) await page.getByRole('button', { name: theme === 'toss' ? '다크 테마' : '기본 테마', exact: true }).click()
-      await expect(page.locator('[data-calendar-panel-id]')).toHaveCount(3)
+      await expect(page.locator('[data-calendar-panel-id]')).toHaveCount(4)
       const before = await geometry(page)
       await edit(page)
       await expectSameGeometry(page, before)
@@ -179,7 +179,7 @@ test('mobile keyboard controls reorder palettes and resize height without changi
   await expect.poll(async () => Math.round((await palette.boundingBox()).height)).toBe(Math.round(before.height + 112))
   await palette.getByRole('button', { name: '사용자 설정 집계 팔레트 이동', exact: true }).focus()
   await page.keyboard.press('ArrowDown')
-  await expect.poll(() => page.locator('[data-calendar-panel-id]').evaluateAll(items => items.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0].dataset.calendarPanelId)).toBe('calendar')
+  await expect.poll(() => page.locator('[data-calendar-panel-id]').evaluateAll(items => items.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0].dataset.calendarPanelId)).toBe('calendar-query')
   await page.locator('.calendar-draft-toolbar').getByRole('button', { name: '변경사항 저장', exact: true }).click()
   await expect(canvas(page)).not.toHaveClass(/calendar-dashboard--editing/)
   expect(state.saved.layout.find(item => item.id === 'aggregate').w).toBe(9)
@@ -242,7 +242,7 @@ test('direct move gestures reorder widgets on desktop and palettes with touch on
     await handle.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
     const source = await handle.boundingBox()
     await dragPointer(page, handle, 0, Math.min(400, page.viewportSize().height - 70 - (source.y + source.height / 2)), true)
-    await expect.poll(() => page.locator('[data-calendar-panel-id]').evaluateAll(items => items.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0].dataset.calendarPanelId)).toBe('calendar')
+    await expect.poll(() => page.locator('[data-calendar-panel-id]').evaluateAll(items => items.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0].dataset.calendarPanelId)).toBe('calendar-query')
   } else {
     await widget(page, 0).getByRole('textbox', { name: '위젯 제목 직접 수정', exact: true }).fill('마우스로 이동한 위젯')
     await widget(page, 0).getByRole('textbox', { name: '위젯 제목 직접 수정', exact: true }).press('Enter')

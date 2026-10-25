@@ -80,7 +80,9 @@ public class HouseholdPersonalizationService {
         lockOwner(ownerId);
         if (!get(ownerId).revision().equals(request.revision())) throw new PreferenceConflictException();
         aggregates.savePreferences(ownerId, new HouseholdAggregatePreferencesRequest(request.widgets()));
-        layouts.saveLayoutSetting(ownerId, "household-calendar", new UserLayoutSettingRequest(3, request.layout()));
+        JsonNode layout = preserveCalendarQuery(ownerId, request.layout());
+        validateLayout(layout);
+        layouts.saveLayoutSetting(ownerId, "household-calendar", new UserLayoutSettingRequest(4, layout));
         layouts.saveLayoutSetting(ownerId, "household-calendar-view", new UserLayoutSettingRequest(3, request.preferences()));
         return get(ownerId);
     }
@@ -94,6 +96,9 @@ public class HouseholdPersonalizationService {
     @Transactional
     public UserLayoutSettingResponse saveCompatibleLayout(Long ownerId, String scope, UserLayoutSettingRequest request) {
         lockOwner(ownerId);
+        if ("household-calendar".equals(scope) && request != null && request.payload() != null && request.payload().isArray()) {
+            request = new UserLayoutSettingRequest(request.version(), preserveCalendarQuery(ownerId, request.payload()));
+        }
         if ("household-calendar-view".equals(scope) && request != null && request.payload() instanceof ObjectNode incoming) {
             JsonNode current = layouts.getLayoutSetting(ownerId, scope).payload();
             ObjectNode merged = incoming.deepCopy();
@@ -110,19 +115,32 @@ public class HouseholdPersonalizationService {
         users.findActiveForPreferenceUpdate(ownerId).orElseThrow(() -> new NotFoundException("사용자 계정을 찾을 수 없습니다."));
     }
 
+    private JsonNode preserveCalendarQuery(Long ownerId, JsonNode incoming) {
+        for (var panel : incoming) if ("calendar-query".equals(panel.path("id").asText())) return incoming;
+        JsonNode current = layouts.getLayoutSetting(ownerId, "household-calendar").payload();
+        if (current != null && current.isArray()) for (var panel : current) if ("calendar-query".equals(panel.path("id").asText())) {
+            var merged = (com.fasterxml.jackson.databind.node.ArrayNode) incoming.deepCopy();
+            merged.add(panel.deepCopy());
+            return merged;
+        }
+        return incoming;
+    }
+
     private void validateLayout(JsonNode layout) {
         var ids = new HashSet<String>();
         for (var panel : layout) {
             String id = panel.path("id").asText();
-            if (!Set.of("aggregate", "calendar", "quick-entry", "sheet").contains(id) || !ids.add(id))
+            if (!Set.of("aggregate", "calendar", "quick-entry", "sheet", "calendar-query").contains(id) || !ids.add(id))
                 throw new BadRequestException("위젯 배치 구성이 올바르지 않습니다.");
             for (String key : Set.of("x", "y", "w", "h")) if (!panel.path(key).isIntegralNumber() || !panel.path(key).canConvertToInt())
                 throw new BadRequestException("배치 위치와 크기는 정수여야 합니다.");
             int x = panel.path("x").asInt(), y = panel.path("y").asInt(), w = panel.path("w").asInt(), h = panel.path("h").asInt();
             if (x < 0 || y < 0 || y > 200 || w < 1 || w > 9 || x + w > 9 || h < 1 || h > 12)
                 throw new BadRequestException("위젯 배치 범위를 확인해 주세요.");
+            if ("calendar-query".equals(id) && (x != 0 || w != 9))
+                throw new BadRequestException("날짜 조회 영역은 전체 9열을 사용해야 합니다.");
         }
-        if (ids.size() != 4) throw new BadRequestException("기본 위젯 배치 정보가 누락되었습니다.");
+        if (!ids.containsAll(Set.of("aggregate", "calendar", "quick-entry", "sheet"))) throw new BadRequestException("기본 위젯 배치 정보가 누락되었습니다.");
     }
 
     private void validatePreferences(JsonNode preferences) {

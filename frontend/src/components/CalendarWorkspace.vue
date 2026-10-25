@@ -8,8 +8,8 @@ import { useTableSelection } from '../lib/tableSelection'
 import { fetchLayoutSetting, fetchHouseholdPersonalization, saveHouseholdPersonalization } from '../lib/api'
 import { clonePersonalization, personalizationChanged, packDashboardPanels } from '../lib/calendarPersonalization'
 import { widgetFrame, reorderItem } from '../lib/calendarDirectEditing'
-import { widgetGridSize, widgetGridStyle, resizedWidgetGrid, resolvedWidgetGrid, widgetGridRowCount } from '../lib/calendarWidgetGrid'
-import { CALENDAR_QUERY_ITEM_ID, calendarQueryRow, withCalendarQueryRow, withoutCalendarQueryRow } from '../lib/calendarQueryLayout'
+import { widgetGridSize, widgetGridStyle, resizedWidgetGrid, resolvedWidgetGrid, packWidgetGrid } from '../lib/calendarWidgetGrid'
+import { CALENDAR_QUERY_ITEM_ID, ensureCalendarQueryPalette } from '../lib/calendarQueryLayout'
 import HouseholdPersonalizationDialog from './HouseholdPersonalizationDialog.vue'
 import CalendarInlineEditor from './CalendarInlineEditor.vue'
 import HouseholdTransactionSheet from './HouseholdTransactionSheet.vue'
@@ -141,7 +141,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'calendar',
-    defaultLayout: { x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 6, h: CALENDAR_RECOMMENDED_CONTENT_ROWS },
+    defaultLayout: { x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS + 1, w: 6, h: CALENDAR_RECOMMENDED_CONTENT_ROWS },
     minW: 4,
     maxW: 9,
     minH: 3,
@@ -149,7 +149,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'quick-entry',
-    defaultLayout: { x: 6, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 3, h: CALENDAR_RECOMMENDED_CONTENT_ROWS },
+    defaultLayout: { x: 6, y: CALENDAR_AGGREGATE_PANEL_ROWS + 1, w: 3, h: CALENDAR_RECOMMENDED_CONTENT_ROWS },
     minW: 2,
     maxW: 9,
     minH: 3,
@@ -157,11 +157,16 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'sheet',
-    defaultLayout: { x: 0, y: CALENDAR_RECOMMENDED_GRID_ROWS, w: 9, h: 3 },
+    defaultLayout: { x: 0, y: CALENDAR_RECOMMENDED_GRID_ROWS + 1, w: 9, h: 3 },
     minW: 4,
     maxW: 9,
     minH: 2,
     maxH: 12,
+  },
+  {
+    id: CALENDAR_QUERY_ITEM_ID,
+    defaultLayout: { x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 9, h: 1 },
+    minW: 9, maxW: 9, minH: 1, maxH: 12,
   },
 ]
 
@@ -404,7 +409,7 @@ const personalizationSnapshot = ref(null)
 const inlineEditor = ref(null)
 const directGesture = ref(null)
 let stopDirectPointer = null
-const paletteNames = { aggregate: '사용자 설정 집계', calendar: '달력', 'quick-entry': '빠른 거래 입력', sheet: '거래 시트' }
+const paletteNames = { aggregate: '사용자 설정 집계', calendar: '달력', 'quick-entry': '빠른 거래 입력', sheet: '거래 시트', 'calendar-query': '날짜·조회' }
 let personalizationLoadSequence = 0
 const isAggregatePanelEnabled = ref(true)
 const isReceiptOcrPanelEnabled = ref(true)
@@ -1240,7 +1245,11 @@ const aggregateGridFrames = computed(() => new Map(aggregateCards.value.map(card
   const preview = directGesture.value?.type === 'widget-resize' && directGesture.value.index === card.index ? directGesture.value.size : null
   return [card.index, resolvedWidgetGrid({ ...card.config, ...preview }, aggregateGridWidth.value, layoutCellHeight.value)]
 })))
-const aggregateGridGuideCellCount = computed(() => 9 * widgetGridRowCount([...aggregateGridFrames.value.values()], isMobileLayoutMode.value))
+const aggregateGridCells = computed(() => {
+  const indices = [...aggregateGridFrames.value.keys()]
+  return new Map(packWidgetGrid([...aggregateGridFrames.value.values()], isMobileLayoutMode.value).map((cell, index) => [indices[index], cell]))
+})
+const aggregateGridGuideCellCount = computed(() => 9 * Math.max(0, ...[...aggregateGridCells.value.values()].map(cell => cell.y + cell.h)))
 const personalizationDirty = computed(() => Boolean(personalizationSnapshot.value && personalizationChanged(personalizationSnapshot.value.baseline || personalizationSnapshot.value.settings, currentPersonalization())))
 const personalizationPreferences = computed(calendarViewPreferencePayload)
 const directGhostStyle = computed(() => ({
@@ -1266,18 +1275,19 @@ const calendarLayoutPanels = computed(() => {
     && (panel.id !== 'sheet' || transactionSheetViewMode.value === 'inline')
   ))
 
-  return panels
+  // The query strip is now a real movable palette. Only resolve collisions from
+  // its responsive height; never insert an invisible, locked presentation row.
+  return packDashboardPanels(panels.map(panel => panel.id === CALENDAR_QUERY_ITEM_ID ? { ...panel, h: Math.max(panel.h, calendarQueryLayoutRows.value) } : panel), CALENDAR_QUERY_ITEM_ID)
 })
+const calendarLayoutContentPanels = computed(() => calendarLayoutPanels.value.filter(panel => panel.id !== CALENDAR_QUERY_ITEM_ID))
+const calendarQueryPanel = computed(() => calendarLayoutPanels.value.find(panel => panel.id === CALENDAR_QUERY_ITEM_ID))
 const calendarPanelLayoutKey = computed(() => (
   calendarLayoutPanels.value.map((panel) => `${panel.id}:${panel.x}:${panel.y}:${panel.w}:${panel.h}`).join('|')
 ))
-const calendarQueryLayoutRow = computed(() => calendarQueryRow(calendarLayoutPanels.value))
-const calendarQueryItemStyle = computed(() => isMobileLayoutMode.value
-  ? { order: calendarQueryLayoutRow.value * 9 - 1 }
-  : isCalendarGridStackActive.value ? null : { gridColumn: '1 / -1', gridRow: `${calendarQueryLayoutRow.value + 1} / span ${calendarQueryLayoutRows.value}` })
+const calendarQueryItemStyle = computed(() => calendarPanelLayoutItemStyle(calendarQueryPanel.value))
 const calendarLayoutGuideRowCount = computed(() => Math.max(
   1,
-  ...calendarLayoutPanels.value.map((panel) => Number(withCalendarQueryRow(panel, calendarQueryLayoutRow.value, calendarQueryLayoutRows.value).y ?? 0) + Number(panel.h ?? 1)),
+  ...calendarLayoutPanels.value.map(panel => panel.y + panel.h),
 ))
 const calendarLayoutGuideCellCount = computed(() => CALENDAR_LAYOUT_GRID_COLUMNS * calendarLayoutGuideRowCount.value)
 const calendarLayoutGridStyle = computed(() => ({
@@ -1998,7 +2008,12 @@ function moveMobilePalette(event, panel) {
 
 function applyMobilePaletteOrder(ordered) {
   let row = 0
-  const moved = new Map(ordered.map(item => { const result = { ...item, y: row }; row += item.h; return [item.id, result] }))
+  const moved = new Map(ordered.map(item => {
+    const stored = calendarPanelLayout.value.find(panel => panel.id === item.id)
+    const result = { ...stored, y: row }
+    row += stored.h
+    return [item.id, result]
+  }))
   calendarPanelLayout.value = normalizeCalendarPanelLayout(calendarPanelLayout.value.map(item => moved.get(item.id) || item))
 }
 
@@ -2018,7 +2033,7 @@ function scrollDuringDirectMove(element, point) {
 function handlePaletteHeaderPointer(event, panel) {
   if (!isMobileLayoutMode.value || !isLayoutEditMode.value) return
   if (event.target.closest('button, a, input, select, textarea, [role="button"], [contenteditable="plaintext-only"]')) return
-  if (event.target.closest('.panel__header, .household-calendar-panel-dragbar')) moveMobilePalette(event, panel)
+  if (event.target.closest('.panel__header, .household-calendar-panel-dragbar, .calendar-query-toolbar')) moveMobilePalette(event, panel)
 }
 
 function editPersonalizationLayout() {
@@ -2267,7 +2282,8 @@ function parseRemoteUpdatedAt(value) {
 }
 
 function normalizeCalendarPanelLayout(layouts) {
-  const source = new Map((Array.isArray(layouts) ? layouts : []).filter(item => item && typeof item === 'object').map((item) => [String(item.id), item]))
+  const incoming = Array.isArray(layouts) && layouts.length ? layouts.filter(item => item && typeof item === 'object') : createDefaultCalendarPanelLayout()
+  const source = new Map(ensureCalendarQueryPalette(incoming).map(item => [String(item.id), item]))
 
   const normalized = calendarPanelDefinitions.map((definition) => {
     const raw = source.get(definition.id) ?? definition.defaultLayout
@@ -2359,11 +2375,11 @@ async function hydrateRemoteCalendarPanelLayout(sequence) {
 function calendarPanelAttrs(panel) {
   return {
     x: panel.x,
-    y: withCalendarQueryRow(panel, calendarQueryLayoutRow.value, calendarQueryLayoutRows.value).y,
+    y: panel.y,
     w: panel.w,
     h: panel.h,
     minW: panel.minW,
-    minH: panel.minH,
+    minH: panel.id === CALENDAR_QUERY_ITEM_ID ? Math.max(panel.minH, calendarQueryLayoutRows.value) : panel.minH,
     maxW: panel.maxW,
     maxH: panel.maxH,
   }
@@ -2393,14 +2409,13 @@ function readLayoutGridSnapshot() {
     return []
   }
 
-  const queryRow = calendarQueryLayoutRow.value, queryRows = calendarQueryLayoutRows.value
   return (layoutGrid.engine?.nodes ?? []).map((node) => ({
     id: node.id || node.el?.getAttribute('gs-id') || node.el?.getAttribute('data-calendar-panel-id'),
     x: node.x,
     y: node.y,
     w: node.w,
     h: node.h,
-  })).filter((item) => item.id && item.id !== CALENDAR_QUERY_ITEM_ID).map(item => withoutCalendarQueryRow(item, queryRow, queryRows))
+  })).filter(item => item.id)
 }
 
 function applyCalendarPanelLayout(snapshot) {
@@ -2451,7 +2466,7 @@ function calendarPanelLayoutItemStyle(panel) {
   }
 
   const columnStart = (Number(panel.x ?? 0) || 0) + 1
-  const rowStart = (Number(withCalendarQueryRow(panel, calendarQueryLayoutRow.value, calendarQueryLayoutRows.value).y ?? 0) || 0) + 1
+  const rowStart = (Number(panel.y ?? 0) || 0) + 1
   const columnSpan = Math.max(1, Number(panel.w ?? 1) || 1)
   const rowSpan = Math.max(1, Number(panel.h ?? 1) || 1)
 
@@ -2493,8 +2508,6 @@ function initLayoutGrid() {
     if (!element) continue
     for (const [key, value] of Object.entries(calendarPanelAttrs(panel))) element.setAttribute(`gs-${key.replace(/[A-Z]/g, match => `-${match.toLowerCase()}`)}`, String(value))
   }
-  const query = layoutGridElement.querySelector('.calendar-query-item')
-  if (query) for (const [key, value] of Object.entries({ x: 0, y: calendarQueryLayoutRow.value, w: 9, h: calendarQueryLayoutRows.value, 'min-h': calendarQueryLayoutRows.value, 'max-h': calendarQueryLayoutRows.value, 'min-w': 9, 'max-w': 9, 'no-move': true, 'no-resize': true, locked: true })) query.setAttribute(`gs-${key}`, String(value))
   layoutGrid = GridStack.init({
     column: CALENDAR_LAYOUT_GRID_COLUMNS,
     margin: CALENDAR_LAYOUT_GRID_MARGIN,
@@ -2505,7 +2518,7 @@ function initLayoutGrid() {
     draggable: {
       appendTo: 'body',
       cancel: 'button,a,input,select,textarea,[data-no-drag="true"]',
-      handle: '.panel__header, .household-calendar-panel-dragbar, .calendar-palette-move-handle',
+      handle: '.panel__header, .household-calendar-panel-dragbar, .calendar-palette-move-handle, .calendar-query-toolbar',
       scroll: false,
     },
     resizable: {
@@ -2514,8 +2527,6 @@ function initLayoutGrid() {
   }, layoutGridElement)
   layoutGrid.enableMove(isLayoutEditMode.value && !personalizationSaving.value && !personalizationLoading.value)
   layoutGrid.enableResize(isLayoutEditMode.value && !personalizationSaving.value && !personalizationLoading.value)
-  const queryElement = layoutGridElement.querySelector('.calendar-query-item')
-  if (queryElement) layoutGrid.update(queryElement, { noMove: true, noResize: true, locked: true })
   layoutGrid.on('dragstop', handleLayoutGridStop)
   layoutGrid.on('resizestop', handleLayoutGridStop)
   for (const handle of layoutGridElement.querySelectorAll(':scope > [data-calendar-panel-id] > .ui-resizable-se')) {
@@ -2804,10 +2815,16 @@ function parseAggregateWidgetSize(value, fallbackConfig = {}) {
 function getAggregateCardGridStyle(card) {
   const config = card?.config ?? {}
   const frame = aggregateGridFrames.value.get(card.index)
+  const cell = aggregateGridCells.value.get(card.index)
   const order = normalizeAggregateLayoutOrder(config.layoutOrder, (card?.index ?? 0) + 1)
   return {
     ...widgetGridStyle(frame, layoutCellHeight.value),
-    ...(isMobileLayoutMode.value ? { '--calendar-widget-width': '100%' } : {}),
+    '--aggregate-card-grid-column': `${cell.x + 1} / span ${cell.w}`,
+    '--aggregate-card-grid-row': `${cell.y + 1} / span ${cell.h}`,
+    '--aggregate-card-col-span': String(cell.w),
+    '--aggregate-card-row-span': String(cell.h),
+    gridColumn: `${cell.x + 1} / span ${cell.w}`,
+    gridRow: `${cell.y + 1} / span ${cell.h}`,
     order,
   }
 }
@@ -4233,10 +4250,15 @@ defineExpose({
         <div v-if="isCalendarGridStackActive" class="household-calendar-layout-guide" aria-hidden="true">
           <span v-for="index in calendarLayoutGuideCellCount" :key="index"></span>
         </div>
-        <div class="calendar-query-item" :class="{ 'grid-stack-item': isCalendarGridStackActive }" :style="calendarQueryItemStyle"
-          :gs-id="CALENDAR_QUERY_ITEM_ID" :gs-x="0" :gs-y="calendarQueryLayoutRow" :gs-w="9" :gs-h="calendarQueryLayoutRows" :gs-min-h="calendarQueryLayoutRows" :gs-max-h="calendarQueryLayoutRows" gs-min-w="9" gs-max-w="9" gs-no-move="true" gs-no-resize="true" gs-locked="true" data-no-drag="true">
-          <div class="calendar-query-item__content" :class="{ 'grid-stack-item-content': isCalendarGridStackActive }">
-            <section class="calendar-query-toolbar" aria-label="달력 조회">
+        <div class="calendar-query-item household-calendar-layout-item--calendar-query" :class="isCalendarGridStackActive ? 'grid-stack-item' : 'calendar-dashboard-item'" :style="calendarQueryItemStyle"
+          :gs-id="CALENDAR_QUERY_ITEM_ID" :data-calendar-panel-id="CALENDAR_QUERY_ITEM_ID"
+          :data-palette-drop-target="directGesture?.type === 'palette-move' && directGesture.targetId === CALENDAR_QUERY_ITEM_ID"
+          :gs-x="calendarQueryPanel.x" :gs-y="calendarQueryPanel.y" :gs-w="calendarQueryPanel.w" :gs-h="calendarQueryPanel.h" :gs-min-h="Math.max(calendarQueryPanel.minH, calendarQueryLayoutRows)" gs-max-h="12" gs-min-w="9" gs-max-w="9" gs-no-move="false" gs-no-resize="false" gs-locked="false" tabindex="-1">
+          <span v-if="isLayoutEditMode && isMobileLayoutMode" class="calendar-mobile-resize" role="button" tabindex="0" :data-palette-resize="CALENDAR_QUERY_ITEM_ID" aria-label="날짜·조회 팔레트 크기 조절" @pointerdown="resizeMobilePalette($event, calendarQueryPanel)"></span>
+          <div class="calendar-query-item__content" :class="isCalendarGridStackActive ? 'grid-stack-item-content' : 'calendar-dashboard-content'">
+            <div class="calendar-dashboard-panel" @pointerdown="handlePaletteHeaderPointer($event, calendarQueryPanel)">
+              <span v-if="isLayoutEditMode" class="calendar-palette-move-handle" role="button" tabindex="0" :data-palette-move="CALENDAR_QUERY_ITEM_ID" aria-label="날짜·조회 팔레트 이동" title="잡아 끌거나 방향키로 이동" @pointerdown="moveMobilePalette($event, calendarQueryPanel)">⠿</span>
+            <section class="panel calendar-query-toolbar" aria-label="달력 조회">
               <div ref="calendarQueryControlsRef" class="calendar-query-toolbar__controls" data-no-drag="true">
                 <div class="calendar-query-toolbar__date">
                   <button type="button" class="button button--secondary" aria-label="이전 월" @click="shiftAnchorMonth(-1)">‹</button>
@@ -4253,10 +4275,11 @@ defineExpose({
                 </div>
               </div>
             </section>
+            </div>
           </div>
         </div>
         <div
-          v-for="panel in calendarLayoutPanels"
+          v-for="panel in calendarLayoutContentPanels"
           :key="panel.id"
           :class="[
             isCalendarGridStackActive ? 'grid-stack-item' : 'calendar-dashboard-item',
@@ -4697,6 +4720,8 @@ defineExpose({
             :data-widget-rows="card.config.cardRows"
             :data-widget-grid-columns="isMobileLayoutMode ? 9 : aggregateGridFrames.get(card.index).cardColumns"
             :data-widget-grid-rows="aggregateGridFrames.get(card.index).cardRows"
+            :data-widget-grid-x="aggregateGridCells.get(card.index).x"
+            :data-widget-grid-y="aggregateGridCells.get(card.index).y"
             :data-widget-resizing="directGesture?.type === 'widget-resize' && directGesture.index === card.index"
             :data-widget-drop-target="directGesture?.type === 'widget-move' && directGesture.targetIndex === card.index"
           >

@@ -18,7 +18,7 @@ async function metrics(page) {
   })
 }
 
-test('common controls have one compact line above both palettes and never become a saved palette', async ({ page }, testInfo) => {
+test('legacy common controls start above both palettes and do not write an upgraded layout before explicit save', async ({ page }, testInfo) => {
   const saved = calendarSettings(), original = structuredClone(saved.layout)
   saved.preferences.transactionSheetViewMode = 'inline'
   const state = await mockPersonalization(page, { saved })

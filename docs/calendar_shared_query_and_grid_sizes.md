@@ -4,7 +4,7 @@
 
 - 개인화 설정/대시보드 편집 버튼 위치는 유지한다.
 - 날짜·연월·오늘·월/주 보기·표시 기준·거래 시트 열기를 달력과 빠른 입력 양쪽 위의 공통 줄로 분리한다. 모바일에서는 같은 순서를 유지하며 필요한 만큼 줄바꿈한다.
-- 표시 전용 `calendar-query` 행은 저장할 수 없고 이동/크기 조절 대상도 아니다. 조회와 편집에 같은 좌표 변환을 적용하며 기존 네 팔레트의 저장 좌표에는 이 행을 포함하지 않는다.
+- `calendar-query`는 전체 9열을 사용하는 이동 가능한 다섯 번째 팔레트이다. 기본적으로 달력/입력 위에 표시하지만 손잡이로 빈 행으로 옮길 수 있고, 저장한 좌표를 조회/편집에 함께 적용한다. 이전 네 팔레트 설정은 기존 표시 위치를 유지하도록 한 번만 호환 변환한다. 상세 내용은 `calendar_query_palette_and_dense_grid.md`를 참고한다.
 - GridStack 재생성 전 원본 좌표를 복원하고, 편집 종료 후 남은 위치 스타일은 일반 CSS Grid에 적용하지 않는다. 임시 조회 필터, 거래 입력·공유, 계정 기본값 저장 방식은 유지한다.
 
 ## 집계 카드 크기
@@ -23,7 +23,7 @@
 
 ## 검증 범위
 
-- `calendarQueryLayout.test.js`, `calendarWidgetGrid.test.js`: 표시 행 투영/복원과 사용자 배치 경계, 구형 크기 유지, 칸 제한·스냅 계산.
+- `calendarQueryLayout.test.js`, `calendarWidgetGrid.test.js`: 이전 설정의 일회성 호환 변환, 사용자 배치 경계, 구형 크기 유지, 칸 제한·스냅 및 2차원 셀 배치 계산.
 - `calendar-widget-grid.spec.js`: 다른 브라우저 세션 복원, PC/모바일 드래그·방향키·취소, 구형 픽셀 복귀, 1440/1024/390/320px 편집/조회 일치.
 - `calendar-shared-controls.spec.js`, `calendar-toolbar-layout.spec.js`, `calendar-layout-alignment.spec.js`: 공통 조회 줄, 기존 컨트롤 실행, 저장 좌표 불변과 배치 정렬.
 - 기존 개인화·WYSIWYG·기기 간 동기화·입력·공유 회귀 검증을 병행한다.

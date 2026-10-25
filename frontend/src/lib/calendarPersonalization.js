@@ -8,7 +8,8 @@ export const PERSONALIZATION_SECTIONS = [
 export const clonePersonalization = value => JSON.parse(JSON.stringify(value))
 export const personalizationChanged = (left, right) => JSON.stringify(left) !== JSON.stringify(right)
 
-// Only explicit edits call this packing helper. Reading saved layouts never rearranges them.
+// Pure collision resolver: explicit edits persist its result; responsive display
+// projections use a copy and never rewrite the stored layout on read.
 export function packDashboardPanels(panels, changedId) {
   const occupied = new Set(), result = new Map()
   const ordered = [...panels].sort((a, b) => (a.id === changedId ? -1 : b.id === changedId ? 1 : a.y - b.y || a.x - b.x))

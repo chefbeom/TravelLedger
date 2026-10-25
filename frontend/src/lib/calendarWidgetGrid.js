@@ -43,13 +43,21 @@ export function resolvedWidgetGrid(config, availableWidth, rowHeight) {
   return { cardColumns: saved.cardColumns || inferred.cardColumns, cardRows: saved.cardRows || inferred.cardRows }
 }
 
+export function packWidgetGrid(frames, mobile = false) {
+  const occupied = new Set()
+  return frames.map(frame => {
+    const size = widgetGridSize(frame)
+    const w = mobile ? WIDGET_GRID_COLUMNS : size.cardColumns || 1, h = size.cardRows || 1
+    for (let y = 0; ; y++) for (let x = 0; x <= WIDGET_GRID_COLUMNS - w; x++) {
+      let free = true
+      for (let row = y; row < y + h && free; row++) for (let column = x; column < x + w; column++) if (occupied.has(`${column}:${row}`)) { free = false; break }
+      if (!free) continue
+      for (let row = y; row < y + h; row++) for (let column = x; column < x + w; column++) occupied.add(`${column}:${row}`)
+      return { x, y, w, h }
+    }
+  })
+}
+
 export function widgetGridRowCount(frames, mobile = false) {
-  let used = 0, rowHeight = 0, rows = 0
-  for (const frame of frames) {
-    const width = mobile ? WIDGET_GRID_COLUMNS : frame.cardColumns
-    if (used + width > WIDGET_GRID_COLUMNS) { rows += rowHeight; used = 0; rowHeight = 0 }
-    used += width
-    rowHeight = Math.max(rowHeight, frame.cardRows)
-  }
-  return rows + rowHeight
+  return Math.max(0, ...packWidgetGrid(frames, mobile).map(frame => frame.y + frame.h))
 }

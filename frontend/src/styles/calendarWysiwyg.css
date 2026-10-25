@@ -34,12 +34,15 @@ html body .app-shell.app-shell .calendar-dashboard .ui-resizable-se, .calendar-m
 
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card.calendar-widget {
   position: relative; flex: 0 0 min(var(--calendar-widget-width), 100%) !important;
-  width: min(var(--calendar-widget-width), 100%) !important; min-width: min(200px, 100%) !important; max-width: 100% !important;
-  height: var(--calendar-widget-height, auto) !important; min-height: 160px !important; align-self: flex-start !important;
+  width: min(var(--calendar-widget-width), 100%) !important; min-width: min(var(--calendar-widget-min-width, 200px), 100%) !important; max-width: 100% !important;
+  height: var(--calendar-widget-height, auto) !important; min-height: var(--calendar-widget-min-height, 160px) !important; align-self: flex-start !important;
   align-content: start !important; justify-content: flex-start !important;
   overflow: auto !important; scroll-margin-top: 120px; box-shadow: none !important;
 }
-html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card.calendar-widget.household-aggregate-card--chart { min-width: min(280px, 100%) !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card.calendar-widget.household-aggregate-card--chart { min-width: min(var(--calendar-widget-min-width, 280px), 100%) !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid { gap: 8px !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .calendar-widget[data-widget-rows='1'] { padding: 10px !important; gap: 8px !important; }
+html body .app-shell.app-shell .calendar-dashboard--editing .household-aggregate-panel .household-aggregate-grid { background-image: linear-gradient(to right, var(--grid-guide-border) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-guide-border) 1px, transparent 1px) !important; background-size: calc((100% + 8px) / 9) var(--calendar-layout-cell-height); }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .calendar-widget.household-aggregate-card--chart { display: grid !important; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr) !important; grid-template-rows: auto minmax(0, 1fr) !important; gap: 8px 12px !important; }
 html body .app-shell.app-shell .calendar-dashboard .calendar-widget.household-aggregate-card--chart .household-aggregate-card__copy { grid-column: 1; grid-row: 1; align-self: start; }
 html body .app-shell.app-shell .calendar-dashboard .calendar-widget.household-aggregate-card--chart .household-aggregate-card__meta { grid-column: 1; grid-row: 2; margin-top: 0; }

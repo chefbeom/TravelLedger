@@ -198,6 +198,7 @@ class HouseholdPersonalizationIntegrationTest {
         var secondDevice = new MockHttpSession();
         ObjectNode request = draft(owner);
         ((ObjectNode) request.at("/widgets/0")).put("title", "다른 컴퓨터에서도 유지").put("cardWidth", 310).put("cardHeight", 230)
+                .put("cardColumns", 3).put("cardRows", 2)
                 .put("textSize", "LARGE").put("textColor", "SKY").put("showPeriod", false).put("showDetails", false);
         ((ObjectNode) request.at("/layout/1")).put("w", 5).put("h", 7);
         ((ObjectNode) request.path("preferences")).put("receiptOcrPanelEnabled", false).put("highlightMode", "income");
@@ -221,6 +222,46 @@ class HouseholdPersonalizationIntegrationTest {
             ((ObjectNode) request.at("/widgets/0")).put(field, value);
             write(owner, request, 400);
         }
+        assertThat(read(owner)).isEqualTo(before);
+    }
+
+    @Test void gridCardDimensionsRoundTripWithoutErasingLegacySizesAndSurviveOlderClients() throws Exception {
+        ObjectNode request = draft(owner);
+        ((ObjectNode) request.at("/widgets/0")).put("cardColumns", 3).put("cardRows", 2)
+                .put("cardWidth", 310).put("cardHeight", 230);
+        JsonNode saved = write(owner, request, 200);
+        assertThat(saved.at("/widgets/0/cardColumns").asInt()).isEqualTo(3);
+        assertThat(read(owner).at("/widgets/0/cardRows").asInt()).isEqualTo(2);
+        ObjectNode legacy = mapper.createObjectNode();
+        JsonNode legacyWidgets = saved.path("widgets").deepCopy();
+        for (JsonNode widget : legacyWidgets) ((ObjectNode) widget).remove(List.of("cardColumns", "cardRows"));
+        legacy.set("widgets", legacyWidgets);
+        mvc.perform(put("/api/account/preferences/household-aggregates").with(user(AppUserPrincipal.from(owner)))
+                .with(csrf()).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(legacy)))
+                .andExpect(status().isOk());
+        JsonNode restored = read(owner);
+        assertThat(restored.at("/widgets/0/cardColumns").asInt()).isEqualTo(3);
+        assertThat(restored.at("/widgets/0/cardRows").asInt()).isEqualTo(2);
+        assertThat(restored.at("/widgets/0/cardWidth").asInt()).isEqualTo(310);
+        assertThat(restored.at("/widgets/0/cardHeight").asInt()).isEqualTo(230);
+        ObjectNode reset = (ObjectNode) restored;
+        ((ObjectNode) reset.at("/widgets/0")).put("cardColumns", 0).put("cardRows", 0);
+        JsonNode automatic = write(owner, reset, 200);
+        assertThat(automatic.at("/widgets/0/cardColumns").isNull()).isTrue();
+        assertThat(automatic.at("/widgets/0/cardRows").isNull()).isTrue();
+        assertThat(automatic.at("/widgets/0/cardWidth").asInt()).isEqualTo(310);
+    }
+
+    @Test void invalidGridCardDimensionsCannotChangeTheAccountSettings() throws Exception {
+        JsonNode before = read(owner);
+        for (String field : List.of("cardColumns", "cardRows")) for (int value : List.of(-1, field.equals("cardColumns") ? 10 : 13)) {
+            ObjectNode request = draft(owner);
+            ((ObjectNode) request.at("/widgets/0")).put(field, value);
+            write(owner, request, 400);
+        }
+        ObjectNode request = draft(owner);
+        ((ObjectNode) request.at("/widgets/0")).put("kind", "MONTHLY_CUMULATIVE_CHART").put("cardColumns", 1);
+        write(owner, request, 400);
         assertThat(read(owner)).isEqualTo(before);
     }
 

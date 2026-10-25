@@ -2,12 +2,12 @@ import { expect, test } from '@playwright/test'
 import { mockPersonalization } from './fixtures/calendarPersonalization.js'
 
 const calendar = page => page.locator('[data-calendar-panel-id="calendar"]')
-const query = page => calendar(page).getByRole('region', { name: '달력 조회', exact: true })
+const query = page => page.getByRole('region', { name: '달력 조회', exact: true })
 
 async function geometry(page) {
   return calendar(page).evaluate(palette => {
     const origin = palette.getBoundingClientRect()
-    return ['.calendar-query-toolbar', '.calendar-shell', '.calendar__weekdays', '.calendar__weeks'].map(selector => {
+    return ['.calendar-query-toolbar__heading', '.calendar-shell', '.calendar__weekdays', '.calendar__weeks'].map(selector => {
       const rect = palette.querySelector(selector).getBoundingClientRect()
       return { selector, x: rect.x - origin.x, y: rect.y - origin.y, width: rect.width, height: rect.height }
     })
@@ -18,7 +18,7 @@ async function expectGeometry(page, before) {
   await expect.poll(async () => Math.max(...(await geometry(page)).flatMap((rect, index) => ['x', 'y', 'width', 'height'].map(key => Math.abs(rect[key] - before[index][key]))))).toBeLessThan(1)
 }
 
-test('calendar controls sit above the calendar while dashboard settings stay at the top, without edit-mode content shifts', async ({ page }, testInfo) => {
+test('one full-width query strip sits above calendar and quick entry, with identical edit and saved geometry', async ({ page }, testInfo) => {
   test.setTimeout(90_000)
   const state = await mockPersonalization(page)
   for (const width of [1440, 1024, 390, 320]) {
@@ -35,12 +35,17 @@ test('calendar controls sit above the calendar while dashboard settings stay at 
       await expect(query(page).getByRole('combobox', { name: '달력 보기', exact: true })).toHaveCount(1)
       await expect(query(page).getByRole('combobox', { name: '표시 기준', exact: true })).toHaveCount(1)
       await expect(page.locator('.household-calendar-panel-dragbar')).toHaveCount(0)
+      await expect.poll(() => query(page).evaluate(toolbar => toolbar.getBoundingClientRect().bottom - Math.min(...[...document.querySelectorAll('[data-calendar-panel-id="calendar"], [data-calendar-panel-id="quick-entry"]')].map(element => element.getBoundingClientRect().top))), { message: 'After a responsive transition, the shared strip must remain above both primary palettes' }).toBeLessThanOrEqual(1)
       const bounds = await query(page).evaluate(toolbar => {
-        const rect = toolbar.getBoundingClientRect(), palette = toolbar.closest('.household-calendar-panel').getBoundingClientRect()
+        const rect = toolbar.getBoundingClientRect(), palette = toolbar.closest('.calendar-query-item').getBoundingClientRect()
         const controls = [...toolbar.querySelectorAll('button, select')].map(control => { const r = control.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, height: r.height } })
-        return { rect: { left: rect.left, right: rect.right, bottom: rect.bottom }, palette: { left: palette.left, right: palette.right, bottom: palette.bottom }, controls, gridTop: toolbar.nextElementSibling.getBoundingClientRect().top }
+        const primary = [...document.querySelectorAll('[data-calendar-panel-id="calendar"], [data-calendar-panel-id="quick-entry"]')].map(element => element.getBoundingClientRect().top)
+        return { rect: { left: rect.left, right: rect.right, bottom: rect.bottom }, palette: { left: palette.left, right: palette.right, bottom: palette.bottom }, controls, gridTop: Math.min(...primary) }
       })
       expect(bounds.rect.bottom).toBeLessThanOrEqual(bounds.gridTop + 1)
+      await expect(calendar(page).locator('.calendar-query-toolbar')).toHaveCount(0)
+      await expect(page.locator('[data-calendar-panel-id="quick-entry"] .calendar-query-toolbar')).toHaveCount(0)
+      if (width >= 1024) expect(Math.max(...bounds.controls.map(item => item.top)) - Math.min(...bounds.controls.map(item => item.top))).toBeLessThan(1)
       for (const control of bounds.controls) {
         expect(control.left).toBeGreaterThanOrEqual(bounds.palette.left)
         expect(control.right).toBeLessThanOrEqual(bounds.palette.right + 1)

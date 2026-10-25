@@ -4,7 +4,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 const props = defineProps({ editor: Object, widget: Object, panel: Object, preferences: Object, paymentMethods: Array, busy: Boolean, canDuplicate: Boolean, mobile: Boolean })
 const emit = defineEmits(['close', 'widget', 'preference', 'panel', 'duplicate', 'delete', 'move', 'hide'])
 const root = ref(null), position = ref({})
-const dimensionDraft = ref({ cardWidth: '', cardHeight: '', w: '', h: '' })
+const dimensionDraft = ref({ cardColumns: '', cardRows: '', w: '', h: '' })
+const cardColumnOptions = computed(() => Array.from({ length: props.widget?.kind === 'MONTHLY_CUMULATIVE_CHART' ? 8 : 9 }, (_, index) => index + (props.widget?.kind === 'MONTHLY_CUMULATIVE_CHART' ? 2 : 1)))
 const isWidget = computed(() => props.editor?.type === 'widget')
 const title = computed(() => isWidget.value ? '위젯 직접 편집' : `${props.editor?.title || '팔레트'} 직접 편집`)
 const field = (key, value) => emit('widget', { index: props.editor.index, field: key, value })
@@ -15,7 +16,7 @@ function dimension(key, value) {
   if (['w', 'h'].includes(key)) emit('panel', { id: props.panel.id, field: key, value: Number(value) })
   else field(key, value)
 }
-watch(() => [props.editor, props.widget?.cardWidth, props.widget?.cardHeight, props.panel?.w, props.panel?.h, props.mobile], () => {
+watch(() => [props.editor, props.widget?.cardColumns, props.widget?.cardRows, props.panel?.w, props.panel?.h, props.mobile], () => {
   for (const key of Object.keys(dimensionDraft.value)) {
     // Scrolling repositions this popover. A repaint must not reset a partly typed number to its old model value.
     if (!root.value?.querySelector(`[data-dimension="${key}"]`)?.matches(':focus')) dimensionDraft.value[key] = dimensionValue(key) || ''
@@ -34,7 +35,7 @@ function outside(event) {
   if (props.editor && !root.value?.contains(event.target) && !props.editor.anchor?.contains(event.target) && !event.target.closest?.('[data-inline-editor-trigger]')) emit('close')
 }
 watch(() => props.editor, async value => { if (value) { await nextTick(); place(); root.value?.querySelector('input, select, button')?.focus() } })
-watch(() => [props.widget?.cardWidth, props.widget?.cardHeight, props.widget?.kind, props.mobile], () => nextTick(place))
+watch(() => [props.widget?.cardColumns, props.widget?.cardRows, props.widget?.kind, props.mobile], () => nextTick(place))
 onMounted(() => { window.addEventListener('resize', place); window.addEventListener('scroll', place, true); document.addEventListener('pointerdown', outside, true) })
 onBeforeUnmount(() => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); document.removeEventListener('pointerdown', outside, true) })
 </script>
@@ -55,8 +56,8 @@ onBeforeUnmount(() => { window.removeEventListener('resize', place); window.remo
             <label><span>글자 크기</span><select :value="widget.textSize" @change="field('textSize', $event.target.value)"><option value="SMALL">작게</option><option value="MEDIUM">기본</option><option value="LARGE">크게</option></select></label>
             <label><span>글자 색상</span><select :value="widget.textColor" @change="field('textColor', $event.target.value)"><option value="DEFAULT">기본</option><option value="MINT">민트</option><option value="SKY">하늘</option><option value="GOLD">오렌지</option><option value="PINK">핑크</option></select></label>
           </div>
-          <div class="calendar-inline-editor__columns"><label><span>카드 너비 (px)</span><input v-model="dimensionDraft.cardWidth" data-dimension="cardWidth" type="number" :min="widget.kind === 'MONTHLY_CUMULATIVE_CHART' ? 280 : 200" max="1200" placeholder="자동" @input="dimension('cardWidth', $event.target.value)" @blur="dimensionDraft.cardWidth = dimensionValue('cardWidth') || ''"></label><label><span>카드 높이 (px)</span><input v-model="dimensionDraft.cardHeight" data-dimension="cardHeight" type="number" min="160" max="800" placeholder="자동" @input="dimension('cardHeight', $event.target.value)" @blur="dimensionDraft.cardHeight = dimensionValue('cardHeight') || ''"></label></div>
-          <small>카드 크기를 바꿔도 글자 크기와 다른 위젯은 바뀌지 않습니다. 입력값을 비우면 자동 크기로 돌아갑니다.</small>
+          <div class="calendar-inline-editor__columns"><label><span>카드 너비 (칸)</span><select v-model="dimensionDraft.cardColumns" data-dimension="cardColumns" @change="dimension('cardColumns', $event.target.value)"><option value="">기존·기본 크기 유지</option><option v-for="columns in cardColumnOptions" :key="columns" :value="columns">{{ columns }} / 9열</option></select></label><label><span>카드 높이 (칸)</span><select v-model="dimensionDraft.cardRows" data-dimension="cardRows" @change="dimension('cardRows', $event.target.value)"><option value="">기존·자동 높이 유지</option><option v-for="rows in 12" :key="rows" :value="rows">{{ rows }}행</option></select></label></div>
+          <small>9열 격자와 팔레트의 행 높이를 기준으로 저장합니다. 글자 크기와 다른 위젯은 바뀌지 않습니다. 모바일에서는 너비를 화면에 맞추고 드래그로는 높이만 조절합니다.</small>
           <label class="calendar-inline-editor__check"><input type="checkbox" :checked="widget.showPeriod !== false" @change="field('showPeriod', $event.target.checked)">기간 표시</label>
           <label class="calendar-inline-editor__check"><input type="checkbox" :checked="widget.showDetails !== false" @change="field('showDetails', $event.target.checked)">수입·지출 및 상세 정보 표시</label>
           <template v-if="widget.kind === 'MONTHLY_CUMULATIVE_CHART'">

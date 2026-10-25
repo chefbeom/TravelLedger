@@ -6,7 +6,12 @@ html body .app-shell.app-shell .calendar-overview-toolbar__intro strong { font-s
 html body .app-shell.app-shell .calendar-overview-toolbar__intro span { font-size: 12px; color: var(--text-soft); }
 html body .app-shell.app-shell .calendar-overview-toolbar__settings { margin-left: auto; }
 html body .app-shell.app-shell :is(.calendar-overview-toolbar, .calendar-query-toolbar) .button { min-height: 40px; padding: 7px 12px; white-space: nowrap; }
-html body .app-shell.app-shell .calendar-query-toolbar { flex: none; min-width: 0; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); scroll-margin-top: 100px; }
+html body .app-shell.app-shell .calendar-query-item { position: relative; min-width: 0; min-height: 0; }
+html body .app-shell.app-shell .calendar-query-item.grid-stack-item { position: absolute; }
+html body .app-shell.app-shell .calendar-query-item:not(.grid-stack-item) { top: auto !important; left: auto !important; width: 100% !important; height: 100% !important; }
+html body .app-shell.app-shell .calendar-query-item__content { position: absolute; inset: var(--calendar-layout-grid-margin); overflow: hidden; }
+html body .app-shell.app-shell .calendar-query-toolbar { display: flex; align-items: center; min-width: 0; height: 100%; box-sizing: border-box; padding: 12px 18px; margin: 0; border: 1px solid var(--line); background: var(--surface-panel); scroll-margin-top: 100px; overflow: auto; container-type: inline-size; }
+html body .app-shell.app-shell .calendar-query-item > .ui-resizable-handle { display: none !important; }
 html body .app-shell.app-shell .calendar-query-toolbar__heading { position: relative; display: flex; align-items: center; min-height: 34px; padding-left: 12px; padding-right: 96px; margin-bottom: 10px; }
 html body .app-shell.app-shell .calendar-query-toolbar__heading h2 { margin: 0; min-width: 0; font-size: 18px; line-height: 26px; overflow-wrap: anywhere; }
 html body .app-shell.app-shell .calendar-query-toolbar__title--editing { visibility: hidden; }
@@ -15,6 +20,7 @@ html body .app-shell.app-shell .calendar-query-toolbar__controls,
 html body .app-shell.app-shell .calendar-query-toolbar__date,
 html body .app-shell.app-shell .calendar-query-toolbar__filters { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 html body .app-shell.app-shell .calendar-query-toolbar__controls { gap: 8px 14px; }
+html body .app-shell.app-shell .calendar-query-toolbar__controls { width: 100%; }
 html body .app-shell.app-shell .calendar-query-toolbar label { min-width: 0; }
 html body .app-shell.app-shell .calendar-query-toolbar select { width: auto; min-width: 0; max-width: 100%; min-height: 40px; padding: 7px 25px 7px 10px; }
 html body .app-shell.app-shell .calendar-query-toolbar__date > .button:first-child,
@@ -169,6 +175,9 @@ html body .app-shell.app-shell .calendar-dashboard .entry-date-time-hint { grid-
   html body .app-shell.app-shell .calendar-overview-toolbar__settings { margin-left: 0; }
 }
 html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layout-grid--mobile-flow { display: flex; flex-direction: column; gap: 8px; }
+html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layout-grid--mobile-flow > .calendar-query-item { flex: none; width: 100%; height: auto !important; }
+html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layout-grid--mobile-flow > .calendar-query-item .calendar-query-item__content { position: static; margin: 4px; }
+html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layout-grid--mobile-flow > .calendar-query-item .calendar-query-toolbar { height: auto; padding: 12px; }
 html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layout-grid--mobile-flow > .calendar-dashboard-item { flex: none; height: calc(var(--calendar-panel-rows) * var(--calendar-layout-cell-height)) !important; order: var(--mobile-calendar-panel-order); }
 @media (max-width: 760px) {
   html body .app-shell.app-shell .calendar-overview-toolbar { padding: 12px; gap: 10px; }

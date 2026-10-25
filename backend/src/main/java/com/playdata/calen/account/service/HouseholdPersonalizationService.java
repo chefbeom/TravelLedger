@@ -72,7 +72,9 @@ public class HouseholdPersonalizationService {
                     || (widget.singleExpenseLimit() != null && widget.singleExpenseLimit() < 0)
                     || (widget.chartMaxAmount() != null && widget.chartMaxAmount() < 0)
                     || (widget.cardWidth() != null && widget.cardWidth() != 0 && (widget.cardWidth() < 200 || widget.cardWidth() > 1200))
-                    || (widget.cardHeight() != null && widget.cardHeight() != 0 && (widget.cardHeight() < 160 || widget.cardHeight() > 800)))
+                    || (widget.cardHeight() != null && widget.cardHeight() != 0 && (widget.cardHeight() < 160 || widget.cardHeight() > 800))
+                    || (widget.cardColumns() != null && widget.cardColumns() != 0 && (widget.cardColumns() < ("MONTHLY_CUMULATIVE_CHART".equals(widget.kind()) ? 2 : 1) || widget.cardColumns() > 9))
+                    || (widget.cardRows() != null && widget.cardRows() != 0 && (widget.cardRows() < 1 || widget.cardRows() > 12)))
                 throw new BadRequestException("위젯 크기와 금액 범위를 확인해 주세요.");
         }
         lockOwner(ownerId);

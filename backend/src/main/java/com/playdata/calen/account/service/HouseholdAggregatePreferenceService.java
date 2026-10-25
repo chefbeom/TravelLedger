@@ -86,7 +86,9 @@ public class HouseholdAggregatePreferenceService {
                         input.cardWidth() == null ? previous.cardWidth() : input.cardWidth(),
                         input.cardHeight() == null ? previous.cardHeight() : input.cardHeight(),
                         input.showPeriod() == null ? previous.showPeriod() : input.showPeriod(),
-                        input.showDetails() == null ? previous.showDetails() : input.showDetails());
+                        input.showDetails() == null ? previous.showDetails() : input.showDetails(),
+                        input.cardColumns() == null ? previous.cardColumns() : input.cardColumns(),
+                        input.cardRows() == null ? previous.cardRows() : input.cardRows());
             }
             result.add(widget);
         }
@@ -116,7 +118,7 @@ public class HouseholdAggregatePreferenceService {
                 widget.layoutOrder(),
                 widget.textSize(),
                 widget.textColor(), widget.title(), widget.hidden(), widget.displaySize(),
-                widget.cardWidth(), widget.cardHeight(), widget.showPeriod(), widget.showDetails()
+                widget.cardWidth(), widget.cardHeight(), widget.showPeriod(), widget.showDetails(), widget.cardColumns(), widget.cardRows()
         );
     }
 
@@ -167,7 +169,7 @@ public class HouseholdAggregatePreferenceService {
                                 widget.layoutOrder(),
                                 widget.textSize(),
                                 widget.textColor(), widget.title(), widget.hidden(), widget.displaySize(),
-                                widget.cardWidth(), widget.cardHeight(), widget.showPeriod(), widget.showDetails()
+                                widget.cardWidth(), widget.cardHeight(), widget.showPeriod(), widget.showDetails(), widget.cardColumns(), widget.cardRows()
                         ))
                         .toList()
         );
@@ -283,7 +285,9 @@ public class HouseholdAggregatePreferenceService {
                     normalizeCardDimension(requestedWidget.cardWidth(), 200, 1200),
                     normalizeCardDimension(requestedWidget.cardHeight(), 160, 800),
                     normalizeBoolean(requestedWidget.showPeriod(), true),
-                    normalizeBoolean(requestedWidget.showDetails(), true)
+                    normalizeBoolean(requestedWidget.showDetails(), true),
+                    normalizeCardDimension(requestedWidget.cardColumns(), "MONTHLY_CUMULATIVE_CHART".equals(kind) ? 2 : 1, 9),
+                    normalizeCardDimension(requestedWidget.cardRows(), 1, 12)
             ));
         }
 
@@ -333,7 +337,7 @@ public class HouseholdAggregatePreferenceService {
                     normalizeLayoutOrder(widget.layoutOrder(), index + 1),
                     widget.textSize(),
                     widget.textColor(), widget.title(), widget.hidden(), widget.displaySize(),
-                    widget.cardWidth(), widget.cardHeight(), widget.showPeriod(), widget.showDetails()
+                    widget.cardWidth(), widget.cardHeight(), widget.showPeriod(), widget.showDetails(), widget.cardColumns(), widget.cardRows()
             );
         }
 
@@ -444,8 +448,19 @@ public class HouseholdAggregatePreferenceService {
             Integer cardWidth,
             Integer cardHeight,
             Boolean showPeriod,
-            Boolean showDetails
+            Boolean showDetails,
+            Integer cardColumns,
+            Integer cardRows
     ) {
+        private StoredWidget(String kind, String period, Long paymentMethodId, String amountType, Long monthlyExpenseTarget,
+                Long singleExpenseLimit, Boolean showIncomeCumulative, Boolean showExpenseCumulative, Boolean comparePreviousPeriod,
+                Long chartMaxAmount, Integer layoutX, Integer layoutY, Integer layoutW, Integer layoutH, Integer layoutOrder,
+                String textSize, String textColor, String title, Boolean hidden, String displaySize,
+                Integer cardWidth, Integer cardHeight, Boolean showPeriod, Boolean showDetails) {
+            this(kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative,
+                    showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, layoutX, layoutY, layoutW, layoutH,
+                    layoutOrder, textSize, textColor, title, hidden, displaySize, cardWidth, cardHeight, showPeriod, showDetails, null, null);
+        }
         private StoredWidget(String kind, String period, Long paymentMethodId, String amountType, Long monthlyExpenseTarget,
                 Long singleExpenseLimit, Boolean showIncomeCumulative, Boolean showExpenseCumulative, Boolean comparePreviousPeriod,
                 Long chartMaxAmount, Integer layoutX, Integer layoutY, Integer layoutW, Integer layoutH, Integer layoutOrder,

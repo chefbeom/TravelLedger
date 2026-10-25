@@ -5,7 +5,7 @@ const gridSelector = '.calendar-dashboard-grid.grid-stack'
 
 async function openLayoutEditor(page, expectedPanels = 4) {
   await page.getByRole('button', { name: '대시보드 편집', exact: true }).click()
-  await expect.poll(() => page.locator(gridSelector).evaluate(grid => grid.gridstack?.engine?.nodes.length)).toBe(expectedPanels)
+  await expect.poll(() => page.locator(gridSelector).evaluate(grid => grid.gridstack?.engine?.nodes.filter(node => node.id !== 'calendar-query').length)).toBe(expectedPanels)
 }
 
 async function layoutGeometry(page) {
@@ -109,12 +109,14 @@ test('dragged and resized cards snap to the same cells and retain their coordina
   await dragPanel(page, 'quick-entry', 1, 0)
   await resizePanel(page, 'calendar', 5, 3)
   const edited = (await layoutGeometry(page)).panels.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))
+  const query = await page.locator('.calendar-query-item').evaluate(element => ({ y: element.gridstackNode.y, h: element.gridstackNode.h }))
+  const savedCoordinates = edited.map(panel => ({ ...panel, y: panel.y >= query.y + query.h ? panel.y - query.h : panel.y }))
   expect(state.writes).toEqual([])
   await page.locator('.calendar-draft-toolbar').getByRole('button', { name: '변경사항 저장', exact: true }).click()
   await expect(page.locator(gridSelector)).toHaveCount(0)
   await expect(page.locator('.household-calendar-layout-guide')).toHaveCount(0)
   expect(state.writes).toHaveLength(1)
-  expect(state.saved.layout).toEqual(edited)
+  expect(state.saved.layout).toEqual(savedCoordinates)
   await page.reload()
   await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
   await openLayoutEditor(page)
@@ -138,7 +140,7 @@ test('switching to mobile hides the grid guides and returning to desktop restore
   }))
   for (const panel of panels) { expect(panel.left).toBeGreaterThanOrEqual(0); expect(panel.right).toBeLessThanOrEqual(391) }
   await page.setViewportSize({ width: 1440, height: 900 })
-  await expect.poll(() => page.locator(gridSelector).evaluate(grid => grid.gridstack?.engine?.nodes.length)).toBe(3)
+  await expect.poll(() => page.locator(gridSelector).evaluate(grid => grid.gridstack?.engine?.nodes.filter(node => node.id !== 'calendar-query').length)).toBe(3)
   await expectAligned(page)
   expect((await layoutGeometry(page)).panels.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))).toEqual(before)
   expect(state.writes).toEqual([])

@@ -67,14 +67,20 @@ test('separate computers restore the complete account settings and old device ca
     await expect(widget(otherPage)).toHaveAttribute('data-aggregate-text-color', 'SKY')
     await expect(widget(otherPage)).toHaveAttribute('data-widget-rows', '2')
     await expect(widget(otherPage)).toHaveAttribute('data-widget-columns', '3')
-    const rowHeight = await otherPage.locator('.calendar-dashboard').evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-layout-cell-height')))
+    const rowHeight = await otherPage.locator('.household-aggregate-grid').evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-widget-cell-height')))
     await expect(widget(otherPage)).toHaveCSS('height', `${2 * rowHeight - 8}px`)
     await expect(widget(otherPage).locator('.household-aggregate-card__meta')).toHaveCount(0)
     await expect(widget(otherPage).locator('.household-aggregate-card__copy small')).toHaveCount(0)
     await expect(otherPage.getByRole('button', { name: '분석 모달 열기', exact: true })).toHaveCount(0)
     await expect(otherPage.getByLabel('표시 기준', { exact: true })).toHaveValue('income')
     await expect(otherPage.locator('[data-calendar-panel-id="calendar"]')).toHaveCSS('grid-column', '1 / span 5')
-    await expect(otherPage.locator('[data-calendar-panel-id="calendar"]')).toHaveCSS('grid-row', '4 / span 7')
+    expect(firstSave.layout.find(panel => panel.id === 'calendar').y).toBe(3)
+    await expect.poll(() => otherPage.locator('.calendar-dashboard-grid').evaluate(grid => {
+      const aggregate = grid.querySelector('[data-calendar-panel-id="aggregate"]').getBoundingClientRect()
+      const query = grid.querySelector('[data-calendar-panel-id="calendar-query"]').getBoundingClientRect()
+      const calendar = grid.querySelector('[data-calendar-panel-id="calendar"]').getBoundingClientRect()
+      return calendar.top - Math.max(aggregate.bottom, query.bottom)
+    })).toBeGreaterThanOrEqual(0)
 
     await openSettings(otherPage)
     await expect(editor(otherPage).getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled()
@@ -145,12 +151,14 @@ test('failed server reads leave the local fallback usable but cannot save it ove
   await page.reload()
   await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
   const calendar = ensureCalendarQueryPalette(localLayout).find(panel => panel.id === 'calendar')
-  await expect.poll(() => page.locator('.calendar-dashboard-grid').evaluate(grid => {
+  const aggregate = ensureCalendarQueryPalette(localLayout).find(panel => panel.id === 'aggregate')
+  await expect.poll(() => page.locator('.calendar-dashboard-grid').evaluate((grid, savedAggregateRows) => {
     const queryRows = Number(grid.querySelector('.calendar-query-item').style.getPropertyValue('--calendar-panel-rows'))
+    const aggregateRows = Number(grid.querySelector('[data-calendar-panel-id="aggregate"]').style.getPropertyValue('--calendar-panel-rows'))
     const calendarOrder = Number(grid.querySelector('[data-calendar-panel-id="calendar"]').style.getPropertyValue('--mobile-calendar-panel-order'))
-    // Mobile controls wrap into an extra display row without changing the cached layout.
-    return calendarOrder - Math.max(0, queryRows - 1) * 9
-  })).toBe(calendar.y * 9 + calendar.x)
+    // Wrapped controls and cards may need additional presentation rows; the cached layout remains unchanged.
+    return calendarOrder - (Math.max(0, queryRows - 1) + Math.max(0, aggregateRows - savedAggregateRows)) * 9
+  }, aggregate.h)).toBe(calendar.y * 9 + calendar.x)
   await openSettings(page)
   await expect(editor(page).getByRole('alert')).toContainText('검증용 설정 조회 실패')
   await expect(editor(page).getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled()

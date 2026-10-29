@@ -10,7 +10,7 @@ export const personalizationChanged = (left, right) => JSON.stringify(left) !== 
 
 // Pure collision resolver: explicit edits persist its result; responsive display
 // projections use a copy and never rewrite the stored layout on read.
-export function packDashboardPanels(panels, changedId) {
+export function packDashboardPanels(panels, changedId, { maxPanelRows = 12 } = {}) {
   const occupied = new Set(), result = new Map()
   const ordered = [...panels].sort((a, b) => (a.id === changedId ? -1 : b.id === changedId ? 1 : a.y - b.y || a.x - b.x))
   const free = (x, y, w, h) => {
@@ -19,7 +19,7 @@ export function packDashboardPanels(panels, changedId) {
   }
   for (const panel of ordered) {
     const w = Math.max(1, Math.min(9, Math.round(Number(panel.w) || 1)))
-    const h = Math.max(1, Math.min(12, Math.round(Number(panel.h) || 1)))
+    const h = Math.max(1, Math.min(Math.max(12, maxPanelRows), Math.round(Number(panel.h) || 1)))
     const x = Math.max(0, Math.min(9 - w, Math.round(Number(panel.x) || 0)))
     let y = Math.max(0, Math.min(200, Math.round(Number(panel.y) || 0)))
     while (y <= 200 && !free(x, y, w, h)) y++

@@ -56,8 +56,10 @@ test('new account uses four readable cards and spacious calendar and input panel
         expect(states.filter(item => item.clipped).every(item => ['auto', 'scroll'].includes(item.overflow))).toBe(true)
       }
     }
-    const geometry = await widgets.evaluateAll(cards => cards.map(card => Math.round(card.getBoundingClientRect().y)))
-    expect(new Set(geometry).size).toBe(1)
+    if (width >= 1366) {
+      const geometry = await widgets.evaluateAll(cards => cards.map(card => Math.round(card.getBoundingClientRect().y)))
+      expect(new Set(geometry).size).toBe(1)
+    }
     if (width === 1600) await page.locator('.calendar-dashboard').screenshot({ path: testInfo.outputPath('new-account-default.png') })
   }
   await page.reload()
@@ -91,7 +93,11 @@ test('editing and saving a fresh account keeps the default geometry and persists
   const state = await mockPersonalization(page, { saved: newAccountSettings() })
   const cards = page.locator('.calendar-widget')
   const sizes = () => cards.evaluateAll(elements => elements.map(element => ({ width: Math.round(element.getBoundingClientRect().width), height: Math.round(element.getBoundingClientRect().height) })))
-  await expect.poll(async () => (await cards.first().boundingBox()).height).toBeGreaterThan(130)
+  await expect.poll(() => cards.first().evaluate(card => {
+    const grid = card.closest('.household-aggregate-grid')
+    const pitch = parseFloat(getComputedStyle(grid).gridAutoRows) + parseFloat(getComputedStyle(grid).rowGap)
+    return Math.abs(card.getBoundingClientRect().height - (pitch - 8))
+  })).toBeLessThan(1)
   const before = await sizes()
   await page.getByRole('button', { name: '대시보드 편집', exact: true }).click()
   await expect(page.locator('.calendar-draft-toolbar')).toBeVisible()

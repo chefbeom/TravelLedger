@@ -148,7 +148,7 @@ test('widget ordering and keyboard resizing operate on the selected card without
   await title.fill('순서 검증 첫 위젯')
   await title.press('Enter')
   const before = await widget(page, 0).boundingBox()
-  const rowHeight = await canvas(page).evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-layout-cell-height')))
+  const rowHeight = await page.locator('.household-aggregate-grid').evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-widget-cell-height')))
   const rows = Math.round((before.height + 8) / rowHeight) + 1
   await widget(page, 0).getByRole('button', { name: /위젯 크기 조절/ }).focus()
   await page.keyboard.press('ArrowDown')
@@ -192,7 +192,7 @@ test('chart corner resize previews the real chart and survives saving', async ({
   const chart = widget(page, 3)
   const before = await chart.boundingBox()
   const touch = page.viewportSize().width < 760
-  const rowHeight = await canvas(page).evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-layout-cell-height')))
+  const rowHeight = await page.locator('.household-aggregate-grid').evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-widget-cell-height')))
   const rows = Math.round((before.height + 8) / rowHeight) + 1
   await dragPointer(page, chart.getByRole('button', { name: /위젯 크기 조절/ }), touch ? -20 : 60, rowHeight * 0.7, touch)
   await expect.poll(async () => Math.round((await chart.boundingBox()).height)).toBe(rowHeight * rows - 8)

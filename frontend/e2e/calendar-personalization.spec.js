@@ -217,7 +217,7 @@ test('desktop tablet and mobile keep cards and all editor sections readable in b
       // A whole cell can be narrower than the former 220px minimum. Verify the
       // explicit cell contract, while retaining the content overflow check above.
       const sizes = await page.locator('.household-aggregate-card').evaluateAll(cards => cards.map(card => {
-        const r = card.getBoundingClientRect(), rowPitch = parseFloat(getComputedStyle(card.closest('.calendar-dashboard')).getPropertyValue('--calendar-layout-cell-height'))
+        const r = card.getBoundingClientRect(), rowPitch = parseFloat(getComputedStyle(card.parentElement).getPropertyValue('--calendar-widget-cell-height'))
         return { width: r.width, height: r.height, columns: Number(card.dataset.widgetGridColumns), expectedWidth: (card.parentElement.clientWidth + 8) / 9 * Number(card.dataset.widgetGridColumns) - 8, expectedHeight: rowPitch * Number(card.dataset.widgetGridRows) - 8 }
       }))
       for (const size of sizes) {

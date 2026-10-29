@@ -86,7 +86,7 @@ test('changing a card frame never rescales its text or its siblings, and persist
   await inspector(page).getByRole('combobox', { name: '카드 너비 (칸)', exact: true }).selectOption('3')
   await inspector(page).getByRole('combobox', { name: '카드 높이 (칸)', exact: true }).selectOption('2')
   const resized = await appearance(widget(page, 0))
-  const rowHeight = await board(page).evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-layout-cell-height')))
+  const rowHeight = await page.locator('.household-aggregate-grid').evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-widget-cell-height')))
   expect(resized.height).toBe(rowHeight * 2 - 8)
   for (const part of ['title', 'amount', 'period', 'detail']) expect(resized[part]).toEqual(before[0][part])
   for (let index = 1; index < 5; index++) expect(await appearance(widget(page, index))).toEqual(before[index])
@@ -147,7 +147,7 @@ test('pointer and touch resizing preview only the selected widget and cancel res
   const handle = widget(page, 0).getByRole('button', { name: /위젯 크기 조절/ })
   await handle.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
   const rect = await handle.boundingBox(), x = rect.x + rect.width / 2, y = rect.y + rect.height / 2
-  const rowHeight = await board(page).evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-layout-cell-height')))
+  const rowHeight = await page.locator('.household-aggregate-grid').evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--calendar-widget-cell-height')))
   if (page.viewportSize().width < 760) {
     const client = await page.context().newCDPSession(page)
     await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] })

@@ -18,7 +18,7 @@ async function save(page) {
 async function cardGeometry(page) {
   return page.locator('.household-aggregate-grid').evaluate(grid => {
     const origin = grid.getBoundingClientRect(), pitch = (grid.clientWidth + 8) / 9
-    const rows = parseFloat(getComputedStyle(grid.closest('.calendar-dashboard')).getPropertyValue('--calendar-layout-cell-height'))
+    const rows = parseFloat(getComputedStyle(grid).getPropertyValue('--calendar-widget-cell-height'))
     const cells = [...grid.querySelectorAll('.calendar-widget-grid-guide > span')]
     const cards = [...grid.querySelectorAll('.calendar-widget')].map(card => {
       const r = card.getBoundingClientRect(), x = Number(card.dataset.widgetGridX), y = Number(card.dataset.widgetGridY)

@@ -37,6 +37,14 @@ test('packing respects a valid custom placement and ordering', () => {
   const custom = panels.map(panel => ({ ...panel, y: panel.y + 15 }))
   assert.deepEqual(packDashboardPanels(custom, 'calendar'), custom)
 })
+test('responsive presentation can exceed the saved 12-row limit without mutating it', () => {
+  const projected = panels.map(panel => panel.id === 'aggregate' ? { ...panel, h: 15 } : panel)
+  const packed = packDashboardPanels(projected, 'aggregate', { maxPanelRows: 15 })
+  assert.equal(packed.find(panel => panel.id === 'aggregate').h, 15)
+  assert.ok(packed.find(panel => panel.id === 'calendar').y >= 15)
+  assert.equal(panels.find(panel => panel.id === 'aggregate').h, 2)
+  assert.equal(packDashboardPanels(projected, 'aggregate').find(panel => panel.id === 'aggregate').h, 12)
+})
 test('editing at the final row never pushes another dashboard panel beyond the saved coordinate range', () => {
   const crowded = panels.map(panel => ({ ...panel, x: 0, y: 200, w: 9 }))
   const packed = packDashboardPanels(crowded, 'calendar')

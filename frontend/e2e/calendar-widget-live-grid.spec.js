@@ -17,7 +17,7 @@ function mixedSettings() {
 async function frames(page) {
   return page.locator('.household-aggregate-grid').evaluate(grid => {
     const origin = grid.getBoundingClientRect(), columns = (grid.clientWidth + 8) / 9
-    const rows = parseFloat(getComputedStyle(grid.closest('.calendar-dashboard')).getPropertyValue('--calendar-layout-cell-height'))
+    const rows = parseFloat(getComputedStyle(grid).getPropertyValue('--calendar-widget-cell-height'))
     return { columns, rows, mobile: document.documentElement.dataset.layoutMode === 'mobile', cards: [...grid.querySelectorAll('.calendar-widget')].map(element => {
       const rect = element.getBoundingClientRect()
       return { x: rect.left - origin.left, y: rect.top - origin.top, w: rect.width, h: rect.height, font: getComputedStyle(element.querySelector('strong')).fontSize }

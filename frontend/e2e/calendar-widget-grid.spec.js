@@ -16,8 +16,9 @@ function gridSettings() {
 async function frame(page) {
   return card(page).evaluate(element => {
     const r = element.getBoundingClientRect(), grid = element.parentElement
-    const rowPitch = parseFloat(getComputedStyle(element.closest('.calendar-dashboard')).getPropertyValue('--calendar-layout-cell-height'))
-    return { width: r.width, height: r.height, columns: Number(element.dataset.widgetColumns), rows: Number(element.dataset.widgetRows), columnPitch: (grid.clientWidth + 8) / 9, rowPitch, font: getComputedStyle(element.querySelector('.household-aggregate-card__copy strong')).fontSize, mobile: document.documentElement.dataset.layoutMode === 'mobile' }
+    const rowPitch = parseFloat(getComputedStyle(grid).getPropertyValue('--calendar-widget-cell-height'))
+    const outerRowPitch = parseFloat(getComputedStyle(element.closest('.calendar-dashboard')).getPropertyValue('--calendar-layout-cell-height'))
+    return { width: r.width, height: r.height, columns: Number(element.dataset.widgetColumns), rows: Number(element.dataset.widgetRows), columnPitch: (grid.clientWidth + 8) / 9, rowPitch, outerRowPitch, font: getComputedStyle(element.querySelector('.household-aggregate-card__copy strong')).fontSize, mobile: document.documentElement.dataset.layoutMode === 'mobile' }
   })
 }
 
@@ -122,7 +123,7 @@ test('clearing grid overrides keeps original pixels and snaps their display to t
   await inline(page).getByRole('combobox', { name: '카드 높이 (칸)', exact: true }).selectOption('')
   await inline(page).getByRole('button', { name: '편집 계속하기' }).click()
   await save(page)
-  const original = await frame(page), rows = Math.round((230 + 8) / original.rowPitch)
+  const original = await frame(page), rows = Math.round((230 + 8) / original.outerRowPitch)
   await expect(card(page)).toHaveCSS('height', `${rows * original.rowPitch - 8}px`)
   await expect(card(page)).toHaveAttribute('data-widget-grid-rows', String(rows))
   expect(state.saved.widgets[0]).toMatchObject({ cardColumns: 0, cardRows: 0, cardWidth: 310, cardHeight: 230 })

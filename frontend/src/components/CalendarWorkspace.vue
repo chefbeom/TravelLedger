@@ -9,6 +9,7 @@ import { fetchLayoutSetting, fetchHouseholdPersonalization, saveHouseholdPersona
 import { clonePersonalization, personalizationChanged, packDashboardPanels } from '../lib/calendarPersonalization'
 import { widgetFrame, reorderItem } from '../lib/calendarDirectEditing'
 import { widgetGridSize, widgetGridStyle, resizedWidgetGrid, resolvedWidgetGrid, packWidgetGrid } from '../lib/calendarWidgetGrid'
+import { aggregateRequiredPanelRows, aggregateWidgetCellHeight } from '../lib/calendarAggregateLayout'
 import { CALENDAR_QUERY_ITEM_ID, ensureCalendarQueryPalette } from '../lib/calendarQueryLayout'
 import { isLegacyDefaultCalendarLayout } from '../lib/calendarDefaultLayout'
 import HouseholdPersonalizationDialog from './HouseholdPersonalizationDialog.vue'
@@ -421,6 +422,9 @@ const ledgerSheetRef = ref(null)
 const aggregatePanelRef = ref(null)
 const aggregateGridRef = ref(null)
 const aggregateGridWidth = ref(0)
+const aggregatePanelChrome = ref(56)
+const aggregateLayoutReady = ref(false)
+const aggregateContentMinRows = ref({})
 const quickEntryScrollTargetRef = ref(null)
 const ledgerSheetScrollTargetRef = ref(null)
 const calendarShellRef = ref(null)
@@ -438,6 +442,7 @@ const calendarPanelLayout = ref(createDefaultCalendarPanelLayout())
 const entryTimeText = ref('00:00')
 let calendarResizeObserver = null
 let aggregateGridResizeObserver = null
+let aggregateObservedContent = new Set()
 let layoutGrid = null
 let layoutGridResizeObserver = null
 let layoutModeObserver = null
@@ -1244,13 +1249,22 @@ const personalizationCards = computed(() => normalizeAggregateConfigs(aggregateW
 const aggregateCards = computed(() => personalizationCards.value.filter(card => card.config.kind !== 'NONE' && !card.config.hidden))
 const aggregateGridFrames = computed(() => new Map(aggregateCards.value.map(card => {
   const preview = directGesture.value?.type === 'widget-resize' && directGesture.value.index === card.index ? directGesture.value.size : null
-  return [card.index, resolvedWidgetGrid({ ...card.config, ...preview }, aggregateGridWidth.value, layoutCellHeight.value)]
+  const frame = resolvedWidgetGrid({ ...card.config, ...preview }, aggregateGridWidth.value, layoutCellHeight.value)
+  // Keep the saved size unchanged, but give an individual card enough room for
+  // its configured text and details when the viewport is too narrow.
+  return [card.index, { ...frame, cardRows: Math.max(frame.cardRows, aggregateContentMinRows.value[card.index] || 1) }]
 })))
 const aggregateGridCells = computed(() => {
   const indices = [...aggregateGridFrames.value.keys()]
   return new Map(packWidgetGrid([...aggregateGridFrames.value.values()], isMobileLayoutMode.value).map((cell, index) => [indices[index], cell]))
 })
 const aggregateGridGuideCellCount = computed(() => 9 * Math.max(0, ...[...aggregateGridCells.value.values()].map(cell => cell.y + cell.h)))
+const aggregateContentRows = computed(() => Math.max(0, ...[...aggregateGridCells.value.values()].map(cell => cell.y + cell.h)))
+const aggregateCompactCells = computed(() => !isMobileLayoutMode.value)
+const aggregateCellHeight = computed(() => aggregateWidgetCellHeight(layoutCellHeight.value, aggregatePanelChrome.value, isMobileLayoutMode.value))
+const aggregateVisiblePanelRows = computed(() => aggregateLayoutReady.value
+  ? aggregateRequiredPanelRows(layoutCellHeight.value, aggregateCellHeight.value, aggregatePanelChrome.value, aggregateContentRows.value)
+  : CALENDAR_AGGREGATE_PANEL_ROWS)
 const personalizationDirty = computed(() => Boolean(personalizationSnapshot.value && personalizationChanged(personalizationSnapshot.value.baseline || personalizationSnapshot.value.settings, currentPersonalization())))
 const personalizationPreferences = computed(calendarViewPreferencePayload)
 const directGhostStyle = computed(() => ({
@@ -1276,9 +1290,17 @@ const calendarLayoutPanels = computed(() => {
     && (panel.id !== 'sheet' || transactionSheetViewMode.value === 'inline')
   ))
 
-  // The query strip is now a real movable palette. Only resolve collisions from
-  // its responsive height; never insert an invisible, locked presentation row.
-  return packDashboardPanels(panels.map(panel => panel.id === CALENDAR_QUERY_ITEM_ID ? { ...panel, h: Math.max(panel.h, calendarQueryLayoutRows.value) } : panel), CALENDAR_QUERY_ITEM_ID)
+  // Display overflow as additional whole palette rows, without changing saved
+  // account settings. When the aggregate is above the query, it remains above
+  // it as the query and following panels are moved out of its way.
+  const aggregate = panels.find(panel => panel.id === 'aggregate')
+  const query = panels.find(panel => panel.id === CALENDAR_QUERY_ITEM_ID)
+  const expanded = aggregate && aggregateVisiblePanelRows.value > aggregate.h
+  const projected = panels.map(panel => panel.id === CALENDAR_QUERY_ITEM_ID
+    ? { ...panel, h: Math.max(panel.h, calendarQueryLayoutRows.value) }
+    : panel.id === 'aggregate' ? { ...panel, h: Math.max(panel.h, aggregateVisiblePanelRows.value) } : panel)
+  return packDashboardPanels(projected, expanded && (!query || aggregate.y < query.y) ? 'aggregate' : CALENDAR_QUERY_ITEM_ID,
+    { maxPanelRows: aggregateVisiblePanelRows.value })
 })
 const calendarLayoutContentPanels = computed(() => calendarLayoutPanels.value.filter(panel => panel.id !== CALENDAR_QUERY_ITEM_ID))
 const calendarQueryPanel = computed(() => calendarLayoutPanels.value.find(panel => panel.id === CALENDAR_QUERY_ITEM_ID))
@@ -1495,19 +1517,29 @@ watch(() => aggregateWidgetDraftConfigs.value.map(item => `${item.kind}:${item.p
 })
 
 watch(aggregateGridRef, (element, previous) => {
-  if (previous) aggregateGridResizeObserver?.unobserve(previous)
-  if (!element) return
-  updateAggregateGridWidth()
-  if (typeof ResizeObserver !== 'undefined') {
-    aggregateGridResizeObserver ||= new ResizeObserver(updateAggregateGridWidth)
-    aggregateGridResizeObserver.observe(element)
+  if (previous) {
+    aggregateGridResizeObserver?.disconnect()
+    aggregateObservedContent.clear()
   }
+  if (!element) return
+  if (typeof ResizeObserver !== 'undefined') {
+    aggregateGridResizeObserver ||= new ResizeObserver(updateAggregateGridMeasurements)
+    aggregateGridResizeObserver.observe(element)
+    const panel = element.closest('.household-aggregate-panel')
+    if (panel) aggregateGridResizeObserver.observe(panel)
+    const header = panel?.querySelector('.household-aggregate-header')
+    if (header) aggregateGridResizeObserver.observe(header)
+  }
+  updateAggregateGridMeasurements()
 }, { flush: 'post' })
+
+watch(() => aggregateLayoutReady.value ? aggregateCards.value : [], () => nextTick(updateAggregateGridMeasurements), { flush: 'post' })
 
 onMounted(() => {
   if (typeof window === 'undefined') {
     return
   }
+  aggregateLayoutReady.value = true
   window.addEventListener('beforeunload', handlePersonalizationBeforeUnload)
   window.addEventListener('calen:before-preference-navigation', handlePersonalizationNavigation)
 
@@ -1566,6 +1598,7 @@ onBeforeUnmount(() => {
   }
   layoutGridResizeObserver?.disconnect()
   aggregateGridResizeObserver?.disconnect()
+  aggregateObservedContent.clear()
   destroyLayoutGrid()
 
   if (layoutModeObserver) {
@@ -1614,7 +1647,9 @@ function handleWorkspaceKeydown(event) {
       }
     }
     const field = resize ? (horizontal ? 'w' : 'h') : (horizontal ? 'x' : 'y')
-    updatePersonalizationPanel({ id, field, value: panel[field] + direction })
+    const displayed = resize && field === 'h' ? calendarLayoutPanels.value.find(item => item.id === id) : null
+    if (id === 'aggregate' && displayed && direction < 0 && displayed.h <= aggregateVisiblePanelRows.value) return
+    updatePersonalizationPanel({ id, field, value: (displayed?.h ?? panel[field]) + direction })
     return
   }
   if (event.key !== 'Backspace') {
@@ -1916,12 +1951,16 @@ function trackDirectPointer(event, handlers) {
 function resizeWidget(event, card) {
   const element = event.currentTarget.closest('.household-aggregate-card'), rect = element.getBoundingClientRect()
   const available = element.parentElement.clientWidth
-  const initial = { ...aggregateGridFrames.value.get(card.index) }
+  const initial = resolvedWidgetGrid(card.config, aggregateGridWidth.value, layoutCellHeight.value)
+  const rowHeight = aggregateCellHeight.value
   // A mobile full-width frame cannot infer a legacy desktop column count.
   if (isMobileLayoutMode.value) initial.cardColumns = widgetGridSize(card.config).cardColumns
   const sizeFor = (dx, dy) => {
-    const snapped = resizedWidgetGrid(rect, dx, dy, available, layoutCellHeight.value, Boolean(card.chart))
-    return { cardColumns: !isMobileLayoutMode.value && Math.abs(dx) > 4 ? snapped.cardColumns : initial.cardColumns, cardRows: Math.abs(dy) > 4 ? snapped.cardRows : initial.cardRows }
+    const snapped = resizedWidgetGrid(rect, dx, dy, available, rowHeight, Boolean(card.chart))
+    const minimumRows = aggregateContentMinRows.value[card.index] || 1
+    const rows = snapped.cardRows <= minimumRows && initial.cardRows < minimumRows
+      ? initial.cardRows : Math.max(snapped.cardRows, minimumRows)
+    return { cardColumns: !isMobileLayoutMode.value && Math.abs(dx) > 4 ? snapped.cardColumns : initial.cardColumns, cardRows: Math.abs(dy) > 4 ? rows : initial.cardRows }
   }
   inlineEditor.value = null
   trackDirectPointer(event, {
@@ -1944,9 +1983,13 @@ function resizeWidgetByKey(event, card) {
   const element = event.currentTarget.closest('.household-aggregate-card'), rect = element.getBoundingClientRect()
   const horizontal = ['ArrowLeft', 'ArrowRight'].includes(event.key)
   if (horizontal && isMobileLayoutMode.value) return
-  const size = widgetGridSize(card.config), inferred = resizedWidgetGrid(rect, 0, 0, element.parentElement.clientWidth, layoutCellHeight.value, Boolean(card.chart))
+  const size = widgetGridSize(card.config), inferred = resizedWidgetGrid(rect, 0, 0, element.parentElement.clientWidth, aggregateCellHeight.value, Boolean(card.chart))
   const field = horizontal ? 'cardColumns' : 'cardRows', direction = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1
-  updateAggregateWidgetLayout(card.index, widgetGridSize({ ...card.config, [field]: Math.max(horizontal && card.chart ? 2 : 1, (size[field] || inferred[field]) + direction) }))
+  const visible = aggregateGridFrames.value.get(card.index)
+  const current = size[field] || inferred[field]
+  if (!horizontal && direction < 0 && visible.cardRows <= (aggregateContentMinRows.value[card.index] || 1)) return
+  const base = horizontal ? current : Math.max(current, visible.cardRows)
+  updateAggregateWidgetLayout(card.index, widgetGridSize({ ...card.config, [field]: Math.max(horizontal && card.chart ? 2 : 1, base + direction) }))
 }
 
 function moveWidgetDirect(event, card) {
@@ -1992,14 +2035,20 @@ function moveMobilePalette(event, panel) {
   inlineEditor.value = null
   trackDirectPointer(event, {
     autoScroll: point => scrollDuringDirectMove(null, point),
-    move(_dx, _dy, point) {
+    move(_dx, dy, point) {
       const elements = [...resolveElementRef(layoutGridRef.value).querySelectorAll(':scope > [data-calendar-panel-id]')]
       // Target the palette under the pointer, not only its distant centre. The
       // shared controls and tall palettes must not create an unresponsive gap.
       const distance = element => { const r = element.getBoundingClientRect(); return Math.max(r.top - point.y, point.y - r.bottom, 0) }
       const nearest = elements.sort((a, b) => distance(a) - distance(b))[0]
       target = ordered.findIndex(item => item.id === nearest?.dataset.calendarPanelId)
-      directGesture.value = { type: 'palette-move', targetId: nearest?.dataset.calendarPanelId, x: point.x, y: point.y, label: paletteNames[panel.id] }
+      const source = ordered.findIndex(item => item.id === panel.id)
+      // A mobile palette may be taller than the screen. A deliberate long
+      // swipe moves it one place even before the pointer reaches its far edge.
+      if (target === source && Math.abs(dy) >= Math.min(200, window.innerHeight * 0.25)) {
+        target = clamp(source + Math.sign(dy), 0, ordered.length - 1)
+      }
+      directGesture.value = { type: 'palette-move', targetId: ordered[target]?.id, x: point.x, y: point.y, label: paletteNames[panel.id] }
     },
     finish() {
       applyMobilePaletteOrder(reorderItem(ordered, ordered.findIndex(item => item.id === panel.id), target))
@@ -2391,7 +2440,7 @@ function calendarPanelAttrs(panel) {
     minW: panel.minW,
     minH: panel.id === CALENDAR_QUERY_ITEM_ID ? Math.max(panel.minH, calendarQueryLayoutRows.value) : panel.minH,
     maxW: panel.maxW,
-    maxH: panel.maxH,
+    maxH: panel.id === 'aggregate' ? Math.max(panel.maxH, panel.h) : panel.maxH,
   }
 }
 
@@ -2430,7 +2479,17 @@ function readLayoutGridSnapshot() {
 
 function applyCalendarPanelLayout(snapshot) {
   const snapshotById = new Map((snapshot ?? []).map((item) => [String(item.id), item]))
-  const mergedLayout = calendarPanelLayout.value.map((current) => snapshotById.get(String(current.id)) ?? current)
+  const projectedAggregate = calendarLayoutPanels.value.find(panel => panel.id === 'aggregate')
+  const mergedLayout = calendarPanelLayout.value.map((current) => {
+    const next = snapshotById.get(String(current.id))
+    if (!next) return current
+    // GridStack sees the responsive presentation height. Do not turn that
+    // temporary height into an account preference while moving another panel.
+    if (current.id === 'aggregate' && projectedAggregate?.h > current.h && next.h === projectedAggregate.h) {
+      return { ...next, h: current.h }
+    }
+    return next
+  })
   calendarPanelLayout.value = normalizeCalendarPanelLayout(mergedLayout)
   refreshCalendarMeasurements()
 }
@@ -2582,7 +2641,7 @@ async function toggleLayoutEditMode() {
 
 function refreshCalendarMeasurements() {
   nextTick(() => {
-    updateAggregateGridWidth()
+    updateAggregateGridMeasurements()
     updateCalendarShellWidth()
     updateCalendarContentSize()
   })
@@ -2591,6 +2650,46 @@ function refreshCalendarMeasurements() {
 function updateAggregateGridWidth() {
   const width = resolveElementRef(aggregateGridRef.value)?.clientWidth
   if (width > 0) aggregateGridWidth.value = width
+}
+
+function updateAggregateGridMeasurements() {
+  updateAggregateGridWidth()
+  const grid = resolveElementRef(aggregateGridRef.value)
+  const panel = grid?.closest('.household-aggregate-panel')
+  if (!panel) return
+  const style = window.getComputedStyle(panel)
+  const chrome = grid.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop
+    + (parseFloat(style.paddingBottom) || 0) + (parseFloat(style.borderBottomWidth) || 0)
+  if (chrome > 0 && Number.isFinite(chrome)) aggregatePanelChrome.value = chrome
+
+  const minimumRows = {}, observedContent = new Set()
+  for (const card of grid.querySelectorAll('.calendar-widget')) {
+    const index = Number(card.dataset.aggregateIndex)
+    if (!Number.isInteger(index)) continue
+    const cardStyle = window.getComputedStyle(card)
+    const copy = card.querySelector('.household-aggregate-card__copy')
+    const meta = card.querySelector('.household-aggregate-card__meta')
+    const goal = card.querySelector('.household-aggregate-goal')
+    const legend = card.querySelector('.household-aggregate-chart__legend')
+    for (const target of [card, copy, meta, goal, legend]) if (target) observedContent.add(target)
+    const verticalPadding = ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth']
+      .reduce((sum, key) => sum + (parseFloat(cardStyle[key]) || 0), 0)
+    const gap = parseFloat(cardStyle.rowGap) || 0
+    const naturalHeight = element => element ? Math.max(element.getBoundingClientRect().height, element.scrollHeight) : 0
+    const pieces = [copy, goal, meta].filter(Boolean)
+    let contentHeight = pieces.reduce((sum, element) => sum + naturalHeight(element), 0) + Math.max(0, pieces.length - 1) * gap
+    if (card.classList.contains('household-aggregate-card--chart')) {
+      // The chart is in the other column; its flexible preview must not drive
+      // the measurement, but leave enough room for the graph and its legend.
+      contentHeight = Math.max(contentHeight, naturalHeight(legend) + 32)
+    }
+    const rows = Math.ceil((contentHeight + verticalPadding + 8 - 0.5) / aggregateCellHeight.value)
+    minimumRows[index] = Math.max(1, Math.min(12, rows))
+  }
+  for (const target of aggregateObservedContent) if (!observedContent.has(target)) aggregateGridResizeObserver?.unobserve(target)
+  for (const target of observedContent) if (!aggregateObservedContent.has(target)) aggregateGridResizeObserver?.observe(target)
+  aggregateObservedContent = observedContent
+  if (JSON.stringify(aggregateContentMinRows.value) !== JSON.stringify(minimumRows)) aggregateContentMinRows.value = minimumRows
 }
 
 function setAggregateGridElement(element) {
@@ -2828,7 +2927,7 @@ function getAggregateCardGridStyle(card) {
   const cell = aggregateGridCells.value.get(card.index)
   const order = normalizeAggregateLayoutOrder(config.layoutOrder, (card?.index ?? 0) + 1)
   return {
-    ...widgetGridStyle(frame, layoutCellHeight.value),
+    ...widgetGridStyle(frame, aggregateCellHeight.value),
     '--aggregate-card-grid-column': `${cell.x + 1} / span ${cell.w}`,
     '--aggregate-card-grid-row': `${cell.y + 1} / span ${cell.h}`,
     '--aggregate-card-col-span': String(cell.w),
@@ -4676,6 +4775,7 @@ defineExpose({
                   ref="aggregatePanelRef"
                   class="panel household-quickstats-panel household-aggregate-panel"
                   :class="{ 'calendar-aggregate-results--editing': isAggregateEditMode }"
+                  :data-aggregate-compact="aggregateCompactCells"
                 >
         <div class="panel__header household-aggregate-header">
           <div>
@@ -4703,6 +4803,7 @@ defineExpose({
           v-else-if="aggregateCards.length"
           :ref="setAggregateGridElement"
           class="household-aggregate-grid"
+          :style="{ '--calendar-widget-cell-height': `${aggregateCellHeight}px` }"
         >
           <div v-if="isLayoutEditMode" class="calendar-widget-grid-guide" aria-hidden="true"><span v-for="cell in aggregateGridGuideCellCount" :key="cell"></span></div>
           <article

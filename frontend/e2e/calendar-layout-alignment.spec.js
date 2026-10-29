@@ -114,7 +114,10 @@ test('dragged and resized cards snap to the same cells and retain their coordina
   await expect(page.locator(gridSelector)).toHaveCount(0)
   await expect(page.locator('.household-calendar-layout-guide')).toHaveCount(0)
   expect(state.writes).toHaveLength(1)
-  expect([...state.saved.layout].sort((a, b) => a.id.localeCompare(b.id))).toEqual([...edited].sort((a, b) => a.id.localeCompare(b.id)))
+  // The aggregate can be taller on screen to fit its cards. Moving unrelated
+  // panels must not save that temporary presentation height as a preference.
+  const savedGeometry = edited.map(panel => panel.id === 'aggregate' ? { ...panel, h: saved.layout.find(item => item.id === 'aggregate').h } : panel)
+  expect([...state.saved.layout].sort((a, b) => a.id.localeCompare(b.id))).toEqual([...savedGeometry].sort((a, b) => a.id.localeCompare(b.id)))
   await page.reload()
   await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
   await openLayoutEditor(page)

@@ -45,20 +45,51 @@ class HouseholdAggregatePreferenceServiceTest {
         var response = service.getPreferences(1L);
 
         assertThat(response.widgets()).hasSize(6);
-        assertThat(response.widgets().get(0).kind()).isEqualTo("TOTAL");
+        assertThat(response.widgets().get(0).kind()).isEqualTo("PAYMENT_METHOD");
         assertThat(response.widgets().get(0).amountType()).isEqualTo("EXPENSE");
+        assertThat(response.widgets().get(0).paymentMethodId()).isEqualTo(7L);
         assertThat(response.widgets().get(1).kind()).isEqualTo("MONTHLY_GOAL");
         assertThat(response.widgets().get(1).period()).isEqualTo("MONTH");
-        assertThat(response.widgets().get(2).kind()).isEqualTo("PAYMENT_METHOD");
-        assertThat(response.widgets().get(2).paymentMethodId()).isEqualTo(7L);
+        assertThat(response.widgets().get(2).kind()).isEqualTo("TOTAL");
         assertThat(response.widgets().get(2).amountType()).isEqualTo("EXPENSE");
         assertThat(response.widgets().get(3).kind()).isEqualTo("MONTHLY_CUMULATIVE_CHART");
         assertThat(response.widgets().get(3).layoutW()).isEqualTo(2);
         assertThat(response.widgets().get(4).kind()).isEqualTo("NONE");
         assertThat(response.widgets().get(5).kind()).isEqualTo("NONE");
+        assertThat(response.widgets().subList(0, 4))
+                .extracting(widget -> List.of(widget.cardColumns(), widget.cardRows()))
+                .containsExactly(List.of(2, 1), List.of(2, 1), List.of(2, 1), List.of(3, 1));
         assertThat(response.widgets())
                 .extracting(widget -> List.of(widget.layoutY(), widget.layoutH()))
                 .containsOnly(List.of(1, 1));
+    }
+
+    @Test
+    void getPreferences_keepsPreviouslySavedWidgetOrderAndDimensions() {
+        HouseholdAggregatePreferenceService service = new HouseholdAggregatePreferenceService(
+                appUserRepository, paymentMethodRepository, new ObjectMapper());
+        AppUser user = activeUser(1L);
+        String saved = """
+                [
+                  {"kind":"TOTAL","period":"YEAR","amountType":"EXPENSE","layoutOrder":1,"cardColumns":1,"cardRows":2,"title":"나의 집계"},
+                  {"kind":"MONTHLY_CUMULATIVE_CHART","period":"MONTH","amountType":"NET","layoutOrder":2,"cardColumns":4,"cardRows":2}
+                ]
+                """;
+        user.setHouseholdAggregateSettingsJson(saved);
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(1L)).thenReturn(List.of());
+
+        var response = service.getPreferences(1L);
+
+        assertThat(response.widgets().get(0).kind()).isEqualTo("TOTAL");
+        assertThat(response.widgets().get(0).period()).isEqualTo("YEAR");
+        assertThat(response.widgets().get(0).title()).isEqualTo("나의 집계");
+        assertThat(response.widgets().get(0).cardColumns()).isEqualTo(1);
+        assertThat(response.widgets().get(0).cardRows()).isEqualTo(2);
+        assertThat(response.widgets().get(1).kind()).isEqualTo("MONTHLY_CUMULATIVE_CHART");
+        assertThat(response.widgets().get(1).cardColumns()).isEqualTo(4);
+        assertThat(response.widgets().get(1).cardRows()).isEqualTo(2);
+        assertThat(user.getHouseholdAggregateSettingsJson()).isEqualTo(saved);
     }
 
     @Test

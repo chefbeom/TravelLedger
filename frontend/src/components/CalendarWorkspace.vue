@@ -10,6 +10,7 @@ import { clonePersonalization, personalizationChanged, packDashboardPanels } fro
 import { widgetFrame, reorderItem } from '../lib/calendarDirectEditing'
 import { widgetGridSize, widgetGridStyle, resizedWidgetGrid, resolvedWidgetGrid, packWidgetGrid } from '../lib/calendarWidgetGrid'
 import { CALENDAR_QUERY_ITEM_ID, ensureCalendarQueryPalette } from '../lib/calendarQueryLayout'
+import { isLegacyDefaultCalendarLayout } from '../lib/calendarDefaultLayout'
 import HouseholdPersonalizationDialog from './HouseholdPersonalizationDialog.vue'
 import CalendarInlineEditor from './CalendarInlineEditor.vue'
 import HouseholdTransactionSheet from './HouseholdTransactionSheet.vue'
@@ -40,7 +41,7 @@ const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
 const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
 const CALENDAR_AGGREGATE_PANEL_ROWS = 2
-const CALENDAR_RECOMMENDED_GRID_ROWS = 8
+const CALENDAR_RECOMMENDED_GRID_ROWS = 11
 const CALENDAR_RECOMMENDED_CONTENT_ROWS = CALENDAR_RECOMMENDED_GRID_ROWS - CALENDAR_AGGREGATE_PANEL_ROWS
 const CALENDAR_AGGREGATE_EDIT_PANEL_ROWS = 4
 const CALENDAR_DAY_LONG_PRESS_MS = 520
@@ -2365,6 +2366,15 @@ async function hydrateRemoteCalendarPanelLayout(sequence) {
       return
     }
 
+    // Older versions cached their automatic six-row layout before any account
+    // setting existed. Upgrade only that exact default after the server has
+    // confirmed there is no saved layout; never replace a customized layout.
+    if (response && response.payload == null && isLegacyDefaultCalendarLayout(calendarPanelLayout.value)) {
+      calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+      persistCalendarPanelLayoutLocal()
+      refreshCalendarMeasurements()
+    }
+
   } catch {
     // Remote layout sync should not block the calendar workspace.
   }
@@ -2716,10 +2726,10 @@ function createDefaultAggregateConfigs() {
     layoutH: 1,
   }
   return [
-    { ...baseConfig, id: 'aggregate-1', kind: 'TOTAL', amountType: 'EXPENSE', layoutX: 1, layoutOrder: 1 },
-    { ...baseConfig, id: 'aggregate-2', kind: 'MONTHLY_GOAL', amountType: 'EXPENSE', layoutX: 2, layoutOrder: 2 },
-    { ...baseConfig, id: 'aggregate-3', kind: 'PAYMENT_METHOD', paymentMethodId: defaultPaymentMethodId, amountType: 'EXPENSE', layoutX: 3, layoutOrder: 3 },
-    { ...baseConfig, id: 'aggregate-4', kind: 'MONTHLY_CUMULATIVE_CHART', layoutW: 2, amountType: 'NET', layoutX: 4, layoutOrder: 4 },
+    { ...baseConfig, id: 'aggregate-1', kind: 'PAYMENT_METHOD', paymentMethodId: defaultPaymentMethodId, amountType: 'EXPENSE', layoutX: 1, layoutOrder: 1, cardColumns: 2, cardRows: 1 },
+    { ...baseConfig, id: 'aggregate-2', kind: 'MONTHLY_GOAL', amountType: 'EXPENSE', layoutX: 2, layoutOrder: 2, cardColumns: 2, cardRows: 1 },
+    { ...baseConfig, id: 'aggregate-3', kind: 'TOTAL', amountType: 'EXPENSE', layoutX: 3, layoutOrder: 3, cardColumns: 2, cardRows: 1 },
+    { ...baseConfig, id: 'aggregate-4', kind: 'MONTHLY_CUMULATIVE_CHART', layoutW: 2, amountType: 'NET', layoutX: 4, layoutOrder: 4, cardColumns: 3, cardRows: 1 },
     { ...baseConfig, id: 'aggregate-5', kind: 'NONE', layoutX: 6, layoutOrder: 5 },
     { ...baseConfig, id: 'aggregate-6', kind: 'NONE', layoutX: 7, layoutOrder: 6 },
   ]
@@ -3022,7 +3032,7 @@ function normalizeAggregateConfigs(configs) {
     const title = String(current.title || '').slice(0, 80)
     const hidden = current.hidden === true
     const displaySize = ['SMALL', 'MEDIUM', 'LARGE'].includes(current.displaySize) ? current.displaySize : 'MEDIUM'
-    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW, layoutH, layoutOrder, title, hidden, displaySize, ...widgetFrame(current), ...widgetGridSize({ ...current, kind }) }
+    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW, layoutH, layoutOrder, title, hidden, displaySize, ...widgetFrame(current), ...widgetGridSize({ ...(configs?.[index] ? current : baseConfig), kind }) }
   })
 
   return packAggregateGridConfigs(orderAggregateConfigs(normalizedConfigs))
@@ -4740,7 +4750,7 @@ defineExpose({
               </template>
               <template v-else-if="card.goal">
                 <strong>{{ formatCurrency(card.goal.expense) }}</strong>
-                <small v-if="card.config.showPeriod || card.config.showDetails"><span v-if="card.config.showPeriod">{{ card.periodLabel }} 기준 </span><span v-if="card.config.showDetails">{{ card.goal.target ? `월 목표 ${formatCurrency(card.goal.target)} 중 ${card.goal.progress}%` : '월 목표 금액을 설정하면 진행률을 표시합니다.' }}</span></small>
+                <small v-if="card.config.showPeriod || card.config.showDetails"><span v-if="card.config.showPeriod">{{ card.periodLabel }} 기준 </span><span v-if="card.config.showDetails">{{ card.goal.target ? `월 목표 ${formatCurrency(card.goal.target)} 중 ${card.goal.progress}%` : '목표 설정 후 진행률 표시' }}</span></small>
               </template>
               <template v-else>
                 <strong>{{ formatCurrency(card.totalAmount) }}</strong>
@@ -4787,7 +4797,7 @@ defineExpose({
               <div class="household-aggregate-goal__bar" :aria-label="`월 목표 사용률 ${card.goal.progress}%`">
                 <span :style="{ width: `${card.goal.progressWidth}%` }"></span>
               </div>
-              <div v-if="card.config.showDetails" class="household-aggregate-goal__stats">
+              <div v-if="card.config.showDetails && (card.goal.target || card.goal.singleLimit)" class="household-aggregate-goal__stats">
                 <span v-if="card.goal.target">{{ card.goal.remainingState === 'over' ? '목표 초과' : '남은 목표' }} {{ formatCurrency(card.goal.remainingAbs) }}</span>
                 <span v-else>월 목표 미설정</span>
                 <span v-if="card.goal.singleLimit">1회 기준 초과 {{ card.goal.overLimitCount }}건</span>

@@ -91,7 +91,8 @@ public class KakaoOAuthClient {
     }
 
     private KakaoIdentity toIdentity(JsonNode profile) {
-        if (profile == null || !profile.hasNonNull("id")) {
+        if (profile == null || !StringUtils.hasText(profile.path("id").asText(""))
+                || profile.path("id").asText().length() > 128) {
             throw new ServiceUnavailableException("카카오 계정 정보를 확인할 수 없습니다.");
         }
         JsonNode account = profile.path("kakao_account");
@@ -102,6 +103,7 @@ public class KakaoOAuthClient {
             throw new BadRequestException("카카오 계정의 인증된 이메일이 필요합니다.");
         }
         String displayName = profile.path("properties").path("nickname").asText("").trim();
+        if (!StringUtils.hasText(displayName)) displayName = account.path("profile").path("nickname").asText("").trim();
         return new KakaoIdentity(profile.path("id").asText(), email, displayName, true);
     }
 

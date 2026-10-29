@@ -110,22 +110,24 @@ function submitRegistration() {
       </article>
 
       <article class="auth-card">
-        <h2>로그인 및 소셜 로그인</h2>
+        <h2>카카오로 가입·로그인</h2>
         <div v-if="socialLoginProviders.length" class="stack-form stack-form--readonly">
-          <p>연결된 소셜 로그인 제공자</p>
+          <p v-if="options?.publicRegistrationEnabled">카카오 인증 후 이메일을 다시 인증할 필요 없이 서비스 계정을 만들 수 있습니다.</p>
+          <p v-else>신규 가입은 닫혀 있습니다. 이미 연결한 카카오 계정은 계속 로그인할 수 있습니다.</p>
           <button
             v-for="provider in socialLoginProviders"
             :key="provider"
-            class="button button--ghost"
+            :class="['button', 'button--ghost', { 'button--kakao': provider === 'KAKAO' }]"
             type="button"
+            :disabled="submitting || loading"
             @click="emit('social-login', provider)"
           >
             {{ provider === 'KAKAO' ? '카카오로 계속' : `${provider}로 계속` }}
           </button>
         </div>
         <div v-else class="stack-form stack-form--readonly">
-          <p>아직 연결된 소셜 로그인 제공자가 없습니다.</p>
-          <p>추후 Google·Kakao 등 제공자를 연결하면, 이 가입 정책을 그대로 적용해 이 영역에 표시됩니다.</p>
+          <p>현재 사용할 수 있는 소셜 로그인 제공자가 없습니다.</p>
+          <p>카카오 연결 설정이 완료되면 이곳에서 가입·로그인할 수 있습니다.</p>
         </div>
         <div class="panel__actions">
           <button class="button button--ghost" type="button" @click="emit('go-login')">로그인으로 돌아가기</button>

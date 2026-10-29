@@ -142,6 +142,14 @@ export function completeKakaoRegistration(payload) {
   })
 }
 
+export function fetchKakaoRegistrationSession() {
+  return request('/auth/oauth/kakao/registration', { cache: 'no-store' })
+}
+
+export function cancelKakaoRegistration() {
+  return request('/auth/oauth/kakao/cancel', { method: 'POST' })
+}
+
 export function login(payload) {
   return request('/auth/login', {
     method: 'POST',

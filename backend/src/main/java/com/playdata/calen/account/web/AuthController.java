@@ -14,6 +14,7 @@ import com.playdata.calen.account.dto.ProfilePrivacyAccessVerifyRequest;
 import com.playdata.calen.account.dto.ProfileSecondaryPinChangeRequest;
 import com.playdata.calen.account.dto.ProfileSecondaryPinVerifyRequest;
 import com.playdata.calen.account.dto.PublicRegistrationOptionsResponse;
+import com.playdata.calen.account.dto.KakaoRegistrationSessionResponse;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.domain.LoginAuditStatus;
 import com.playdata.calen.account.domain.SocialLoginProvider;
@@ -30,6 +31,8 @@ import com.playdata.calen.account.social.KakaoOAuthClient;
 import com.playdata.calen.account.social.KakaoOAuthProperties;
 import com.playdata.calen.account.social.KakaoPendingRegistration;
 import com.playdata.calen.common.exception.TooManyRequestsException;
+import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.ServiceUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -38,6 +41,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +74,7 @@ public class AuthController {
     private static final String KAKAO_STATE_CREATED_SESSION_KEY = "CALEN_KAKAO_OAUTH_STATE_CREATED";
     private static final String KAKAO_PENDING_SESSION_KEY = "CALEN_KAKAO_PENDING_REGISTRATION";
     private static final long KAKAO_STATE_VALIDITY_MILLIS = 5 * 60 * 1000L;
+    private static final long KAKAO_REGISTRATION_VALIDITY_SECONDS = 10 * 60L;
 
     private final AppUserService appUserService;
     private final EmailVerificationService emailVerificationService;
@@ -195,10 +200,15 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) throws IOException {
+        if (!kakaoOAuthClient.isConfigured()) {
+            throw new ServiceUnavailableException("카카오 로그인이 아직 설정되지 않았습니다.");
+        }
         String state = createOAuthState();
         HttpSession session = httpRequest.getSession(true);
+        session.removeAttribute(KAKAO_PENDING_SESSION_KEY);
         session.setAttribute(KAKAO_STATE_SESSION_KEY, state);
         session.setAttribute(KAKAO_STATE_CREATED_SESSION_KEY, System.currentTimeMillis());
+        httpResponse.setHeader("Cache-Control", "no-store");
         httpResponse.sendRedirect(kakaoOAuthClient.authorizationUrl(state));
     }
 
@@ -210,8 +220,13 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) throws IOException {
-        if (!consumeOAuthState(httpRequest, state) || error != null || code == null || code.isBlank()) {
-            redirectToFrontend(httpResponse, "signup");
+        clearPendingKakaoRegistration(httpRequest);
+        if (!consumeOAuthState(httpRequest, state)) {
+            redirectToFrontend(httpResponse, "signup?kakao=invalid-state");
+            return;
+        }
+        if (error != null || code == null || code.isBlank()) {
+            redirectToFrontend(httpResponse, "signup?kakao=" + ("access_denied".equals(error) ? "cancelled" : "failed"));
             return;
         }
 
@@ -237,20 +252,45 @@ public class AuthController {
                 return;
             }
 
-            if (!registrationPolicyService.isPublicRegistrationEnabled()
-                    || appUserService.findUserByEmail(identity.email()).isPresent()) {
-                redirectToFrontend(httpResponse, "signup");
+            if (!registrationPolicyService.isPublicRegistrationEnabled()) {
+                redirectToFrontend(httpResponse, "signup?kakao=registration-closed");
+                return;
+            }
+            if (appUserService.findUserByEmail(identity.email()).isPresent()) {
+                redirectToFrontend(httpResponse, "signup?kakao=existing-account");
                 return;
             }
 
             httpRequest.getSession(true).setAttribute(
                     KAKAO_PENDING_SESSION_KEY,
-                    new KakaoPendingRegistration(identity.providerUserId(), identity.email(), identity.displayName())
+                    new KakaoPendingRegistration(identity.providerUserId(), identity.email(), identity.displayName(),
+                            Instant.now().plusSeconds(KAKAO_REGISTRATION_VALIDITY_SECONDS))
             );
             redirectToFrontend(httpResponse, "oauth/kakao/complete");
+        } catch (BadRequestException exception) {
+            redirectToFrontend(httpResponse, "signup?kakao=email-required");
         } catch (RuntimeException exception) {
-            redirectToFrontend(httpResponse, "signup");
+            redirectToFrontend(httpResponse, "signup?kakao=unavailable");
         }
+    }
+
+    @GetMapping("/oauth/kakao/registration")
+    public ResponseEntity<KakaoRegistrationSessionResponse> kakaoRegistration(HttpServletRequest request) {
+        requireKakaoRegistrationAvailable();
+        KakaoPendingRegistration pending = requirePendingKakaoRegistration(request);
+        return ResponseEntity.ok().header("Cache-Control", "no-store")
+                .body(new KakaoRegistrationSessionResponse(pending.email(), pending.displayName(), pending.expiresAt()));
+    }
+
+    @PostMapping("/oauth/kakao/cancel")
+    public ResponseEntity<Void> cancelKakaoRegistration(HttpServletRequest request) {
+        clearPendingKakaoRegistration(request);
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.removeAttribute(KAKAO_STATE_SESSION_KEY);
+            session.removeAttribute(KAKAO_STATE_CREATED_SESSION_KEY);
+        }
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/oauth/kakao/complete")
@@ -259,14 +299,8 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        registrationPolicyService.requirePublicRegistrationEnabled();
-        HttpSession session = httpRequest.getSession(false);
-        if (session == null || !(session.getAttribute(KAKAO_PENDING_SESSION_KEY) instanceof KakaoPendingRegistration pending)) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "카카오 가입 세션이 만료되었습니다. 다시 시도해 주세요."
-            );
-        }
+        requireKakaoRegistrationAvailable();
+        KakaoPendingRegistration pending = requirePendingKakaoRegistration(httpRequest);
 
         KakaoIdentity identity = new KakaoIdentity(
                 pending.providerUserId(),
@@ -281,8 +315,8 @@ public class AuthController {
                 request.password(),
                 request.secondaryPin()
         );
-        session.removeAttribute(KAKAO_PENDING_SESSION_KEY);
-        Authentication authentication = authenticate(createdUser.getLoginId(), request.password());
+        clearPendingKakaoRegistration(httpRequest);
+        Authentication authentication = authenticatedPrincipal(createdUser);
         signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
         secondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, request.secondaryPin().trim());
         loginAuditLogService.record(
@@ -294,6 +328,28 @@ public class AuthController {
                 createdUser
         );
         return appUserService.toResponse(createdUser);
+    }
+
+    private void requireKakaoRegistrationAvailable() {
+        registrationPolicyService.requirePublicRegistrationEnabled();
+        if (!kakaoOAuthClient.isConfigured()) {
+            throw new ServiceUnavailableException("카카오 로그인이 아직 설정되지 않았습니다.");
+        }
+    }
+
+    private KakaoPendingRegistration requirePendingKakaoRegistration(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session != null && session.getAttribute(KAKAO_PENDING_SESSION_KEY) instanceof KakaoPendingRegistration pending
+                && pending.expiresAt() != null && pending.expiresAt().isAfter(Instant.now())) {
+            return pending;
+        }
+        clearPendingKakaoRegistration(request);
+        throw new BadRequestException("카카오 가입 인증이 만료되었거나 취소되었습니다. 카카오로 다시 인증해 주세요.");
+    }
+
+    private void clearPendingKakaoRegistration(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session != null) session.removeAttribute(KAKAO_PENDING_SESSION_KEY);
     }
 
     @GetMapping("/me")
@@ -426,6 +482,7 @@ public class AuthController {
     }
 
     private void redirectToFrontend(HttpServletResponse response, String route) throws IOException {
+        response.setHeader("Cache-Control", "no-store");
         String baseUrl = kakaoOAuthProperties.getFrontendBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
             response.sendError(HttpStatus.SERVICE_UNAVAILABLE.value());

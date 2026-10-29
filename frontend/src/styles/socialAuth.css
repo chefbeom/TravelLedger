@@ -1,0 +1,9 @@
+html body .app-shell.app-shell .button.button--kakao {
+  background: #fee500 !important;
+  color: #191919 !important;
+  -webkit-text-fill-color: #191919 !important;
+  border-color: #e6ce00 !important;
+  box-shadow: none !important;
+}
+html body .app-shell.app-shell .button.button--kakao:hover:not(:disabled) { background: #f4dc00 !important; }
+html body .app-shell.app-shell .button.button--kakao:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }

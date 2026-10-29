@@ -1,0 +1,404 @@
+/* Login-only tokens. Other authentication screens and saved theme preferences
+   continue to use the application's existing design system. */
+.app-shell--login {
+  --login-forest: #17302a;
+  --login-surface: #f4f1e8;
+  --login-ink: #17302a;
+  --login-muted: #42584e;
+  --login-field: #fff;
+  --login-placeholder: #53675d;
+  --login-border: #b3c2b5;
+  --login-accent: #2f6b4f;
+  --login-accent-hover: #24563f;
+  --login-accent-text: #fff;
+  --login-progress-empty: #c8cfc4;
+  --login-focus: #087a56;
+  --login-spacing: .875rem;
+  --login-radius: .625rem;
+  --login-sans: 'Pretendard', 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+  --login-serif: 'Noto Serif KR', 'Batang', 'Nanum Myeongjo', Georgia, serif;
+  /* Feed the legacy high-specificity theme rules with these screen tokens. */
+  --text-muted: var(--login-placeholder);
+  --dark-text-muted: var(--login-placeholder);
+  --dark-accent-strong: var(--login-accent);
+  --dark-accent-hover: var(--login-accent-hover);
+}
+
+html[data-theme='toss'] .app-shell--login {
+  --login-surface: #18241f;
+  --login-ink: #f4f1e8;
+  --login-muted: #c8d9cf;
+  --login-field: #293b33;
+  --login-placeholder: #c2d0c6;
+  --login-border: #819a89;
+  --login-accent: #2f6b4f;
+  --login-accent-hover: #24563f;
+  --login-progress-empty: #657b6c;
+  --login-focus: #92e0b5;
+}
+
+html body .app-shell.app-shell--login {
+  min-width: 0;
+  padding: 0 !important;
+  overflow: visible !important;
+  font-family: var(--login-sans);
+}
+
+/* The existing view/theme controls are unchanged and remain available after
+   sign-in; the stored choice still applies to this screen. */
+html body .app-shell.app-shell--login .theme-switcher { display: none !important; }
+
+html body .app-shell--login .auth-shell.auth-shell--travel-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-rows: auto;
+  gap: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0 !important;
+  border: 0;
+  background: var(--login-surface) !important;
+  box-shadow: none !important;
+}
+
+html body .app-shell--login .auth-shell--travel-preview > .login-map-preview {
+  min-width: 0;
+  min-height: 100%;
+  height: auto;
+  border: 0;
+  background: var(--login-forest);
+}
+
+html body .app-shell--login .login-map-preview__map,
+html body .app-shell--login .login-map-preview .leaflet-container {
+  background: var(--login-forest);
+}
+html body .app-shell--login .login-map-preview .leaflet-tile {
+  filter: grayscale(.8) saturate(.35) brightness(.35);
+}
+html body .app-shell--login .login-map-preview .leaflet-tile-pane { opacity: .55; }
+html body .app-shell--login .login-map-preview__shade {
+  /* Dim only the map tiles: route markers, popups and zoom controls must not
+     inherit a dark overlay or lose their contrast. */
+  display: none;
+}
+html body .app-shell--login .login-map-preview__heading {
+  top: clamp(2rem, 5vh, 4.5rem);
+  right: clamp(2rem, 5vw, 5.5rem);
+  left: clamp(2rem, 5vw, 5.5rem);
+  color: #f4f1e8;
+}
+html body .app-shell--login .login-map-preview__eyebrow {
+  color: #b4e4c9;
+  font-size: .75rem;
+}
+html body .app-shell.app-shell--login .login-map-preview .login-map-preview__heading h2 {
+  margin: 1rem 0 .75rem;
+  color: #f4f1e8 !important;
+  -webkit-text-fill-color: #f4f1e8 !important;
+  font-family: var(--login-serif);
+  font-size: clamp(2rem, 3.1vw, 2.75rem);
+  font-weight: 700;
+  line-height: 1.25;
+  word-break: keep-all;
+  text-shadow: 0 .1rem .5rem rgba(0, 0, 0, .35);
+}
+html body .app-shell.app-shell--login .login-map-preview .login-map-preview__heading p {
+  color: #f4f1e8 !important;
+  -webkit-text-fill-color: #f4f1e8 !important;
+  font-size: 1rem;
+}
+html body .app-shell--login .login-map-preview__summary {
+  top: auto;
+  right: auto;
+  bottom: 4rem;
+  left: clamp(2rem, 5vw, 5.5rem);
+  padding: 0;
+  gap: .5rem;
+}
+html body .app-shell--login .login-map-preview__summary span {
+  padding: .4rem .75rem;
+  border: 1px solid #6a9a7f;
+  border-radius: 999rem !important;
+  background: #214a3b;
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 700;
+}
+html body .app-shell--login .login-map-preview__empty {
+  top: 50%;
+  color: #f4f1e8;
+}
+html body .app-shell.app-shell--login .login-map-preview .login-map-preview__empty :is(strong, span) {
+  color: #f4f1e8 !important;
+  -webkit-text-fill-color: #f4f1e8 !important;
+}
+html body .app-shell--login .login-map-preview__empty-mark {
+  border-color: #b4e4c9;
+  color: #f4f1e8;
+  border-radius: 50% !important;
+}
+html body .app-shell--login .login-map-preview__footer {
+  right: 5rem;
+  bottom: 1.5rem;
+  left: clamp(2rem, 5vw, 5.5rem);
+  color: #f4f1e8;
+  font-size: .75rem;
+}
+html body .app-shell--login .login-map-preview__privacy,
+html body .app-shell--login .login-map-preview__attribution { color: #f4f1e8; }
+html body .app-shell.app-shell--login .login-map-preview__attribution a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding-inline: .25rem;
+  color: #f4f1e8 !important;
+  -webkit-text-fill-color: #f4f1e8 !important;
+}
+html body .app-shell--login .login-map-preview .leaflet-control-zoom a {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  line-height: 1;
+}
+
+html body .app-shell--login .auth-travel-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  min-width: 0;
+  padding: clamp(2rem, 4vw, 4rem);
+  border: 0;
+  background: var(--login-surface) !important;
+  color: var(--login-ink);
+}
+html body .app-shell--login .auth-travel-brand,
+html body .app-shell--login .auth-card--travel-login {
+  width: min(100%, 25rem);
+  max-width: 25rem;
+}
+html body .app-shell--login .auth-travel-brand { gap: .875rem; padding: 0; }
+html body .app-shell--login .auth-travel-brand__mark {
+  width: 3rem;
+  height: 3rem;
+  border: 0;
+  border-radius: var(--login-radius) !important;
+  background: var(--login-forest);
+  color: #fff;
+}
+html body .app-shell--login .auth-travel-brand__eyebrow { display: none; }
+html body .app-shell--login .auth-travel-brand h1 {
+  margin: 0;
+  color: var(--login-ink);
+  font-size: 1.25rem;
+  letter-spacing: -.03em;
+}
+html body .app-shell--login .auth-travel-brand p {
+  margin: .125rem 0 0;
+  color: var(--login-muted);
+  font-size: .8125rem;
+}
+html body .app-shell--login .auth-card.auth-card--travel-login {
+  display: grid;
+  gap: 1rem;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--login-ink) !important;
+  box-shadow: none !important;
+}
+html body .app-shell--login .auth-travel-login__heading > span { display: none; }
+html body .app-shell--login .auth-card--travel-login .auth-travel-login__heading h2 {
+  color: var(--login-ink) !important;
+  -webkit-text-fill-color: var(--login-ink) !important;
+  font-family: var(--login-serif);
+  font-size: 1.75rem;
+  font-weight: 700;
+  text-shadow: none !important;
+}
+html body .app-shell--login .stack-form--login {
+  display: grid;
+  gap: var(--login-spacing);
+  color: var(--login-ink) !important;
+}
+html body .app-shell--login .login-field { display: grid; gap: .375rem; }
+html body .app-shell--login .login-field > span,
+html body .app-shell--login .pin-pad__header .field__label {
+  color: var(--login-ink) !important;
+  -webkit-text-fill-color: var(--login-ink) !important;
+  font-size: .8125rem;
+  font-weight: 700;
+}
+html body .app-shell--login .stack-form--login .login-field input {
+  width: 100%;
+  min-width: 0;
+  height: 3rem;
+  min-height: 3rem;
+  padding: 0 .875rem;
+  border: 1px solid var(--login-border) !important;
+  border-radius: var(--login-radius) !important;
+  background: var(--login-field) !important;
+  color: var(--login-ink) !important;
+  -webkit-text-fill-color: var(--login-ink) !important;
+}
+html body .app-shell--login .stack-form--login .login-field input::placeholder {
+  color: var(--login-placeholder) !important;
+  -webkit-text-fill-color: var(--login-placeholder) !important;
+  opacity: 1;
+}
+html body .app-shell--login .auth-card--travel-login .pin-pad {
+  display: grid;
+  gap: .5rem;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--login-ink) !important;
+}
+html body .app-shell--login .pin-pad__header { gap: .5rem; }
+html body .app-shell--login .pin-pad__progress {
+  color: var(--login-muted) !important;
+  -webkit-text-fill-color: var(--login-muted) !important;
+  font-size: .8125rem;
+  text-shadow: none !important;
+}
+html body .app-shell.app-shell--login .auth-card--travel-login .pin-pad__display {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: .375rem;
+  background: transparent !important;
+  border: 0 !important;
+}
+html body .app-shell.app-shell--login .auth-card--travel-login .pin-pad__slot {
+  display: block;
+  height: .375rem;
+  min-height: .375rem;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 999rem !important;
+  background: var(--login-progress-empty) !important;
+  box-shadow: none !important;
+  font-size: 0;
+}
+html body .app-shell.app-shell--login .auth-card--travel-login .pin-pad__slot--filled { background: var(--login-accent) !important; }
+html[data-theme='toss'] body .app-shell.app-shell--login .auth-card--travel-login .pin-pad__slot--filled { background: #84d7a9 !important; }
+html body .app-shell--login .pin-pad__grid { gap: .5rem; }
+html body .app-shell.app-shell--login .pin-pad__key {
+  min-height: 3rem;
+  padding: .25rem;
+  border: 1px solid var(--login-border) !important;
+  border-radius: var(--login-radius) !important;
+  background: var(--login-field) !important;
+  color: var(--login-ink) !important;
+  -webkit-text-fill-color: var(--login-ink) !important;
+  font-weight: 700;
+}
+html body .app-shell.app-shell--login .pin-pad__key:not(:disabled):hover {
+  border-color: var(--login-accent) !important;
+  background: color-mix(in srgb, var(--login-field) 86%, var(--login-accent)) !important;
+}
+html body .app-shell--login .pin-pad__hint {
+  order: 1;
+  margin: 0;
+  color: var(--login-muted) !important;
+  -webkit-text-fill-color: var(--login-muted) !important;
+  font-size: .75rem;
+}
+html body .app-shell--login .stack-form--login .checkbox-row {
+  min-height: 2.75rem;
+  gap: .625rem;
+  color: var(--login-ink);
+  font-size: .875rem;
+}
+html body .app-shell--login .stack-form--login .checkbox-row input {
+  width: 1.125rem;
+  height: 1.125rem;
+  min-height: 0;
+  accent-color: var(--login-accent);
+}
+html body .app-shell.app-shell--login .stack-form--login > .button--primary {
+  min-height: 3.25rem;
+  border: 0 !important;
+  border-radius: var(--login-radius) !important;
+  background: var(--login-accent) !important;
+  color: var(--login-accent-text) !important;
+  -webkit-text-fill-color: var(--login-accent-text) !important;
+  font-weight: 700;
+}
+html body .app-shell.app-shell--login .stack-form--login > .button--primary:hover:not(:disabled) {
+  background: var(--login-accent-hover) !important;
+}
+html body .app-shell.app-shell--login .stack-form--login > .button--kakao {
+  min-height: 3rem;
+  border-radius: var(--login-radius) !important;
+}
+html body .app-shell--login .auth-signup-note {
+  gap: .75rem;
+  padding-top: .75rem;
+  border-color: var(--login-border);
+  color: var(--login-muted);
+  font-size: .8125rem;
+}
+html body .app-shell--login .auth-signup-note strong {
+  color: var(--login-ink) !important;
+  -webkit-text-fill-color: var(--login-ink) !important;
+  text-shadow: none !important;
+}
+html body .app-shell.app-shell--login .auth-signup-note .button {
+  min-height: 2.75rem;
+  border: 1px solid var(--login-border) !important;
+  border-radius: var(--login-radius) !important;
+  background: var(--login-field) !important;
+  color: var(--login-ink) !important;
+  -webkit-text-fill-color: var(--login-ink) !important;
+}
+html body .app-shell--login :is(input, button, a):focus-visible {
+  outline: .1875rem solid var(--login-focus) !important;
+  outline-offset: .1875rem;
+}
+html body .app-shell--login .auth-feedback { width: 100%; margin: 0; }
+
+/* Keep 48px controls and the full PIN keypad usable on shorter laptops. */
+@media (min-width: 901px) and (max-height: 850px) {
+  html body .app-shell--login .auth-travel-panel { gap: .75rem; padding-block: .75rem; }
+  html body .app-shell--login .auth-card.auth-card--travel-login { gap: .625rem; }
+  html body .app-shell--login .auth-signup-note { padding-top: .5rem; }
+  html body .app-shell--login .auth-signup-note > div { display: flex; flex-wrap: wrap; gap: .25rem; }
+}
+
+@media (max-width: 900px) {
+  html body .app-shell--login .auth-shell.auth-shell--travel-preview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 16.25rem auto;
+  }
+  html body .app-shell--login .auth-shell--travel-preview > .login-map-preview {
+    height: 16.25rem;
+    min-height: 16.25rem;
+  }
+  html body .app-shell--login .auth-travel-panel { padding: 2rem clamp(1.25rem, 5vw, 2.5rem) 3rem; }
+  html body .app-shell--login .login-map-preview__heading { top: 1.25rem; right: 1.25rem; left: 1.25rem; }
+  html body .app-shell.app-shell--login .login-map-preview .login-map-preview__heading h2 { margin: .5rem 0 .375rem; font-size: clamp(1.5rem, 5vw, 2rem); }
+  html body .app-shell.app-shell--login .login-map-preview .login-map-preview__heading p { font-size: .875rem; }
+  html body .app-shell--login .login-map-preview__summary { bottom: 3.25rem; left: 1.25rem; }
+  html body .app-shell--login .login-map-preview__footer { right: 6.75rem; bottom: .75rem; left: 1.25rem; flex-wrap: wrap; gap: .125rem .5rem; font-size: .6875rem; }
+  html body .app-shell--login .login-map-preview__attribution { margin-left: 0; }
+  html body .app-shell--login .login-map-preview__privacy { display: none; }
+  html body .app-shell--login .login-map-preview__empty {
+    top: auto;
+    bottom: 3rem;
+    left: 1.25rem;
+    width: calc(100% - 6rem);
+    justify-items: start;
+    text-align: left;
+    transform: none;
+  }
+  html body .app-shell--login .login-map-preview__empty-mark,
+  html body .app-shell--login .login-map-preview__empty > span:last-child { display: none; }
+  html body .app-shell--login .login-map-preview__empty strong { font-size: .75rem; }
+}

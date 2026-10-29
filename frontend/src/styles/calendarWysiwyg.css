@@ -133,6 +133,13 @@ html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .c
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .calendar-widget.household-aggregate-card--chart .household-aggregate-card__meta { align-self: start !important; }
 /* Footer information follows the amount instead of creating a large forced spacer. */
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .calendar-widget:not(.household-aggregate-card--chart) { gap: 10px !important; }
+/* Preserve the same grid size and text sizes while reducing wasted space in
+   one-row cards on narrower desktop screens. */
+@media (min-width: 761px) and (max-width: 1450px) {
+  html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .calendar-widget[data-widget-grid-rows='1'] { padding: 6px !important; gap: 2px !important; }
+  html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .calendar-widget[data-widget-grid-rows='1'] .household-aggregate-card__copy { gap: 2px !important; }
+  html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .calendar-widget[data-widget-grid-rows='1'] :is(.household-aggregate-card__copy small, .household-aggregate-card__meta, .household-aggregate-goal__stats) { line-height: 1.2 !important; }
+}
 .personalization-preview > strong { font-size: var(--calendar-widget-title-size); }
 .personalization-preview b { font-size: var(--calendar-widget-amount-size); }
 .personalization-preview > :is(strong, b, small, span) { color: var(--calendar-widget-color, var(--text)); -webkit-text-fill-color: currentColor; }

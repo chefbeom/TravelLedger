@@ -35660,7 +35660,7 @@ html[data-theme='toss'] body .app-shell :is(
   input,
   select,
   textarea
-):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure):not(.pet-companion__avatar):where(:not(.leaflet-marker-icon)):not(.travel-journey-controls__slider) {
+):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure):not(.pet-companion__avatar):where(:not(.leaflet-marker-icon)):not(.travel-journey-controls__slider):not(.button--kakao):not(.button--login-primary) {
   background: var(--dark-control) !important;
   background-color: var(--dark-control) !important;
   background-image: none !important;
@@ -35683,7 +35683,7 @@ html[data-theme='toss'] body .app-shell :is(
   button,
   .button,
   [role='button']
-):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure):not(.pet-companion__avatar):where(:not(.leaflet-marker-icon)):hover {
+):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure):not(.pet-companion__avatar):where(:not(.leaflet-marker-icon)):not(.button--kakao):not(.button--login-primary):hover {
   background: var(--dark-control-hover) !important;
   background-color: var(--dark-control-hover) !important;
   border-color: var(--dark-accent) !important;

@@ -8,6 +8,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.ServiceUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -78,6 +79,29 @@ class KakaoOAuthClientTest {
         assertThatThrownBy(() -> client.fetchIdentity("authorization-code"))
                 .isInstanceOf(BadRequestException.class);
         server.verify();
+    }
+
+    @Test
+    void readsNicknameFromTheConsentedAccountProfile() {
+        KakaoIdentity identity = readProfile("{\"id\":12345,\"kakao_account\":{\"email\":\"user@example.com\","
+                + "\"is_email_valid\":true,\"is_email_verified\":true,\"profile\":{\"nickname\":\"프로필 닉네임\"}}}");
+        assertThat(identity.displayName()).isEqualTo("프로필 닉네임");
+    }
+
+    @Test
+    void missingProviderIdentityCannotBecomeALinkedAccount() {
+        assertThatThrownBy(() -> readProfile("{\"id\":\"\"}"))
+                .isInstanceOf(ServiceUnavailableException.class);
+        assertThatThrownBy(() -> readProfile("{\"kakao_account\":{}}"))
+                .isInstanceOf(ServiceUnavailableException.class);
+    }
+
+    private KakaoIdentity readProfile(String profile) {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(TOKEN_URI)).andRespond(withSuccess("{\"access_token\":\"test-access-token\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USER_INFO_URI)).andRespond(withSuccess(profile, MediaType.APPLICATION_JSON));
+        return new KakaoOAuthClient(builder.build(), configuredProperties()).fetchIdentity("authorization-code");
     }
 
     private KakaoOAuthProperties configuredProperties() {

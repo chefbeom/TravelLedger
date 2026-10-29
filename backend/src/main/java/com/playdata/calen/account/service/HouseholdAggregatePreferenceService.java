@@ -415,10 +415,10 @@ public class HouseholdAggregatePreferenceService {
 
     private List<StoredWidget> buildDefaultWidgets() {
         return List.of(
-                new StoredWidget("TOTAL", "MONTH", null, "EXPENSE", null, null, null, null, null, null, 1, 1, 1, 1, 1, "MEDIUM", "DEFAULT"),
-                new StoredWidget("MONTHLY_GOAL", "MONTH", null, "EXPENSE", null, null, null, null, null, null, 2, 1, 1, 1, 2, "MEDIUM", "DEFAULT"),
-                new StoredWidget("PAYMENT_METHOD", "MONTH", null, "EXPENSE", null, null, null, null, null, null, 3, 1, 1, 1, 3, "MEDIUM", "DEFAULT"),
-                new StoredWidget("MONTHLY_CUMULATIVE_CHART", "MONTH", null, "NET", null, null, true, true, false, null, 4, 1, 2, 1, 4, "MEDIUM", "DEFAULT"),
+                new StoredWidget("PAYMENT_METHOD", "MONTH", null, "EXPENSE", null, null, null, null, null, null, 1, 1, 1, 1, 1, "MEDIUM", "DEFAULT", 2, 1),
+                new StoredWidget("MONTHLY_GOAL", "MONTH", null, "EXPENSE", null, null, null, null, null, null, 2, 1, 1, 1, 2, "MEDIUM", "DEFAULT", 2, 1),
+                new StoredWidget("TOTAL", "MONTH", null, "EXPENSE", null, null, null, null, null, null, 3, 1, 1, 1, 3, "MEDIUM", "DEFAULT", 2, 1),
+                new StoredWidget("MONTHLY_CUMULATIVE_CHART", "MONTH", null, "NET", null, null, true, true, false, null, 4, 1, 2, 1, 4, "MEDIUM", "DEFAULT", 3, 1),
                 new StoredWidget("NONE", "MONTH", null, "EXPENSE", null, null, null, null, null, null, 6, 1, 1, 1, 5, "MEDIUM", "DEFAULT"),
                 new StoredWidget("NONE", "MONTH", null, "EXPENSE", null, null, null, null, null, null, 7, 1, 1, 1, 6, "MEDIUM", "DEFAULT")
         );
@@ -452,6 +452,14 @@ public class HouseholdAggregatePreferenceService {
             Integer cardColumns,
             Integer cardRows
     ) {
+        private StoredWidget(String kind, String period, Long paymentMethodId, String amountType, Long monthlyExpenseTarget,
+                Long singleExpenseLimit, Boolean showIncomeCumulative, Boolean showExpenseCumulative, Boolean comparePreviousPeriod,
+                Long chartMaxAmount, Integer layoutX, Integer layoutY, Integer layoutW, Integer layoutH, Integer layoutOrder,
+                String textSize, String textColor, Integer cardColumns, Integer cardRows) {
+            this(kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative,
+                    showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, layoutX, layoutY, layoutW, layoutH, layoutOrder,
+                    textSize, textColor, "", false, "MEDIUM", null, null, true, true, cardColumns, cardRows);
+        }
         private StoredWidget(String kind, String period, Long paymentMethodId, String amountType, Long monthlyExpenseTarget,
                 Long singleExpenseLimit, Boolean showIncomeCumulative, Boolean showExpenseCumulative, Boolean comparePreviousPeriod,
                 Long chartMaxAmount, Integer layoutX, Integer layoutY, Integer layoutW, Integer layoutH, Integer layoutOrder,

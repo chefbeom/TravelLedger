@@ -2726,7 +2726,8 @@ onBeforeUnmount(() => {
                     <input v-model="state.registrationPolicyForm.publicRegistrationEnabled" type="checkbox" :disabled="state.savingRegistrationPolicy" />
                     <span class="field__label">공개 회원가입 허용</span>
                   </label>
-                  <p class="form-hint">소셜 로그인 제공자는 아직 연결되지 않았습니다. 이후 제공자를 추가해도 이 공개 가입 정책을 함께 적용합니다.</p>
+                  <p v-if="state.registrationPolicy?.socialLoginProviders?.includes('KAKAO')" class="form-hint" role="status">카카오 로그인 설정이 감지되었습니다. 공개 가입을 켜면 카카오 신규 가입을 받을 수 있습니다. 기존 연결 계정은 공개 가입을 꺼도 로그인할 수 있습니다. 실제 카카오 인증 성공 여부는 별도 검증이 필요합니다.</p>
+                  <p v-else class="form-hint" role="status">카카오 로그인은 비활성 상태이거나 연결 설정이 누락되었습니다. 서버의 APP_AUTH_KAKAO_ENABLED, REST API 키, Redirect URI, 프런트엔드 주소를 확인해 주세요. 키 값은 이 화면에 표시하지 않습니다.</p>
                   <div class="panel__actions">
                     <button class="button button--primary" type="button" :disabled="state.savingRegistrationPolicy" @click="handleSaveRegistrationPolicy">
                       {{ state.savingRegistrationPolicy ? '저장 중...' : '가입 정책 저장' }}

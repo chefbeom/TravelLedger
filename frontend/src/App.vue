@@ -4,6 +4,8 @@ import { isPreferenceNavigationAllowed } from './lib/calendarPersonalization'
 import PinPadInput from './components/PinPadInput.vue'
 import { MOBILE_LAYOUT_QUERY, resolveLayoutMode } from './lib/responsiveLayout'
 import { createModalMutationFilter } from './lib/modalMutationFilter'
+import { kakaoCallbackMessage } from './lib/kakaoSignup'
+import './styles/socialAuth.css'
 import {
   acceptInvite,
   completeKakaoRegistration,
@@ -206,7 +208,7 @@ const currentUser = ref(null)
 const isSubmitting = ref(false)
 const activeSubmit = ref('')
 const successMessage = ref('')
-const errorMessage = ref('')
+const errorMessage = ref(kakaoCallbackMessage(initialRouteState.kakaoError))
 const initialProfileModalOpen = initialRouteState.route === 'profile'
 const activeRoute = ref(initialProfileModalOpen ? 'launcher' : initialRouteState.route)
 const profileModalOpen = ref(initialProfileModalOpen)
@@ -253,6 +255,9 @@ const pageMeta = computed(() => {
   const routeKey = travelRouteKeys.has(activeRoute.value) ? 'travel' : activeRoute.value
   return normalizedRouteMeta[routeKey] || normalizedRouteMeta.launcher
 })
+const isLoginScreen = computed(() => authChecked.value && !currentUser.value && ![
+  'record-map-share', 'travel-share', 'invite', 'verify-email', 'kakao-complete', 'signup',
+].includes(activeRoute.value))
 const isTossTheme = computed(() => themeMode.value === 'toss')
 const launcherItems = computed(() => {
   const featureItems = currentUser.value?.admin
@@ -287,6 +292,9 @@ let inviteRequestSequence = 0
 
 function resolveRouteState(hash) {
   const route = String(hash || '').replace(/^#/, '').trim()
+  if (route.startsWith('signup?')) {
+    return { route: 'signup', token: '', kakaoError: new URLSearchParams(route.slice('signup?'.length)).get('kakao') }
+  }
   if (route.toLowerCase().startsWith('record-map-share/')) {
     return {
       route: 'record-map-share',
@@ -379,6 +387,7 @@ function redirectFromRestrictedDriveRoute() {
 
 function applyHashRoute(hash) {
   const routeState = resolveRouteState(hash)
+  if (routeState.kakaoError) setFeedback('', kakaoCallbackMessage(routeState.kakaoError))
   if (routeState.route === 'drive' && currentUser.value && !isDriveRouteAllowed()) {
     redirectFromRestrictedDriveRoute()
     return
@@ -775,7 +784,7 @@ async function handleKakaoRegistration(payload) {
     navigate('launcher')
     setFeedback('카카오 계정으로 가입하고 로그인했습니다.')
   } catch (error) {
-    setFeedback('', error.message)
+    setFeedback('', error.status === 403 ? kakaoCallbackMessage('registration-closed') : error.message)
   } finally {
     isSubmitting.value = false
     activeSubmit.value = ''
@@ -1038,7 +1047,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell" :data-layout-mode="layoutMode">
+  <div class="app-shell" :class="{ 'app-shell--login': isLoginScreen }" :data-layout-mode="layoutMode">
     <div class="theme-switcher">
       <div class="theme-switcher__actions">
         <div class="layout-mode-toggle" role="group" aria-label="보기 환경 전환">
@@ -1165,6 +1174,7 @@ onBeforeUnmount(() => {
       <KakaoRegistrationWorkspace
         :submitting="isSubmitting && activeSubmit === 'kakao'"
         @complete="handleKakaoRegistration"
+        @restart="handleSocialLogin('KAKAO')"
         @go-login="navigate('launcher')"
       />
       <div v-if="successMessage" class="feedback feedback--success auth-feedback">{{ successMessage }}</div>
@@ -1204,24 +1214,31 @@ onBeforeUnmount(() => {
               <h2>로그인</h2>
             </div>
             <form class="stack-form stack-form--login" @submit.prevent="handleLogin">
-              <input v-model="loginForm.loginId" type="text" placeholder="로그인 ID" autocomplete="username" />
-              <input v-model="loginForm.password" type="password" placeholder="비밀번호" autocomplete="current-password" />
+              <label class="login-field">
+                <span>아이디</span>
+                <input v-model="loginForm.loginId" type="text" placeholder="아이디" autocomplete="username" />
+              </label>
+              <label class="login-field">
+                <span>비밀번호</span>
+                <input v-model="loginForm.password" type="password" placeholder="비밀번호" autocomplete="current-password" />
+              </label>
               <PinPadInput
                 v-model="loginForm.secondaryPin"
                 label="2차 비밀번호"
-                hint="보안을 위해 숫자 8자리 이상을 입력해 주세요."
+                hint="보안을 위해 숫자 8자리를 입력해 주세요."
                 :disabled="isSubmitting"
+                login-appearance
               />
               <label class="checkbox-row">
                 <input v-model="loginForm.rememberDevice" type="checkbox" />
                 <span>이 기기에서 로그인 상태 유지</span>
               </label>
-              <button class="button button--primary" type="submit" :disabled="isSubmitting">
+              <button class="button button--primary button--login-primary" type="submit" :disabled="isSubmitting">
                 {{ isSubmitting && activeSubmit === 'login' ? '로그인 중...' : '로그인' }}
               </button>
               <button
                 v-if="registrationOptions.socialLoginProviders.includes('KAKAO')"
-                class="button button--ghost"
+                class="button button--ghost button--kakao"
                 type="button"
                 :disabled="isSubmitting"
                 @click="handleSocialLogin('KAKAO')"
@@ -1229,6 +1246,8 @@ onBeforeUnmount(() => {
                 카카오로 계속
               </button>
             </form>
+            <div v-if="successMessage" class="feedback feedback--success auth-feedback" role="status">{{ successMessage }}</div>
+            <div v-if="errorMessage" class="feedback feedback--error auth-feedback" role="alert">{{ errorMessage }}</div>
             <aside class="auth-signup-note" aria-label="회원가입 안내">
               <div>
                 <strong>{{ registrationOptions.publicRegistrationEnabled ? '처음 방문하셨나요?' : '계정이 필요하신가요?' }}</strong>
@@ -1248,9 +1267,6 @@ onBeforeUnmount(() => {
           </article>
         </div>
       </section>
-
-      <div v-if="successMessage" class="feedback feedback--success auth-feedback">{{ successMessage }}</div>
-      <div v-if="errorMessage" class="feedback feedback--error auth-feedback">{{ errorMessage }}</div>
     </template>
 
     <template v-else>

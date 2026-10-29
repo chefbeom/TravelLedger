@@ -90,6 +90,8 @@ public class SecurityConfig {
                             "/api/auth/oauth/kakao/start",
                             "/api/auth/oauth/kakao/callback",
                             "/api/auth/oauth/kakao/complete",
+                            "/api/auth/oauth/kakao/registration",
+                            "/api/auth/oauth/kakao/cancel",
                             "/api/invites/*",
                             "/api/invites/accept",
                             "/api/file/public-download/*",

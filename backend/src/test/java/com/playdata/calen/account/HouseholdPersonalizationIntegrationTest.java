@@ -43,6 +43,22 @@ class HouseholdPersonalizationIntegrationTest {
 
     @BeforeEach void createOwner() { owner = createUser(); }
 
+    @Test void freshAccountGetsTheSameReadableDefaultsFromBothApisWithoutSavingThem() throws Exception {
+        JsonNode preferences = read(owner);
+        JsonNode aggregate = mapper.readTree(mvc.perform(get("/api/account/preferences/household-aggregates")
+                        .with(user(AppUserPrincipal.from(owner))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(preferences.path("widgets")).isEqualTo(aggregate.path("widgets"));
+        assertThat(preferences.at("/widgets/0/kind").asText()).isEqualTo("PAYMENT_METHOD");
+        assertThat(preferences.at("/widgets/1/kind").asText()).isEqualTo("MONTHLY_GOAL");
+        assertThat(preferences.at("/widgets/2/kind").asText()).isEqualTo("TOTAL");
+        assertThat(preferences.at("/widgets/3/kind").asText()).isEqualTo("MONTHLY_CUMULATIVE_CHART");
+        assertThat(List.of(preferences.at("/widgets/0/cardColumns").asInt(), preferences.at("/widgets/1/cardColumns").asInt(),
+                preferences.at("/widgets/2/cardColumns").asInt(), preferences.at("/widgets/3/cardColumns").asInt()))
+                .containsExactly(2, 2, 2, 3);
+        assertThat(users.findById(owner.getId()).orElseThrow().getHouseholdAggregateSettingsJson()).isNull();
+    }
+
     @Test void readsLegacySettingsWithoutChangingThem() throws Exception {
         owner.setHouseholdAggregateSettingsJson("[{\"kind\":\"TOTAL\",\"period\":\"YEAR\",\"amountType\":\"INCOME\"}]");
         users.saveAndFlush(owner);

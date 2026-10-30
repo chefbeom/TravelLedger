@@ -17,6 +17,8 @@ const props = defineProps({
   formatAmountMain: { type: Function, required: true },
   formatAmountSub: { type: Function, required: true },
   modal: { type: Boolean, default: false },
+  canMoveToPreviousDay: { type: Boolean, default: true },
+  canMoveToNextDay: { type: Boolean, default: true },
 })
 
 const emit = defineEmits([
@@ -29,6 +31,7 @@ const emit = defineEmits([
   'delete-entry',
   'open-settings',
   'close',
+  'move-day',
 ])
 
 function updatePage(offset) {
@@ -41,7 +44,11 @@ function updatePage(offset) {
   <section :class="['panel', 'household-sheet-panel', { 'household-sheet-panel--modal': modal }]">
     <div class="panel__header household-sheet-panel__header">
       <div>
-        <h2>{{ selectedDateLabel }} 거래 시트</h2>
+        <nav class="household-sheet-date-nav" aria-label="거래 날짜 이동" data-no-drag="true">
+          <button type="button" class="button button--ghost household-sheet-date-nav__button" aria-label="이전 날" title="이전 날" :disabled="!canMoveToPreviousDay" @click="emit('move-day', -1)">‹</button>
+          <h2 aria-live="polite" aria-atomic="true">{{ selectedDateLabel }} 거래 시트</h2>
+          <button type="button" class="button button--ghost household-sheet-date-nav__button" aria-label="다음 날" title="다음 날" :disabled="!canMoveToNextDay" @click="emit('move-day', 1)">›</button>
+        </nav>
         <p>선택한 날짜의 거래를 바로 수정하거나 삭제할 수 있습니다.</p>
       </div>
       <div class="household-sheet-header">
@@ -158,3 +165,26 @@ function updatePage(offset) {
     </div>
   </section>
 </template>
+
+<style scoped>
+.household-sheet-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.household-sheet-date-nav h2 {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.household-sheet-date-nav__button {
+  flex: 0 0 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+</style>

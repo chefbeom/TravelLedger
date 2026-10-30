@@ -165,7 +165,7 @@ html body .app-shell.app-shell .calendar-dashboard .household-time-toggle input 
 html body .app-shell.app-shell .calendar-dashboard .entry-date-control input,
 html body .app-shell.app-shell .calendar-dashboard .household-time-selectors input { width: 100%; min-width: 0; max-width: 100%; height: 44px; min-height: 44px; padding-block: 8px; }
 html body .app-shell.app-shell .calendar-dashboard .entry-date-time-hint { grid-column: 1 / -1; font-size: 12px; line-height: 1.5; }
-@container calendar-entry (max-width: 400px) {
+@container calendar-entry (max-width: 310px) {
   /* Keep both inputs side by side; date navigation uses a separate, touch-sized row. */
   html body .app-shell.app-shell .calendar-dashboard .entry-date-control { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
   html body .app-shell.app-shell .calendar-dashboard .entry-date-control input { grid-column: 1 / -1; grid-row: 1; padding-inline: 8px; font-size: 13px; }

@@ -6,6 +6,7 @@ import './styles/receiptReview.css'
 import './styles/calendarPersonalization.css'
 import './styles/calendarWysiwyg.css'
 import './styles/loginExperience.css'
+import './styles/quickEntry.css'
 import App from './App.vue'
 
 createApp(App).use(createPinia()).mount('#app')

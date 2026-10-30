@@ -13,7 +13,7 @@ export function calendarSettings() {
   }
 }
 
-export async function mockPersonalization(page, { saved = calendarSettings(), failSave = false, conflict = false, layoutUpdatedAt = null, sharedStore = null, entryOverrides = {} } = {}) {
+export async function mockPersonalization(page, { saved = calendarSettings(), failSave = false, conflict = false, layoutUpdatedAt = null, sharedStore = null, entryOverrides = {}, entries = null } = {}) {
   const state = sharedStore || { saved, writes: [], reads: [], failSave, conflict, errors: [] }
   const entry = { id: 7, entryDate: '2026-10-22', entryTime: '12:30', entryType: 'EXPENSE', amount: 15000, title: '검증용 식사', categoryGroupId: 101, categoryDetailId: 102, paymentMethodId: 103, ...entryOverrides }
   page.on('pageerror', error => state.errors.push(error.message))
@@ -39,7 +39,12 @@ export async function mockPersonalization(page, { saved = calendarSettings(), fa
     else if (path.endsWith('/layout-settings/household-calendar-view')) json = { version: 3, payload: state.saved.preferences }
     else if (path.endsWith('/layout-settings/household-calendar')) json = { version: 3, payload: state.saved.layout, updatedAt: layoutUpdatedAt }
     else if (path === '/api/entries/date-range') json = { minDate: '2026-01-01', maxDate: '2026-10-22' }
-    else if (path === '/api/entries') json = request.method() === 'POST' ? { ...entry, ...request.postDataJSON() } : [entry]
+    else if (path === '/api/entries') {
+      const url = new URL(request.url())
+      json = request.method() === 'POST' ? { ...entry, ...request.postDataJSON() } : entries
+        ? entries.filter(item => (!url.searchParams.get('from') || item.entryDate >= url.searchParams.get('from')) && (!url.searchParams.get('to') || item.entryDate <= url.searchParams.get('to')))
+        : [entry]
+    }
     else if (path === '/api/dashboard') json = { anchorDate: '2026-10-22', quickStats: [], calendar: [], expenseBreakdown: [], paymentBreakdown: [], monthlyComparison: [], recentEntries: [entry] }
     else if (path === '/api/record-shares/counts') json = { ledger: 0, travel: 0 }
     else if (path.endsWith('/image-analysis/history/summary')) json = { pendingReviewCount: 0, pendingReviewIds: [], processingCount: 0 }

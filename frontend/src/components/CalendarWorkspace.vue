@@ -383,6 +383,7 @@ function requestRecurringLedgerRegistration() {
 }
 
 const selectedDate = ref(props.anchorDate)
+const sheetNavigationDate = ref('')
 const selectedDaySort = ref('ASC')
 const selectedDayEntryFilter = ref('ALL')
 const selectedDayAmountMode = ref('KRW')
@@ -429,8 +430,10 @@ const quickEntryScrollTargetRef = ref(null)
 const ledgerSheetScrollTargetRef = ref(null)
 const calendarShellRef = ref(null)
 const layoutGridRef = ref(null)
+const quickEntryContentRef = ref(null)
 const calendarQueryControlsRef = ref(null)
 const calendarQueryLayoutRows = ref(1)
+const quickEntryRequiredRows = ref(0)
 const receiptFileInputRef = ref(null)
 const receiptCameraInputRef = ref(null)
 const selectedReceiptDocumentType = ref('AUTO')
@@ -441,6 +444,8 @@ const layoutCellHeight = ref(112)
 const calendarPanelLayout = ref(createDefaultCalendarPanelLayout())
 const entryTimeText = ref('00:00')
 let calendarResizeObserver = null
+let quickEntryResizeObserver = null
+let isLayoutGridResizing = false
 let aggregateGridResizeObserver = null
 let aggregateObservedContent = new Set()
 let layoutGrid = null
@@ -1049,9 +1054,12 @@ const yearOptions = computed(() => {
 const isAmountOnlyCalendar = computed(() => false)
 const isFitCalendar = computed(() => calendarScalePreset.value === 'fit')
 const todayIso = getLocalIsoDate(new Date())
-const currentWeekReferenceDate = computed(() => (
-  props.anchorDate.slice(0, 7) === todayIso.slice(0, 7) ? todayIso : props.anchorDate
-))
+const currentWeekReferenceDate = computed(() => {
+  if (sheetNavigationDate.value.slice(0, 7) === props.anchorDate.slice(0, 7)) {
+    return sheetNavigationDate.value
+  }
+  return props.anchorDate.slice(0, 7) === todayIso.slice(0, 7) ? todayIso : props.anchorDate
+})
 const referenceWeekIndex = computed(() => {
   const byCurrentDate = props.calendarWeeks.findIndex((week) => week.some((day) => day.date === currentWeekReferenceDate.value))
   if (byCurrentDate >= 0) {
@@ -1296,11 +1304,19 @@ const calendarLayoutPanels = computed(() => {
   const aggregate = panels.find(panel => panel.id === 'aggregate')
   const query = panels.find(panel => panel.id === CALENDAR_QUERY_ITEM_ID)
   const expanded = aggregate && aggregateVisiblePanelRows.value > aggregate.h
-  const projected = panels.map(panel => panel.id === CALENDAR_QUERY_ITEM_ID
-    ? { ...panel, h: Math.max(panel.h, calendarQueryLayoutRows.value) }
-    : panel.id === 'aggregate' ? { ...panel, h: Math.max(panel.h, aggregateVisiblePanelRows.value) } : panel)
+  const projected = panels.map(panel => {
+    if (panel.id === CALENDAR_QUERY_ITEM_ID) return { ...panel, h: Math.max(panel.h, calendarQueryLayoutRows.value) }
+    if (panel.id === 'aggregate') return { ...panel, h: Math.max(panel.h, aggregateVisiblePanelRows.value) }
+    if (panel.id === 'quick-entry') return {
+      ...panel,
+      h: Math.max(panel.h, quickEntryRequiredRows.value),
+      minH: Math.max(panel.minH, quickEntryRequiredRows.value),
+      maxH: Math.max(panel.maxH, quickEntryRequiredRows.value),
+    }
+    return panel
+  })
   return packDashboardPanels(projected, expanded && (!query || aggregate.y < query.y) ? 'aggregate' : CALENDAR_QUERY_ITEM_ID,
-    { maxPanelRows: aggregateVisiblePanelRows.value })
+    { maxPanelRows: Math.max(aggregateVisiblePanelRows.value, quickEntryRequiredRows.value) })
 })
 const calendarLayoutContentPanels = computed(() => calendarLayoutPanels.value.filter(panel => panel.id !== CALENDAR_QUERY_ITEM_ID))
 const calendarQueryPanel = computed(() => calendarLayoutPanels.value.find(panel => panel.id === CALENDAR_QUERY_ITEM_ID))
@@ -1342,9 +1358,12 @@ function clampEntryDate(value) {
 
 watch(
   () => props.anchorDate,
-  (value) => {
+  (value, previousValue) => {
     const nextDate = clampEntryDate(value)
     const currentMonthKey = nextDate.slice(0, 7)
+    if (previousValue && previousValue.slice(0, 7) !== currentMonthKey && nextDate !== sheetNavigationDate.value) {
+      sheetNavigationDate.value = ''
+    }
     if (!selectedDate.value || !selectedDate.value.startsWith(currentMonthKey)) {
       selectedDate.value = nextDate
     }
@@ -1394,6 +1413,9 @@ watch(
     }
     if (nextDate && selectedDate.value !== nextDate) {
       selectedDate.value = nextDate
+    }
+    if (sheetNavigationDate.value && calendarWeekMode.value !== 'month' && nextDate) {
+      sheetNavigationDate.value = nextDate
     }
   },
 )
@@ -1473,6 +1495,8 @@ watch([personalizationSaving, personalizationLoading], ([saving, loading]) => {
   layoutGrid?.enableResize(isLayoutEditMode.value && !saving && !loading)
 })
 
+watch(calendarWeekMode, () => { sheetNavigationDate.value = '' }, { flush: 'sync' })
+
 watch([calendarWeekMode, displayedCalendarWeeks], () => {
   if (calendarWeekMode.value === 'month') {
     return
@@ -1531,6 +1555,16 @@ watch(aggregateGridRef, (element, previous) => {
     if (header) aggregateGridResizeObserver.observe(header)
   }
   updateAggregateGridMeasurements()
+}, { flush: 'post' })
+
+watch(quickEntryContentRef, (element, previous) => {
+  if (previous) quickEntryResizeObserver?.disconnect()
+  if (!element) return
+  if (typeof ResizeObserver !== 'undefined') {
+    quickEntryResizeObserver ||= new ResizeObserver(updateQuickEntryRequiredRows)
+    quickEntryResizeObserver.observe(element)
+  }
+  updateQuickEntryRequiredRows()
 }, { flush: 'post' })
 
 watch(() => aggregateLayoutReady.value ? aggregateCards.value : [], () => nextTick(updateAggregateGridMeasurements), { flush: 'post' })
@@ -1598,6 +1632,7 @@ onBeforeUnmount(() => {
   }
   layoutGridResizeObserver?.disconnect()
   aggregateGridResizeObserver?.disconnect()
+  quickEntryResizeObserver?.disconnect()
   aggregateObservedContent.clear()
   destroyLayoutGrid()
 
@@ -1649,6 +1684,7 @@ function handleWorkspaceKeydown(event) {
     const field = resize ? (horizontal ? 'w' : 'h') : (horizontal ? 'x' : 'y')
     const displayed = resize && field === 'h' ? calendarLayoutPanels.value.find(item => item.id === id) : null
     if (id === 'aggregate' && displayed && direction < 0 && displayed.h <= aggregateVisiblePanelRows.value) return
+    if (id === 'quick-entry' && displayed && direction < 0 && displayed.h <= quickEntryRequiredRows.value) return
     updatePersonalizationPanel({ id, field, value: (displayed?.h ?? panel[field]) + direction })
     return
   }
@@ -2479,13 +2515,14 @@ function readLayoutGridSnapshot() {
 
 function applyCalendarPanelLayout(snapshot) {
   const snapshotById = new Map((snapshot ?? []).map((item) => [String(item.id), item]))
-  const projectedAggregate = calendarLayoutPanels.value.find(panel => panel.id === 'aggregate')
+  const projectedPanels = new Map(calendarLayoutPanels.value.map(panel => [panel.id, panel]))
   const mergedLayout = calendarPanelLayout.value.map((current) => {
     const next = snapshotById.get(String(current.id))
     if (!next) return current
     // GridStack sees the responsive presentation height. Do not turn that
     // temporary height into an account preference while moving another panel.
-    if (current.id === 'aggregate' && projectedAggregate?.h > current.h && next.h === projectedAggregate.h) {
+    const projected = projectedPanels.get(current.id)
+    if (['aggregate', 'quick-entry'].includes(current.id) && projected?.h > current.h && next.h === projected.h) {
       return { ...next, h: current.h }
     }
     return next
@@ -2496,6 +2533,11 @@ function applyCalendarPanelLayout(snapshot) {
 
 function handleLayoutGridStop() {
   if (!personalizationSaving.value) applyCalendarPanelLayout(readLayoutGridSnapshot())
+}
+
+function handleLayoutGridResizeStop() {
+  isLayoutGridResizing = false
+  handleLayoutGridStop()
 }
 
 function readIsMobileLayoutMode() {
@@ -2553,9 +2595,11 @@ function destroyLayoutGrid() {
   }
 
   layoutGrid.off('dragstop')
+  layoutGrid.off('resizestart')
   layoutGrid.off('resizestop')
   layoutGrid.destroy(false)
   layoutGrid = null
+  isLayoutGridResizing = false
 }
 
 function initLayoutGrid() {
@@ -2597,7 +2641,8 @@ function initLayoutGrid() {
   layoutGrid.enableMove(isLayoutEditMode.value && !personalizationSaving.value && !personalizationLoading.value)
   layoutGrid.enableResize(isLayoutEditMode.value && !personalizationSaving.value && !personalizationLoading.value)
   layoutGrid.on('dragstop', handleLayoutGridStop)
-  layoutGrid.on('resizestop', handleLayoutGridStop)
+  layoutGrid.on('resizestart', () => { isLayoutGridResizing = true })
+  layoutGrid.on('resizestop', handleLayoutGridResizeStop)
   for (const handle of layoutGridElement.querySelectorAll(':scope > [data-calendar-panel-id] > .ui-resizable-se')) {
     const id = handle.parentElement.dataset.calendarPanelId
     handle.dataset.paletteResize = id
@@ -2644,7 +2689,27 @@ function refreshCalendarMeasurements() {
     updateAggregateGridMeasurements()
     updateCalendarShellWidth()
     updateCalendarContentSize()
+    updateQuickEntryRequiredRows()
   })
+}
+
+function setQuickEntryContentElement(element) {
+  const next = resolveElementRef(element)
+  if (quickEntryContentRef.value !== next) quickEntryContentRef.value = next
+}
+
+function updateQuickEntryRequiredRows() {
+  // Rebuilding GridStack while its resize handle is active would interrupt the
+  // gesture. Recalculate after resizestop with the final content width instead.
+  if (isLayoutGridResizing) return
+  const content = quickEntryContentRef.value
+  const panel = content?.closest('.household-entry-panel')
+  if (!panel || !content.getBoundingClientRect().width || !layoutCellHeight.value) return
+  const style = window.getComputedStyle(panel)
+  const chrome = ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth']
+    .reduce((sum, property) => sum + (parseFloat(style[property]) || 0), 0)
+  const needed = Math.ceil((content.getBoundingClientRect().height + chrome + CALENDAR_LAYOUT_GRID_GAP - 0.5) / layoutCellHeight.value)
+  quickEntryRequiredRows.value = Math.max(1, needed)
 }
 
 function updateAggregateGridWidth() {
@@ -4107,6 +4172,16 @@ function selectCalendarDay(day) {
   }
 }
 
+function shiftSheetDate(offset) {
+  const date = parseIsoDate(selectedDate.value)
+  if (!date) return
+  date.setDate(date.getDate() + offset)
+  const nextDate = clampEntryDate(getLocalIsoDate(date))
+  if (nextDate === selectedDate.value) return
+  if (calendarWeekMode.value !== 'month') sheetNavigationDate.value = nextDate
+  selectCalendarDay({ date: nextDate })
+}
+
 function handleSelectDay(day) {
   selectCalendarDay(day)
 }
@@ -4423,51 +4498,34 @@ defineExpose({
             >
               <span v-if="isLayoutEditMode" class="calendar-palette-move-handle" role="button" tabindex="0" :data-palette-move="panel.id" :aria-label="`${paletteNames[panel.id]} 팔레트 이동`" title="잡아 끌거나 방향키로 이동" @pointerdown="moveMobilePalette($event, panel)">⠿</span>
               <div v-if="isLayoutEditMode && panel.id !== 'aggregate'" class="calendar-palette-tools" data-no-drag="true">
-                <button type="button" class="button button--secondary" data-inline-editor-trigger :disabled="personalizationSaving || personalizationLoading" @click="openInlineEditor('panel', panel.id, $event)">{{ panel.id === 'quick-entry' ? '입력 설정' : panel.id === 'calendar' ? '달력 설정' : '크기·설정' }}</button>
+                <button type="button" class="button button--secondary" data-inline-editor-trigger :aria-label="panel.id === 'quick-entry' ? '입력 설정' : undefined" :disabled="personalizationSaving || personalizationLoading" @click="openInlineEditor('panel', panel.id, $event)">{{ panel.id === 'quick-entry' ? '입력 설정' : panel.id === 'calendar' ? '달력 설정' : '크기·설정' }}</button>
               </div>
               <template v-if="panel.id === 'quick-entry'">
                 <section ref="quickEntryPanelRef" class="panel household-entry-panel">
-        <div class="panel__header">
+        <div :ref="setQuickEntryContentElement" class="household-entry-panel__content">
+        <div class="panel__header household-entry-panel__header">
           <div class="household-entry-panel__heading">
-            <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
+            <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
           </div>
-          <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
+          <button v-if="isReceiptOcrPanelEnabled" type="button" class="button button--secondary household-entry-panel__receipt-button" data-no-drag="true" @click="openReceiptOcrModal">영수증·거래내역 인식</button>
         </div>
-
-
-
-        <section v-if="isReceiptOcrPanelEnabled" class="receipt-ocr-panel receipt-ocr-panel--launcher" data-no-drag="true">
-          <div class="receipt-ocr-panel__header">
-            <div>
-              <strong>거래 이미지 자동입력</strong>
-            </div>
-            <div class="receipt-ocr-panel__actions">
-              <button
-                type="button"
-                class="button button--secondary"
-                @click="openReceiptOcrModal"
-              >
-                분석 모달 열기
-              </button>
-            </div>
-          </div>
-          <p v-if="receiptOcr?.isAnalyzing" class="receipt-ocr-panel__message">
-            <template v-if="receiptBatchProgress?.phase === 'refreshing'">분석 결과와 검수 대기 건수를 자동 새로고침 중입니다.</template>
-            <template v-else>요청 처리 {{ receiptBatchProgress?.settled || 0 }} / {{ receiptBatchProgress?.total || receiptPendingCount }}건 · 남은 {{ receiptBatchProgress?.remaining ?? receiptPendingCount }}건 · 완료된 결과는 모달에서 수정할 수 있습니다.</template>
-          </p>
-          <p v-else-if="receiptTotalSuggestionCount" class="receipt-ocr-panel__message">
-            검토 가능한 거래 제안 {{ receiptTotalSuggestionCount }}건이 있습니다.
-          </p>
-        </section>
-
+        <p v-if="isEditingEntry" class="household-entry-panel__editing" role="status">거래 수정 중</p>
+        <p v-if="isReceiptOcrPanelEnabled && receiptOcr?.isAnalyzing" class="household-entry-panel__receipt-status" role="status">
+          <template v-if="receiptBatchProgress?.phase === 'refreshing'">분석 결과와 검수 대기 건수를 자동 새로고침 중입니다.</template>
+          <template v-else>요청 처리 {{ receiptBatchProgress?.settled || 0 }} / {{ receiptBatchProgress?.total || receiptPendingCount }}건 · 남은 {{ receiptBatchProgress?.remaining ?? receiptPendingCount }}건 · 완료된 결과는 모달에서 수정할 수 있습니다.</template>
+        </p>
+        <p v-else-if="isReceiptOcrPanelEnabled && receiptTotalSuggestionCount" class="household-entry-panel__receipt-status" role="status">
+          검토 가능한 거래 제안 {{ receiptTotalSuggestionCount }}건이 있습니다.
+        </p>
 
         <div class="entry-editor">
           <div class="entry-editor__amount">
             <div class="entry-editor__amount-controls">
-              <div class="entry-type-toggle">
+              <div class="entry-type-toggle" role="group" aria-label="거래 구분">
                 <button
                   type="button"
                   :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'EXPENSE' }]"
+                  :aria-pressed="entryForm.entryType === 'EXPENSE'"
                   @click="entryForm.entryType = 'EXPENSE'"
                 >
                   지출
@@ -4475,6 +4533,7 @@ defineExpose({
                 <button
                   type="button"
                   :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'INCOME' }]"
+                  :aria-pressed="entryForm.entryType === 'INCOME'"
                   @click="entryForm.entryType = 'INCOME'"
                 >
                   수입
@@ -4485,6 +4544,7 @@ defineExpose({
                 <button
                   type="button"
                   :class="['toggle-chip', { 'toggle-chip--active': entryForm.currencyMode !== 'FOREIGN' }]"
+                  :aria-pressed="entryForm.currencyMode !== 'FOREIGN'"
                   @click="entryForm.currencyMode = 'KRW'"
                 >
                   원화
@@ -4492,6 +4552,7 @@ defineExpose({
                 <button
                   type="button"
                   :class="['toggle-chip', { 'toggle-chip--active': entryForm.currencyMode === 'FOREIGN' }]"
+                  :aria-pressed="entryForm.currencyMode === 'FOREIGN'"
                   @click="entryForm.currencyMode = 'FOREIGN'"
                 >
                   외화
@@ -4765,6 +4826,7 @@ defineExpose({
           >
             {{ undoEntryActionLabel }}
           </button>
+        </div>
         </div>
       </section>
 
@@ -5124,6 +5186,8 @@ defineExpose({
                 <HouseholdTransactionSheet
                   ref="ledgerSheetRef"
                   :selected-date-label="formatShortDate(selectedDate)"
+                  :can-move-to-previous-day="!entryDateMin || selectedDate > entryDateMin"
+                  :can-move-to-next-day="!entryDateMax || selectedDate < entryDateMax"
                   :count-label="selectedDateCountLabel"
                   :entries="pagedNormalizedSelectedDateEntries"
                   :total-entry-count="normalizedSelectedDateEntries.length"
@@ -5143,6 +5207,7 @@ defineExpose({
                   @update:entry-filter="selectedDayEntryFilter = $event"
                   @update:sort="selectedDaySort = $event"
                   @update:page="selectedDayEntryPage = $event"
+                  @move-day="shiftSheetDate"
                   @edit-entry="handleSheetEditEntry"
                   @share-entry="handleSheetShareEntry"
                   @delete-entry="emit('delete-entry', $event)"
@@ -5167,6 +5232,8 @@ defineExpose({
               aria-modal="true"
               aria-label="거래 시트"
               :selected-date-label="formatShortDate(selectedDate)"
+              :can-move-to-previous-day="!entryDateMin || selectedDate > entryDateMin"
+              :can-move-to-next-day="!entryDateMax || selectedDate < entryDateMax"
               :count-label="selectedDateCountLabel"
               :entries="pagedNormalizedSelectedDateEntries"
               :total-entry-count="normalizedSelectedDateEntries.length"
@@ -5187,6 +5254,7 @@ defineExpose({
               @update:entry-filter="selectedDayEntryFilter = $event"
               @update:sort="selectedDaySort = $event"
               @update:page="selectedDayEntryPage = $event"
+              @move-day="shiftSheetDate"
               @edit-entry="handleSheetEditEntry"
               @share-entry="handleSheetShareEntry"
               @delete-entry="emit('delete-entry', $event)"

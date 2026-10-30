@@ -122,10 +122,10 @@ async function expectAggregateHeaderLayout(header, stacked) {
 async function expectQuickEntryHeaderLayout(page, testInfo) {
   // Input settings now belong to the common draft editor, not an autosaving inline form.
   const panel = page.locator('.household-entry-panel')
-  const header = panel.locator(':scope > .panel__header')
+  const header = panel.locator('.household-entry-panel__header')
   const date = header.locator('.household-entry-panel__date-badge')
   const originalDate = await date.textContent()
-  await expect(header.getByRole('heading', { name: '빠른 거래 입력', exact: true })).toBeVisible()
+  await expect(header.getByRole('button', { name: '영수증·거래내역 인식', exact: true })).toBeVisible()
   await expect(header.getByRole('button', { name: '입력 설정', exact: true })).toHaveCount(0)
   for (const theme of ['default', 'toss']) {
     await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
@@ -145,7 +145,7 @@ for (const [width, height] of sizes) {
   test.describe(`mobile usability ${width}x${height}`, () => {
     test.use({ viewport: { width, height }, hasTouch: true, isMobile: true })
 
-    test('quick entry header aligns settings beside title on mobile', async ({ page }, testInfo) => {
+    test('quick entry header keeps date and recognition accessible on mobile', async ({ page }, testInfo) => {
       const errors = await mock(page)
       await page.goto('/#household')
       await page.getByRole('button', { name: '달력 가계부', exact: true }).tap()
@@ -278,7 +278,7 @@ for (const [width, height] of sizes) {
 
 test.describe('desktop aggregate header', () => {
   test.use({ viewport: { width: 1440, height: 900 }, hasTouch: false, isMobile: false })
-  test('quick entry header aligns settings beside title on desktop', async ({ page }, testInfo) => {
+  test('quick entry header keeps date and recognition accessible on desktop', async ({ page }, testInfo) => {
     const errors = await mock(page)
     for (const width of [1440, 1920]) {
       await page.setViewportSize({ width, height: 1080 })

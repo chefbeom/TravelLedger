@@ -459,6 +459,7 @@ const dashboard = ref({
 })
 const monthEntries = ref([])
 const calendarAggregateEntries = ref([])
+let calendarDataLoadSequence = 0
 let calendarAggregateLoadSequence = 0
 let aggregatePreviewTimer = 0
 const statsEntries = ref([])
@@ -1296,15 +1297,15 @@ watch(
   },
 )
 
-watch(calendarAnchorDate, async () => {
+watch(calendarAnchorDate, async (value) => {
+  if (!isEditingEntry.value) {
+    entryForm.entryDate = value
+  }
+  if (statsControls.anchorDate !== value) {
+    statsControls.anchorDate = value
+  }
   if (calendarReady.value) {
     await loadCalendarData()
-  }
-  if (!isEditingEntry.value) {
-    entryForm.entryDate = calendarAnchorDate.value
-  }
-  if (statsControls.anchorDate !== calendarAnchorDate.value) {
-    statsControls.anchorDate = calendarAnchorDate.value
   }
 })
 
@@ -1418,6 +1419,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(aggregatePreviewTimer)
+  calendarDataLoadSequence++
   calendarAggregateLoadSequence++
   window.removeEventListener('pointerdown', handleGlobalPointerDown)
   receiptOcr.items.forEach((item) => {
@@ -2290,6 +2292,7 @@ function previewAggregatePreferences(widgets) {
 }
 
 async function loadCalendarData() {
+  const sequence = ++calendarDataLoadSequence
   const aggregateSequence = ++calendarAggregateLoadSequence
   const range = buildCalendarEntryRange(calendarAnchorDate.value)
   const aggregateRange = buildCalendarAggregateEntryRange()
@@ -2302,6 +2305,7 @@ async function loadCalendarData() {
     entryItemsPromise,
     aggregateItemsPromise,
   ])
+  if (sequence !== calendarDataLoadSequence) return
   dashboard.value = dashboardResponse
   monthEntries.value = entryItems
   if (aggregateSequence === calendarAggregateLoadSequence) calendarAggregateEntries.value = aggregateItems

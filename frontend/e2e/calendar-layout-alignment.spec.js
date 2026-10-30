@@ -45,7 +45,7 @@ async function gridMetrics(page, id) {
 
 async function dragPanel(page, id, dx, dy) {
   const before = await gridMetrics(page, id)
-  const handle = page.locator(`${gridSelector} [data-calendar-panel-id="${id}"] .panel__header h2`)
+  const handle = page.locator(`${gridSelector} [data-calendar-panel-id="${id}"] ${id === 'quick-entry' ? '.household-entry-panel__header' : '.panel__header h2'}`)
   await handle.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
   const box = await handle.boundingBox()
   const x = box.x + 25, y = box.y + box.height / 2
@@ -105,7 +105,10 @@ test('dragged and resized cards snap to the same cells and retain their coordina
   const state = await mockPersonalization(page, { saved })
   await openLayoutEditor(page)
   await dragPanel(page, 'quick-entry', 0, 2)
-  await resizePanel(page, 'quick-entry', 2, 4)
+  const quickHeight = (await gridMetrics(page, 'quick-entry')).h
+  await resizePanel(page, 'quick-entry', 2, quickHeight)
+  await expect.poll(() => page.locator('.household-entry-panel').evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1)
+  await expectAligned(page)
   await dragPanel(page, 'quick-entry', 1, 0)
   await resizePanel(page, 'calendar', 5, 3)
   const edited = (await layoutGeometry(page)).panels.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))
@@ -114,9 +117,9 @@ test('dragged and resized cards snap to the same cells and retain their coordina
   await expect(page.locator(gridSelector)).toHaveCount(0)
   await expect(page.locator('.household-calendar-layout-guide')).toHaveCount(0)
   expect(state.writes).toHaveLength(1)
-  // The aggregate can be taller on screen to fit its cards. Moving unrelated
-  // panels must not save that temporary presentation height as a preference.
-  const savedGeometry = edited.map(panel => panel.id === 'aggregate' ? { ...panel, h: saved.layout.find(item => item.id === 'aggregate').h } : panel)
+  // Content can make the aggregate or quick-entry palette taller on screen.
+  // Moving or narrowing a palette must not save that temporary height.
+  const savedGeometry = edited.map(panel => ['aggregate', 'quick-entry'].includes(panel.id) ? { ...panel, h: saved.layout.find(item => item.id === panel.id).h } : panel)
   expect([...state.saved.layout].sort((a, b) => a.id.localeCompare(b.id))).toEqual([...savedGeometry].sort((a, b) => a.id.localeCompare(b.id)))
   await page.reload()
   await page.getByRole('button', { name: '달력 가계부', exact: true }).click()

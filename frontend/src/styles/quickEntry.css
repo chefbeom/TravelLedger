@@ -1,0 +1,123 @@
+/* Keep the form's natural height measurable; the dashboard reserves whole rows
+   for it without changing the user's saved palette dimensions. */
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel__content {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel__header {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 44px;
+  margin-bottom: 10px;
+  padding-right: 36px;
+}
+
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel__heading {
+  flex: 0 0 auto;
+  width: auto;
+  gap: 6px;
+}
+
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel__date-badge {
+  flex: none;
+  padding: 6px 8px;
+  font-size: 12px;
+  white-space: nowrap !important;
+}
+
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel__editing {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel__receipt-button {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel__receipt-status {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel .entry-editor {
+  gap: 10px;
+}
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel :is(.entry-editor__amount, .entry-editor__fields) {
+  gap: 8px;
+}
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel .entry-editor__amount-controls {
+  gap: 6px;
+}
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel :is(.entry-type-toggle, .entry-currency-toggle) {
+  gap: 4px;
+  padding: 4px;
+}
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel .entry-editor__amount-controls .toggle-chip {
+  padding-inline: 10px;
+}
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel .amount-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 6px;
+  margin-top: 4px;
+}
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel .amount-shortcuts__button {
+  min-height: 44px;
+  padding-inline: 6px;
+}
+
+/* Reserve the edit tool's small footprint in both modes, so it does not cover
+   the date or recognition button when the dashboard editor is opened. */
+html body .app-shell.app-shell .calendar-dashboard .household-calendar-layout-item--quick-entry .calendar-palette-tools .button {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  font-size: 0;
+}
+html body .app-shell.app-shell .calendar-dashboard .household-calendar-layout-item--quick-entry .calendar-palette-tools .button::after {
+  content: '⚙';
+  font-size: 16px;
+  line-height: 1;
+}
+
+html body .app-shell.app-shell .calendar-dashboard .entry-editor__field-row--date-time {
+  grid-template-columns: minmax(0, 14rem) minmax(5rem, 7rem) !important;
+  justify-content: start;
+}
+
+html body .app-shell.app-shell .calendar-dashboard .entry-editor__actions {
+  margin-top: 10px;
+}
+
+/* These selectors intentionally beat the global theme/readability guards. */
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel .entry-editor__amount-controls .toggle-chip {
+  border: 1px solid transparent;
+  background: var(--field-bg) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+  box-shadow: none !important;
+}
+html body .app-shell.app-shell .calendar-dashboard .household-calendar-layout-item--quick-entry .household-entry-panel .household-entry-panel__content .entry-editor .entry-editor__amount .entry-editor__amount-controls .toggle-chip.toggle-chip--active[aria-pressed='true'] {
+  border-color: #56b98b !important;
+  background: #166b4d !important;
+  background-color: #166b4d !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  box-shadow: inset 0 0 0 1px #56b98b !important;
+}

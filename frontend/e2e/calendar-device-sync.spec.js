@@ -71,7 +71,7 @@ test('separate computers restore the complete account settings and old device ca
     await expect(widget(otherPage)).toHaveCSS('height', `${2 * rowHeight - 8}px`)
     await expect(widget(otherPage).locator('.household-aggregate-card__meta')).toHaveCount(0)
     await expect(widget(otherPage).locator('.household-aggregate-card__copy small')).toHaveCount(0)
-    await expect(otherPage.getByRole('button', { name: '분석 모달 열기', exact: true })).toHaveCount(0)
+    await expect(otherPage.getByRole('button', { name: '영수증·거래내역 인식', exact: true })).toHaveCount(0)
     await expect(otherPage.getByLabel('표시 기준', { exact: true })).toHaveValue('income')
     await expect(otherPage.locator('[data-calendar-panel-id="calendar"]')).toHaveCSS('grid-column', '1 / span 5')
     expect(firstSave.layout.find(panel => panel.id === 'calendar').y).toBe(3)

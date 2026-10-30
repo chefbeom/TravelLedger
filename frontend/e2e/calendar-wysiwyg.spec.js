@@ -214,7 +214,7 @@ test('palette movement has grab cursors and a drop preview, with direct touch re
     await dragPointer(page, palette.getByRole('button', { name: '사용자 설정 집계 팔레트 크기 조절', exact: true }), 0, 112, true)
     await expect.poll(async () => Math.round((await palette.boundingBox()).height)).toBe(Math.round(before.height + 112))
   } else {
-    const handle = page.locator('[data-calendar-panel-id="quick-entry"] .panel__header h2')
+    const handle = page.locator('[data-calendar-panel-id="quick-entry"] .household-entry-panel__header')
     await expect(handle).toHaveCSS('cursor', 'grab')
     await handle.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
     const box = await handle.boundingBox()
@@ -276,11 +276,13 @@ test('read-mode graph detail opens over the full viewport instead of being clipp
   expect(state.errors).toEqual([])
 })
 
-test('fixed-height palettes keep transaction inputs reachable by native touch scrolling', async ({ page }) => {
+test('quick-entry palettes keep inputs reachable without an inner scroll area', async ({ page }) => {
   const state = await mockPersonalization(page)
   await page.setViewportSize({ width: 390, height: 844 })
   const panel = page.locator('.household-entry-panel')
-  await panel.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
+  await expect.poll(() => panel.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1)
+  await panel.evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }))
+  const pageScrollBefore = await page.evaluate(() => window.scrollY)
   const box = await panel.boundingBox(), x = box.x + box.width / 2
   const y = Math.min(694, box.y + box.height - 100)
   const client = await page.context().newCDPSession(page)
@@ -288,7 +290,8 @@ test('fixed-height palettes keep transaction inputs reachable by native touch sc
   for (let step = 1; step <= 12; step++) await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - 300 * step / 12, id: 2 }] })
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await client.detach()
-  await expect.poll(() => panel.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(pageScrollBefore)
+  expect(await panel.evaluate(element => element.scrollTop)).toBe(0)
   await panel.getByLabel('거래 날짜', { exact: true }).fill('2026-10-20')
   await panel.getByRole('button', { name: '다음날', exact: true }).click()
   await expect(panel.getByLabel('거래 날짜', { exact: true })).toHaveValue('2026-10-21')

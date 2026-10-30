@@ -217,7 +217,38 @@ html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layou
   html body .app-shell.app-shell .calendar-query-toolbar .button { padding-inline: 10px; }
 }
 
-/* Calendar tools use real palette space. Scroll the palette instead of squeezing transaction details out of each day. */
+/* Weekly views keep their natural content height; month view is sized below. */
 html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel .calendar-shell { flex: 1 0 auto; height: auto; overflow: visible; }
 html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel :is(.calendar-scale-frame, .calendar-scale-content, .calendar__weeks) { height: auto; }
 html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel .calendar__weeks { grid-auto-rows: minmax(max(128px, var(--calendar-day-min-height)), auto); }
+
+/* Keep all six weeks inside a seven-row palette.  Shorter palettes retain
+   native scrolling instead of hiding dates or transaction amounts. */
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar-shell {
+  flex: 1 0 0;
+  min-height: calc(6 * 98px + 5 * var(--calendar-week-gap) + 36px);
+}
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) :is(.calendar-scale-frame, .calendar-scale-content, .calendar__weeks) { height: 100%; }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__weeks { grid-auto-rows: minmax(max-content, 1fr); }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__week { min-height: 98px; }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__day { min-height: max-content; gap: 4px; padding: 5px; }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__expense-total { line-height: 1.3; }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__metrics { flex: 0 0 auto; gap: 3px; overflow: visible; }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__metric { gap: 3px; padding: 2px 4px; }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__month-tag { padding: 1px 4px; }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__bar { height: 4px; flex: 0 0 4px; }
+
+@container (max-width: 700px) {
+  html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__day { gap: 2px; padding: 3px; }
+  html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__metrics { gap: 2px; }
+  html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__metric {
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 2px;
+    padding-inline: 2px;
+  }
+  html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__metric > span { font-size: inherit; white-space: nowrap; }
+}
+
+@container (min-width: 1000px) {
+  html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel:not(.household-calendar-layout--week-view) .calendar__day { gap: 5px; padding: 6px; }
+}

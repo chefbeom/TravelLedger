@@ -628,6 +628,18 @@ export function createEntry(payload) {
   })
 }
 
+export function createLedgerAdjustment(entryId, payload) {
+  return request(`/entries/${encodeURIComponent(entryId)}/adjustments`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function fetchLedgerAdjustments(entryId) {
+  return request(`/entries/${encodeURIComponent(entryId)}/adjustments`)
+}
+
+export function revertLedgerAdjustment(adjustmentId) {
+  return request(`/entries/${encodeURIComponent(adjustmentId)}/adjustments/revert`, { method: 'POST' })
+}
+
 export function fetchRecordShareGroups() {
   return request('/record-shares/groups')
 }

@@ -33,6 +33,13 @@ public class AppUserService {
                 .orElseThrow(() -> new NotFoundException("사용자 계정을 찾을 수 없습니다."));
     }
 
+    /** Serialize user-owned writes with deactivation/withdrawal in the caller's transaction. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public AppUser getRequiredUserForWrite(Long userId) {
+        return appUserRepository.findActiveForPreferenceUpdate(userId)
+                .orElseThrow(() -> new NotFoundException("사용자 계정을 찾을 수 없습니다."));
+    }
+
     public Optional<AppUser> findActiveUserByLoginId(String loginId) {
         return appUserRepository.findByLoginId(loginId)
                 .filter(AppUser::isActive);

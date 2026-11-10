@@ -98,4 +98,40 @@ public class LedgerEntry {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    /** Excluded rows remain visible as records but do not contribute to income or expense totals. */
+    @Column(name = "financially_excluded", nullable = false)
+    private boolean financiallyExcluded;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "refunded_principal", nullable = false, precision = 15, scale = 2)
+    private BigDecimal refundedPrincipal = BigDecimal.ZERO;
+
+    @Column(name = "has_adjustment_history", nullable = false)
+    private boolean hasAdjustmentHistory;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "adjustment_type", length = 30)
+    private LedgerAdjustmentType adjustmentType;
+
+    // No FK: account withdrawal removes all of an owner's ledger rows together.
+    @Column(name = "adjustment_origin_id")
+    private Long adjustmentOriginId;
+
+    @Column(name = "adjustment_request_key", length = 36)
+    private String adjustmentRequestKey;
+
+    @Column(name = "adjustment_principal", precision = 15, scale = 2)
+    private BigDecimal adjustmentPrincipal;
+
+    @Column(name = "adjustment_deduction", precision = 15, scale = 2)
+    private BigDecimal adjustmentDeduction;
+
+    @Column(name = "adjustment_extra", precision = 15, scale = 2)
+    private BigDecimal adjustmentExtra;
+
+    @Column(name = "adjustment_voided_at")
+    private LocalDateTime adjustmentVoidedAt;
 }

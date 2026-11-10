@@ -16,6 +16,7 @@ import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerEntryChangeAction;
 import com.playdata.calen.ledger.domain.LedgerEntryChangeHistory;
 import com.playdata.calen.ledger.domain.LedgerEntry;
+import com.playdata.calen.ledger.domain.LedgerAdjustmentType;
 import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.domain.PaymentMethodKind;
 import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateRequest;
@@ -303,10 +304,12 @@ public class LedgerEntryService {
         Root<LedgerEntry> entry = criteriaQuery.from(LedgerEntry.class);
         LedgerSearchJoins joins = joinSearchFields(entry);
         Expression<BigDecimal> incomeAmount = criteriaBuilder.<BigDecimal>selectCase()
-                .when(criteriaBuilder.equal(entry.<EntryType>get(FIELD_ENTRY_TYPE), EntryType.INCOME), entry.<BigDecimal>get(FIELD_AMOUNT))
+                .when(criteriaBuilder.and(criteriaBuilder.isFalse(entry.get("financiallyExcluded")),
+                        criteriaBuilder.equal(entry.<EntryType>get(FIELD_ENTRY_TYPE), EntryType.INCOME)), entry.<BigDecimal>get(FIELD_AMOUNT))
                 .otherwise(BigDecimal.ZERO);
         Expression<BigDecimal> expenseAmount = criteriaBuilder.<BigDecimal>selectCase()
-                .when(criteriaBuilder.equal(entry.<EntryType>get(FIELD_ENTRY_TYPE), EntryType.EXPENSE), entry.<BigDecimal>get(FIELD_AMOUNT))
+                .when(criteriaBuilder.and(criteriaBuilder.isFalse(entry.get("financiallyExcluded")),
+                        criteriaBuilder.equal(entry.<EntryType>get(FIELD_ENTRY_TYPE), EntryType.EXPENSE)), entry.<BigDecimal>get(FIELD_AMOUNT))
                 .otherwise(BigDecimal.ZERO);
 
         criteriaQuery.multiselect(
@@ -595,7 +598,7 @@ public class LedgerEntryService {
 
     @Transactional
     public LedgerEntryChangeHistoryDetailResponse restoreChangeHistory(Long userId, Long historyId) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         LedgerEntryChangeHistory history = ledgerEntryChangeHistoryRepository.findByIdAndOwnerId(historyId, userId)
                 .orElseThrow(() -> new NotFoundException("변경 이력을 찾을 수 없습니다."));
         if (hasPatchHistory(history)) {
@@ -637,8 +640,21 @@ public class LedgerEntryService {
     }
 
     public LedgerEntryResponse getEntryForSharing(Long userId, Long entryId) {
-        return toResponse(ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
-                .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다.")));
+        LedgerEntry entry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
+                .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다."));
+        if (entry.isFinanciallyExcluded() || entry.getAdjustmentType() != null) {
+            throw new BadRequestException("취소·환불 처리 기록은 개별 공유할 수 없습니다.");
+        }
+        return toResponse(entry);
+    }
+
+    public List<LedgerEntryResponse> getAdjustmentHistory(Long userId, Long entryId) {
+        appUserService.getRequiredUser(userId);
+        LedgerEntry original = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
+                .orElseThrow(() -> new NotFoundException("원거래를 찾을 수 없습니다."));
+        if (original.getAdjustmentType() != null) throw new BadRequestException("원거래에서 처리 내역을 확인해 주세요.");
+        return ledgerEntryRepository.findAllByOwnerIdAndAdjustmentOriginIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(userId, entryId)
+                .stream().map(this::toResponse).toList();
     }
 
     /** Validate a sender's edited share without modifying a managed ledger entity. */
@@ -652,7 +668,7 @@ public class LedgerEntryService {
 
     @Transactional
     public LedgerEntryResponse create(Long userId, LedgerEntryRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         LedgerEntry ledgerEntry = new LedgerEntry();
         ledgerEntry.setOwner(owner);
         applyRequest(userId, ledgerEntry, request);
@@ -661,8 +677,10 @@ public class LedgerEntryService {
 
     @Transactional
     public LedgerEntryResponse update(Long userId, Long entryId, LedgerEntryRequest request) {
+        appUserService.getRequiredUserForWrite(userId);
         LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
                 .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다."));
+        requireOrdinaryEditableEntry(ledgerEntry);
         LedgerEntrySnapshot beforeSnapshot = toSnapshot(ledgerEntry);
         applyRequest(userId, ledgerEntry, request);
         LedgerEntrySnapshot afterSnapshot = toSnapshot(ledgerEntry);
@@ -678,7 +696,7 @@ public class LedgerEntryService {
 
     @Transactional
     public LedgerEntryBulkUpdateResponse bulkUpdate(Long userId, LedgerEntryBulkUpdateRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         Set<Long> targetIds = new LinkedHashSet<>(request.entryIds());
         if (targetIds.isEmpty()) {
             throw new BadRequestException("변경할 거래를 선택해 주세요.");
@@ -694,6 +712,7 @@ public class LedgerEntryService {
         if (entries.size() != targetIds.size()) {
             throw new NotFoundException("선택한 거래 중 변경할 수 없는 거래가 있습니다.");
         }
+        entries.forEach(this::requireOrdinaryEditableEntry);
 
         List<LedgerEntrySnapshot> beforeSnapshots = entries.stream()
                 .map(this::toSnapshot)
@@ -752,8 +771,10 @@ public class LedgerEntryService {
 
     @Transactional
     public void delete(Long userId, Long entryId, boolean permanent) {
+        appUserService.getRequiredUserForWrite(userId);
         LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
                 .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다."));
+        requireOrdinaryEditableEntry(ledgerEntry);
         if (permanent) {
             ledgerEntryRepository.delete(ledgerEntry);
             return;
@@ -763,6 +784,7 @@ public class LedgerEntryService {
 
     @Transactional
     public LedgerEntryResponse restore(Long userId, Long entryId) {
+        appUserService.getRequiredUserForWrite(userId);
         LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNotNull(entryId, userId)
                 .orElseThrow(() -> new NotFoundException("복구할 내역을 찾을 수 없습니다."));
         ledgerEntry.setDeletedAt(null);
@@ -771,7 +793,7 @@ public class LedgerEntryService {
 
     @Transactional
     public int emptyTrash(Long userId) {
-        appUserService.getRequiredUser(userId);
+        appUserService.getRequiredUserForWrite(userId);
         return ledgerEntryRepository.deleteAllDeletedByOwnerId(userId);
     }
 
@@ -905,6 +927,7 @@ public class LedgerEntryService {
     }
 
     private void applySnapshot(Long userId, LedgerEntry entry, LedgerEntrySnapshot snapshot) {
+        requireOrdinaryEditableEntry(entry);
         CategoryGroup group = categoryGroupRepository.findByIdAndOwnerId(snapshot.categoryGroupId(), userId)
                 .orElseThrow(() -> new NotFoundException("복구할 대분류를 찾을 수 없습니다."));
         CategoryDetail detail = null;
@@ -1267,10 +1290,11 @@ public class LedgerEntryService {
     }
 
     private LedgerEntryResponse toResponse(LedgerEntry entry) {
-        String paymentMethodName = entry.getEntryType() == EntryType.INCOME
+        boolean hideIncomePayment = entry.getEntryType() == EntryType.INCOME && entry.getAdjustmentType() != LedgerAdjustmentType.REFUND;
+        String paymentMethodName = hideIncomePayment
                 ? INCOME_PAYMENT_METHOD_NAME
                 : entry.getPaymentMethod().getName();
-        PaymentMethodKind paymentMethodKind = entry.getEntryType() == EntryType.INCOME
+        PaymentMethodKind paymentMethodKind = hideIncomePayment
                 ? PaymentMethodKind.OTHER
                 : entry.getPaymentMethod().getKind();
         return new LedgerEntryResponse(
@@ -1294,8 +1318,17 @@ public class LedgerEntryService {
                 paymentMethodName,
                 paymentMethodKind,
                 entry.getTravelPlanId(),
-                entry.getTravelRecordId()
+                entry.getTravelRecordId(),
+                entry.isFinanciallyExcluded(), entry.getCancelledAt(), entry.getRefundedPrincipal(),
+                entry.isHasAdjustmentHistory(), entry.getAdjustmentType(), entry.getAdjustmentOriginId(),
+                entry.getAdjustmentPrincipal(), entry.getAdjustmentDeduction(), entry.getAdjustmentExtra(), entry.getAdjustmentVoidedAt()
         );
+    }
+
+    private void requireOrdinaryEditableEntry(LedgerEntry entry) {
+        if (entry.getAdjustmentType() != null || entry.isHasAdjustmentHistory()) {
+            throw new BadRequestException("취소·환불 이력이 있는 거래는 기록 보존을 위해 일반 수정·삭제할 수 없습니다. 잘못된 처리는 처리 내역에서 되돌려 주세요.");
+        }
     }
 
     private void applyRequest(Long userId, LedgerEntry ledgerEntry, LedgerEntryRequest request) {

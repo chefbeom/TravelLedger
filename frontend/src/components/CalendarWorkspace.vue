@@ -363,6 +363,9 @@ const emit = defineEmits([
   'undo-entry-action',
   'edit-entry',
   'delete-entry',
+  'adjust-entry',
+  'revert-adjustment',
+  'show-adjustments',
   'apply-entry-suggestion',
   'apply-title-suggestion',
   'change-anchor-month',
@@ -1129,7 +1132,10 @@ const pagedNormalizedSelectedDateEntries = computed(() => {
   const start = selectedDayEntryPage.value * SELECTED_DAY_ENTRY_PAGE_SIZE
   return normalizedSelectedDateEntries.value.slice(start, start + SELECTED_DAY_ENTRY_PAGE_SIZE)
 })
-const selectedDayEntrySelection = useTableSelection(pagedNormalizedSelectedDateEntries)
+const selectableDayEntries = computed(() => pagedNormalizedSelectedDateEntries.value.filter(
+  (entry) => !entry.hasAdjustmentHistory && !entry.adjustmentType,
+))
+const selectedDayEntrySelection = useTableSelection(selectableDayEntries)
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
 watch(userStorageId, userId => {
   try {
@@ -4233,7 +4239,7 @@ function handleCalendarDayClick(day) {
 }
 
 function formatPaymentMethodForSheet(entry) {
-  return entry.entryType === 'INCOME' ? '-' : entry.paymentMethodName
+  return entry.entryType === 'INCOME' && entry.adjustmentType !== 'REFUND' ? '-' : entry.paymentMethodName
 }
 
 function hasForeignEntry(entry) {
@@ -5211,6 +5217,9 @@ defineExpose({
                   @edit-entry="handleSheetEditEntry"
                   @share-entry="handleSheetShareEntry"
                   @delete-entry="emit('delete-entry', $event)"
+                  @adjust-entry="emit('adjust-entry', $event)"
+                  @revert-adjustment="emit('revert-adjustment', $event)"
+                  @show-adjustments="emit('show-adjustments', $event)"
                   @open-settings="openTransactionSheetSettings"
                 />
               </template>
@@ -5258,6 +5267,9 @@ defineExpose({
               @edit-entry="handleSheetEditEntry"
               @share-entry="handleSheetShareEntry"
               @delete-entry="emit('delete-entry', $event)"
+              @adjust-entry="emit('adjust-entry', $event)"
+              @revert-adjustment="emit('revert-adjustment', $event)"
+              @show-adjustments="emit('show-adjustments', $event)"
               @open-settings="openTransactionSheetSettings"
               @close="closeTransactionSheetModal"
             />

@@ -4,7 +4,7 @@ import {
   getWeekdayFullLabel,
   parseIsoDate,
   toIsoDate,
-} from './format'
+} from './format.js'
 
 const presetLabels = {
   DAY: '일간',
@@ -232,7 +232,7 @@ export function filterEntries(entries, filters) {
 export function summarizeEntries(entries) {
   return entries.reduce(
     (summary, entry) => {
-      const amount = Number(entry.amount ?? 0)
+      const amount = entry.financiallyExcluded ? 0 : Number(entry.amount ?? 0)
       if (entry.entryType === 'INCOME') {
         summary.income += amount
       } else {
@@ -250,7 +250,7 @@ function buildExpenseBuckets(entries, resolver, labelResolver) {
   const buckets = new Map()
 
   entries
-    .filter((entry) => entry.entryType === 'EXPENSE')
+    .filter((entry) => entry.entryType === 'EXPENSE' && !entry.financiallyExcluded)
     .forEach((entry) => {
       const key = resolver(entry)
       if (key === null || key === undefined) {
@@ -278,7 +278,7 @@ function buildSeries(entries, keys, resolver, labelResolver) {
   const totals = new Map(keys.map((key) => [key, 0]))
 
   entries
-    .filter((entry) => entry.entryType === 'EXPENSE')
+    .filter((entry) => entry.entryType === 'EXPENSE' && !entry.financiallyExcluded)
     .forEach((entry) => {
       const key = resolver(entry)
       if (key === null || key === undefined || !totals.has(key)) {
@@ -320,7 +320,7 @@ export function buildInsights(entries) {
   )
 
   const peakExpenseDay = entries
-    .filter((entry) => entry.entryType === 'EXPENSE')
+    .filter((entry) => entry.entryType === 'EXPENSE' && !entry.financiallyExcluded)
     .reduce((map, entry) => {
       const key = entry.entryDate
       map.set(key, (map.get(key) ?? 0) + Number(entry.amount ?? 0))

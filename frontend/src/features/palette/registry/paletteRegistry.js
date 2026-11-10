@@ -109,7 +109,7 @@ function buildRecentFlowKpi(context, options = {}) {
     ? context.entries
     : (context.dashboard?.recentEntries ?? [])
   const recentEntries = sourceEntries
-    .filter((entry) => entry.entryType === entryType)
+    .filter((entry) => entry.entryType === entryType && !entry.financiallyExcluded)
     .slice()
     .sort((left, right) => entryTimestamp(right) - entryTimestamp(left))
     .slice(0, limit)

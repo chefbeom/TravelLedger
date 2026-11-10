@@ -11,6 +11,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>, LedgerEmbeddingTrashOperations {
@@ -35,7 +37,17 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
 
     java.util.Optional<LedgerEntry> findByIdAndOwnerIdAndDeletedAtIsNull(Long id, Long ownerId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select entry from LedgerEntry entry where entry.id = :id and entry.owner.id = :owner and entry.deletedAt is null")
+    java.util.Optional<LedgerEntry> lockActiveOwned(@Param("id") Long id, @Param("owner") Long ownerId);
+
     java.util.Optional<LedgerEntry> findByIdAndOwnerIdAndDeletedAtIsNotNull(Long id, Long ownerId);
+
+    boolean existsByOwnerIdAndAdjustmentOriginId(Long ownerId, Long originId);
+
+    java.util.Optional<LedgerEntry> findByOwnerIdAndAdjustmentRequestKey(Long ownerId, String requestKey);
+
+    List<LedgerEntry> findAllByOwnerIdAndAdjustmentOriginIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(Long ownerId, Long originId);
 
     java.util.Optional<LedgerEntry> findByOwnerIdAndTravelRecordIdAndDeletedAtIsNull(Long ownerId, Long travelRecordId);
 
@@ -150,8 +162,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
 
     @Query("""
             select
-                coalesce(sum(case when entry.entryType = :incomeType then entry.amount else 0 end), 0) as income,
-                coalesce(sum(case when entry.entryType = :expenseType then entry.amount else 0 end), 0) as expense,
+                coalesce(sum(case when entry.financiallyExcluded = false and entry.entryType = :incomeType then entry.amount else 0 end), 0) as income,
+                coalesce(sum(case when entry.financiallyExcluded = false and entry.entryType = :expenseType then entry.amount else 0 end), 0) as expense,
                 count(entry) as entryCount
             from LedgerEntry entry
             join entry.categoryGroup categoryGroup
@@ -204,8 +216,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
 
     @Query("""
             select
-                coalesce(sum(case when entry.entryType = :incomeType then entry.amount else 0 end), 0) as income,
-                coalesce(sum(case when entry.entryType = :expenseType then entry.amount else 0 end), 0) as expense,
+                coalesce(sum(case when entry.financiallyExcluded = false and entry.entryType = :incomeType then entry.amount else 0 end), 0) as income,
+                coalesce(sum(case when entry.financiallyExcluded = false and entry.entryType = :expenseType then entry.amount else 0 end), 0) as expense,
                 count(entry) as entryCount
             from LedgerEntry entry
             where entry.owner.id = :userId
@@ -222,8 +234,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
     @Query("""
             select
                 entry.entryDate as entryDate,
-                coalesce(sum(case when entry.entryType = :incomeType then entry.amount else 0 end), 0) as income,
-                coalesce(sum(case when entry.entryType = :expenseType then entry.amount else 0 end), 0) as expense,
+                coalesce(sum(case when entry.financiallyExcluded = false and entry.entryType = :incomeType then entry.amount else 0 end), 0) as income,
+                coalesce(sum(case when entry.financiallyExcluded = false and entry.entryType = :expenseType then entry.amount else 0 end), 0) as expense,
                 count(entry) as entryCount
             from LedgerEntry entry
             where entry.owner.id = :userId
@@ -251,6 +263,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
             left join entry.categoryDetail categoryDetail
             where entry.owner.id = :userId
               and entry.deletedAt is null
+              and entry.financiallyExcluded = false
               and entry.entryDate between :from and :to
               and (:entryType is null or entry.entryType = :entryType)
             group by categoryGroup.name, categoryDetail.name
@@ -273,6 +286,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
             join entry.paymentMethod paymentMethod
             where entry.owner.id = :userId
               and entry.deletedAt is null
+              and entry.financiallyExcluded = false
               and entry.entryDate between :from and :to
               and entry.entryType = :entryType
             group by paymentMethod.id, paymentMethod.name, paymentMethod.kind
@@ -299,6 +313,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
             join entry.paymentMethod paymentMethod
             where entry.owner.id = :userId
               and entry.deletedAt is null
+              and entry.financiallyExcluded = false
               and entry.entryType = :entryType
               and entry.entryDate between :from and :to
             order by entry.entryDate asc, entry.amount desc, entry.id asc
@@ -324,6 +339,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
             join entry.paymentMethod paymentMethod
             where entry.owner.id = :userId
               and entry.deletedAt is null
+              and entry.financiallyExcluded = false
               and entry.entryType = :entryType
               and entry.entryDate between :from and :to
             order by entry.amount desc, entry.entryDate desc, entry.id desc
@@ -353,6 +369,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
             join entry.paymentMethod paymentMethod
             where entry.owner.id = :userId
               and entry.deletedAt is null
+              and entry.financiallyExcluded = false
             order by entry.entryDate desc, entry.id desc
             """)
     List<ExistingEntryStyleAggregate> findRecentEntriesForOcrStyle(
@@ -376,6 +393,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
             join entry.paymentMethod paymentMethod
             where entry.owner.id = :userId
               and entry.deletedAt is null
+              and entry.financiallyExcluded = false
               and entry.entryDate <= :referenceDate
             order by entry.entryDate desc, entry.id desc
             """)
@@ -388,6 +406,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long>,
             select coalesce(sum(entry.amount), 0)
             from LedgerEntry entry
             where entry.deletedAt is null
+              and entry.financiallyExcluded = false
               and entry.entryType = :entryType
             """)
     java.math.BigDecimal sumAmountByEntryTypeAndDeletedAtIsNull(

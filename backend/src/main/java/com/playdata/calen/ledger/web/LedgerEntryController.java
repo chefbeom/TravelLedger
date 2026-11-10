@@ -12,10 +12,12 @@ import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
+import com.playdata.calen.ledger.dto.LedgerAdjustmentRequest;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
 import com.playdata.calen.ledger.dto.LedgerExchangeRateResponse;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.service.LedgerEntryService;
+import com.playdata.calen.ledger.service.LedgerAdjustmentService;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
@@ -49,6 +51,7 @@ public class LedgerEntryController {
 
     private final LedgerEntryService ledgerEntryService;
     private final SecondaryPinSessionSupport secondaryPinSessionSupport;
+    private final LedgerAdjustmentService ledgerAdjustmentService;
 
     @GetMapping
     public List<LedgerEntryResponse> getEntries(
@@ -205,6 +208,29 @@ public class LedgerEntryController {
             @Valid @RequestBody LedgerEntryRequest request
     ) {
         return ledgerEntryService.update(currentUser.userId(), id, request);
+    }
+
+    @PostMapping("/{id}/adjustments")
+    public java.util.Map<String, Long> adjustEntry(
+            @AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id,
+            @Valid @RequestBody LedgerAdjustmentRequest request
+    ) {
+        return java.util.Map.of("id", ledgerAdjustmentService.create(currentUser.userId(), id, request));
+    }
+
+    @GetMapping("/{id}/adjustments")
+    public List<LedgerEntryResponse> getAdjustments(
+            @AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id
+    ) {
+        return ledgerEntryService.getAdjustmentHistory(currentUser.userId(), id);
+    }
+
+    @PostMapping("/{id}/adjustments/revert")
+    public ResponseEntity<Void> revertAdjustment(
+            @AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id
+    ) {
+        ledgerAdjustmentService.revert(currentUser.userId(), id);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")

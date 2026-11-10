@@ -96,6 +96,15 @@ class LedgerEmbeddingDocumentServiceTest {
         assertThatThrownBy(() -> service.prepareEntry(owner.getId(), sourceId)).isInstanceOf(NotFoundException.class);
     }
 
+    @Test void excludedCancellationIsRemovedFromTheSearchIndexInsteadOfUpserted() {
+        LedgerEntry entry = entry();
+        entry.setFinanciallyExcluded(true);
+        entry = entries.saveAndFlush(entry);
+        Long sourceId = entry.getId();
+        assertThatThrownBy(() -> service.prepareEntry(owner.getId(), sourceId)).isInstanceOf(NotFoundException.class);
+        assertThat(service.findCurrentForSync(owner.getId(), LedgerEmbeddingRecordType.LEDGER_ENTRY, sourceId)).isEmpty();
+    }
+
     @Test void readsInactiveRuleWithoutGeneratedTransactionsButRejectsOtherOwner() {
         RecurringLedgerRule rule = new RecurringLedgerRule();
         rule.setOwner(owner);

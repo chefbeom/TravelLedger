@@ -32,7 +32,32 @@ const emit = defineEmits([
   'open-settings',
   'close',
   'move-day',
+  'adjust-entry',
+  'revert-adjustment',
+  'show-adjustments',
 ])
+
+function statusLabel(entry) {
+  if (entry.adjustmentVoidedAt) return '처리 되돌림'
+  if (entry.adjustmentType === 'PAYMENT_CANCELLATION') return '결제 취소 기록'
+  if (entry.adjustmentType === 'REFUND') return '환불 입금'
+  if (entry.cancelledAt) return '결제 취소됨'
+  if (Number(entry.refundedPrincipal || 0) > 0) {
+    return Number(entry.refundedPrincipal) >= Number(entry.amount) ? '환불 완료' : '부분 환불'
+  }
+  return entry.hasAdjustmentHistory ? '처리 이력 있음' : ''
+}
+function money(value) {
+  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 2 }).format(Number(value || 0))
+}
+function canRefund(entry) {
+  return entry.entryType === 'EXPENSE' && !entry.adjustmentType && !entry.financiallyExcluded
+    && Number(entry.amount || 0) > Number(entry.refundedPrincipal || 0)
+}
+function canCancel(entry) {
+  return entry.entryType === 'EXPENSE' && !entry.adjustmentType && !entry.financiallyExcluded
+    && !Number(entry.refundedPrincipal || 0) && !entry.travelRecordId
+}
 
 function updatePage(offset) {
   const next = Math.min(Math.max(props.page + offset, 0), Math.max(props.pageCount - 1, 0))
@@ -114,6 +139,7 @@ function updatePage(offset) {
               <input
                 class="sheet-table__checkbox"
                 type="checkbox"
+                :disabled="entry.hasAdjustmentHistory || !!entry.adjustmentType"
                 :checked="selection.isSelected(entry)"
                 @change="selection.toggleItem(entry)"
               />
@@ -124,7 +150,16 @@ function updatePage(offset) {
                 {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
               </span>
             </td>
-            <td class="sheet-table__title">{{ entry.title }}</td>
+            <td class="sheet-table__title">
+              <div class="adjustment-title-content">
+                <div class="adjustment-title-line"><span>{{ entry.title }}</span><span v-if="statusLabel(entry)" class="adjustment-status">{{ statusLabel(entry) }}</span></div>
+                <small v-if="entry.adjustmentType === 'REFUND'" class="adjustment-detail">
+                  원거래 #{{ entry.adjustmentOriginId }} · 기준 {{ money(entry.adjustmentPrincipal) }} · 차감 {{ money(entry.adjustmentDeduction) }} · 추가 {{ money(entry.adjustmentExtra) }}
+                </small>
+                <small v-else-if="entry.adjustmentType" class="adjustment-detail">원거래 #{{ entry.adjustmentOriginId }}</small>
+                <small v-else-if="Number(entry.refundedPrincipal || 0) > 0" class="adjustment-detail">환불 기준금액 {{ money(entry.refundedPrincipal) }}</small>
+              </div>
+            </td>
             <td class="sheet-table__category">
               {{ entry.categoryGroupName }}
               <template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template>
@@ -144,11 +179,16 @@ function updatePage(offset) {
               <span v-else>{{ entry.visibleMemo || '-' }}</span>
             </td>
             <td class="sheet-table__actions">
-              <div class="sheet-table__actions-inner">
-                <button type="button" class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
-                <button type="button" class="button button--ghost" @click="emit('share-entry', entry)">공유</button>
-                <button type="button" class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
+              <div class="sheet-table__actions-inner household-sheet-actions--adjustment">
+                <button v-if="!entry.hasAdjustmentHistory && !entry.adjustmentType" type="button" class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
+                <button v-if="!entry.financiallyExcluded && !entry.adjustmentType" type="button" class="button button--ghost" @click="emit('share-entry', entry)">공유</button>
+                <button v-if="canRefund(entry)" type="button" class="button button--ghost" @click="emit('adjust-entry', { entry, mode: 'REFUND' })">환불</button>
+                <button v-if="canCancel(entry)" type="button" class="button button--ghost" @click="emit('adjust-entry', { entry, mode: 'PAYMENT_CANCELLATION' })">결제 취소</button>
+                <button v-if="entry.hasAdjustmentHistory && !entry.adjustmentType" type="button" class="button button--ghost" @click="emit('show-adjustments', entry)">처리 내역</button>
+                <button v-if="entry.adjustmentType && !entry.adjustmentVoidedAt" type="button" class="button button--ghost" @click="emit('revert-adjustment', entry)">되돌리기</button>
+                <button v-if="!entry.hasAdjustmentHistory && !entry.adjustmentType" type="button" class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
               </div>
+              <small v-if="entry.travelRecordId && !entry.adjustmentType && !entry.financiallyExcluded" class="adjustment-detail">여행 연결 거래의 결제 취소는 지원하지 않습니다.</small>
             </td>
           </tr>
           <tr v-if="!totalEntryCount">
@@ -187,4 +227,13 @@ function updatePage(offset) {
   font-size: 1.5rem;
   line-height: 1;
 }
+
+.adjustment-title-content { min-width: 0; overflow-wrap: anywhere; }
+.adjustment-title-line { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.adjustment-status { display: inline-block; padding: .1rem .35rem; border: 1px solid currentColor; border-radius: .25rem; font-size: .75rem; white-space: nowrap; }
+.adjustment-detail { display: block; margin-top: .3rem; line-height: 1.4; }
+:global(:root[data-layout-mode='mobile']) .adjustment-title-content { max-width: 75%; text-align: right; }
+:global(:root[data-layout-mode='mobile']) .adjustment-title-line { justify-content: flex-end; }
+.sheet-table__actions-inner.household-sheet-actions--adjustment { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+:global(:root[data-layout-mode='mobile']) .sheet-table__actions-inner.household-sheet-actions--adjustment { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 </style>

@@ -29,6 +29,9 @@ final class LedgerCsvFormatter {
         appendRow(output, HEADER);
 
         for (LedgerEntryResponse entry : entries) {
+            // CSV import has no adjustment-status/link columns. Including these rows would
+            // recreate a cancelled expense as a live expense on import.
+            if (entry.financiallyExcluded() || entry.amount() == null || entry.amount().signum() == 0) continue;
             appendRow(output, List.of(
                     stringify(entry.entryDate()),
                     toImportEntryType(entry.entryType()),

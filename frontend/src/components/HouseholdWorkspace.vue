@@ -14,6 +14,7 @@ import {
   createCategoryDetail,
   createCategoryGroup,
   createEntry,
+  createLedgerAdjustment,
   createPaymentMethod,
   createTravelPlan,
   deleteCategoryDetailPermanently,
@@ -36,6 +37,7 @@ import {
   fetchEntryDateRange,
   fetchLedgerEntryHistories,
   fetchLedgerEntryHistory,
+  fetchLedgerAdjustments,
   fetchLedgerExchangeRate,
   fetchLedgerAiAnalysisHistory,
   fetchLedgerAiAnalysisHistories,
@@ -63,6 +65,7 @@ import {
   reorderCategoryGroups,
   reorderPaymentMethods,
   restoreEntry,
+  revertLedgerAdjustment,
   restoreLedgerEntryHistory,
   updateEntry,
 } from '../lib/api'
@@ -92,6 +95,8 @@ import PaletteContainer from '../features/palette/components/PaletteContainer.vu
 import CalendarWorkspace from './CalendarWorkspace.vue'
 import RecurringLedgerWorkspace from './RecurringLedgerWorkspace.vue'
 import RecordShareDialog from './RecordShareDialog.vue'
+import LedgerAdjustmentDialog from './LedgerAdjustmentDialog.vue'
+import LedgerAdjustmentHistoryDialog from './LedgerAdjustmentHistoryDialog.vue'
 import { useRecordShareNotifications } from '../lib/useRecordShareNotifications'
 import { createReceiptSelectionRequestIds } from '../lib/receiptHistoryGroups'
 import { summarizeReceiptBatch } from '../lib/receiptReview'
@@ -99,6 +104,59 @@ import { normalizeReceiptConcurrency, runReceiptRequestBatches } from '../lib/re
 
 const RecordSharingWorkspace = defineAsyncComponent(() => import('./RecordSharingWorkspace.vue'))
 const entryToShare = ref(null)
+const adjustmentDialog = reactive({ entry: null, mode: '', busy: false, error: '' })
+const adjustmentHistory = reactive({ entry: null, items: [], loading: false, error: '' })
+
+async function loadAdjustmentHistory(entry = adjustmentHistory.entry) {
+  if (!entry?.id || adjustmentHistory.loading) return
+  adjustmentHistory.entry = entry
+  adjustmentHistory.loading = true
+  adjustmentHistory.error = ''
+  try { adjustmentHistory.items = await fetchLedgerAdjustments(entry.id) }
+  catch (error) { adjustmentHistory.items = []; adjustmentHistory.error = error?.message || '처리 내역을 불러오지 못했습니다.' }
+  finally { adjustmentHistory.loading = false }
+}
+
+function openLedgerAdjustment({ entry, mode }) {
+  if (adjustmentDialog.busy) return
+  adjustmentDialog.entry = entry
+  adjustmentDialog.mode = mode
+  adjustmentDialog.error = ''
+}
+
+async function submitLedgerAdjustment(payload) {
+  if (adjustmentDialog.busy || !adjustmentDialog.entry) return
+  adjustmentDialog.busy = true
+  adjustmentDialog.error = ''
+  let saved = false
+  try {
+    await createLedgerAdjustment(adjustmentDialog.entry.id, payload)
+    saved = true
+    adjustmentDialog.entry = null
+    await refreshLedgerViews({ forceStatistics: true })
+    setFeedback(payload.type === 'REFUND' ? '환불 기록을 저장했습니다.' : '결제 취소 기록을 저장했습니다.')
+  } catch (error) {
+    if (saved) setFeedback('기록은 저장되었습니다.', `화면 새로고침 실패: ${error.message}`)
+    else adjustmentDialog.error = error?.message || '기록을 저장하지 못했습니다.'
+  } finally { adjustmentDialog.busy = false }
+}
+
+async function undoLedgerAdjustment(entry) {
+  if (adjustmentDialog.busy || !entry?.id) return
+  const label = entry.adjustmentType === 'REFUND' ? '환불' : '결제 취소'
+  if (!window.confirm(`${label} 처리를 되돌리시겠습니까? 처리 이력은 남고 가계부 합계가 다시 계산됩니다.`)) return
+  adjustmentDialog.busy = true
+  let saved = false
+  try {
+    await revertLedgerAdjustment(entry.id)
+    saved = true
+    await refreshLedgerViews({ forceStatistics: true })
+    if (adjustmentHistory.entry) await loadAdjustmentHistory()
+    setFeedback(`${label} 처리를 되돌렸습니다. 기존 이력은 보존됩니다.`)
+  } catch (error) {
+    setFeedback(saved ? '처리는 되돌렸습니다.' : '', saved ? `화면 새로고침 실패: ${error.message}` : error.message)
+  } finally { adjustmentDialog.busy = false }
+}
 const { shareCounts } = useRecordShareNotifications()
 
 const HouseholdTravelLedgerWorkspace = defineAsyncComponent(() => import('./HouseholdTravelLedgerWorkspace.vue'))
@@ -971,7 +1029,7 @@ const entrySuggestions = computed(() => {
   const seen = new Set()
 
   baseEntries
-    .filter((entry) => entry.entryType === entryForm.entryType)
+    .filter((entry) => entry.entryType === entryForm.entryType && !entry.financiallyExcluded && !entry.adjustmentType)
     .sort((left, right) => `${right.entryDate}${right.entryTime || ''}${String(right.id).padStart(10, '0')}`.localeCompare(`${left.entryDate}${left.entryTime || ''}${String(left.id).padStart(10, '0')}`))
     .forEach((entry) => {
       const title = String(entry.title || '').trim()
@@ -1020,7 +1078,7 @@ function getRecentEntryCandidates() {
     ...monthEntries.value,
     ...statsEntries.value,
   ]
-    .filter((entry) => entry?.entryDate)
+    .filter((entry) => entry?.entryDate && !entry.financiallyExcluded && !entry.adjustmentType)
     .filter((entry) => {
       const key = entry.id != null
         ? `id:${entry.id}`
@@ -5497,6 +5555,12 @@ async function activatePayment(paymentId) {
 <template>
   <div class="workspace-stack">
     <RecordShareDialog v-if="entryToShare" kind="LEDGER" :source="entryToShare" @close="entryToShare = null" @shared="entryToShare = null; setFeedback('가계부 공유 요청을 보냈습니다.')" />
+    <LedgerAdjustmentDialog v-if="adjustmentDialog.entry" :entry="adjustmentDialog.entry" :mode="adjustmentDialog.mode"
+      :categories="categories" :payment-methods="paymentMethods" :busy="adjustmentDialog.busy" :error="adjustmentDialog.error"
+      @close="adjustmentDialog.entry = null" @submit="submitLedgerAdjustment" />
+    <LedgerAdjustmentHistoryDialog v-if="adjustmentHistory.entry" :entry="adjustmentHistory.entry" :items="adjustmentHistory.items"
+      :loading="adjustmentHistory.loading" :busy="adjustmentDialog.busy" :error="adjustmentHistory.error"
+      @close="adjustmentHistory.entry = null" @reload="loadAdjustmentHistory()" @revert="undoLedgerAdjustment" />
     <div v-if="feedback" class="feedback feedback--success feedback--actionable">
       <span>{{ feedback }}</span>
     </div>
@@ -5564,6 +5628,7 @@ async function activatePayment(paymentId) {
             <button class="button button--secondary household-data-actions__menu-button" :disabled="isSubmitting" @click="exportEntriesToCsv">
               {{ isSubmitting && activeSubmit === 'export-csv' ? 'CSV 내보내는 중...' : `CSV 내보내기 (${csvExportLabel})` }}
             </button>
+            <small>취소·되돌린 기록과 금액 0원 기록은 CSV에서 제외됩니다. 환불은 수입으로 내보내며 원거래 연결은 CSV에 포함되지 않습니다.</small>
           </div>
         </div>
         <button class="button" :class="{ 'button--primary': householdTab === 'management' }" @click="setHouseholdTab('management')">분류 관리</button>
@@ -5682,6 +5747,9 @@ async function activatePayment(paymentId) {
       @undo-entry-action="undoLastEntryAction"
       @edit-entry="fillEntryForm"
       @delete-entry="removeEntry"
+      @adjust-entry="openLedgerAdjustment"
+      @revert-adjustment="undoLedgerAdjustment"
+      @show-adjustments="loadAdjustmentHistory"
       @apply-entry-suggestion="applyEntrySuggestion"
       @apply-title-suggestion="applyEntryTitleSuggestion"
       @change-anchor-month="handleChangeCalendarMonth"

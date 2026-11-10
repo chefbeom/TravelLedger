@@ -221,7 +221,17 @@ const analysisScope = computed(() => {
   }
 })
 
-const searchResultSelection = useTableSelection(computed(() => props.searchResults))
+const searchResultSelection = useTableSelection(computed(() => props.searchResults.filter(
+  entry => !entry.hasAdjustmentHistory && !entry.adjustmentType,
+)))
+function adjustmentLabel(entry) {
+  if (entry.adjustmentVoidedAt) return '처리 되돌림'
+  if (entry.adjustmentType === 'PAYMENT_CANCELLATION') return '결제 취소 기록'
+  if (entry.adjustmentType === 'REFUND') return '환불 입금'
+  if (entry.cancelledAt) return '결제 취소됨'
+  if (Number(entry.refundedPrincipal || 0) > 0) return Number(entry.refundedPrincipal) >= Number(entry.amount) ? '환불 완료' : '부분 환불'
+  return entry.hasAdjustmentHistory ? '처리 이력 있음' : ''
+}
 const trashResultSelection = useTableSelection(computed(() => props.trashResults))
 const editingSearchEntryId = ref(null)
 const isSearchBulkToolbarVisible = ref(false)
@@ -2492,6 +2502,7 @@ watch(
                   <input
                     class="sheet-table__checkbox"
                     type="checkbox"
+                    :disabled="entry.hasAdjustmentHistory || !!entry.adjustmentType"
                     :checked="searchResultSelection.isSelected(entry)"
                     @change="searchResultSelection.toggleItem(entry)"
                   />
@@ -2550,6 +2561,7 @@ watch(
                   <td class="sheet-table__title">
                     <div class="stats-search-title-cell">
                       <strong>{{ entry.title }}</strong>
+                      <small v-if="adjustmentLabel(entry)">{{ adjustmentLabel(entry) }}<template v-if="entry.adjustmentOriginId"> · 원거래 #{{ entry.adjustmentOriginId }}</template></small>
                       <span v-if="entry.memo" class="stats-search-title-cell__memo">{{ entry.memo }}</span>
                     </div>
                   </td>
@@ -2574,10 +2586,10 @@ watch(
                       <button type="button" class="button button--ghost" @click="cancelSearchEntryEdit">취소</button>
 </template>
                     <template v-else>
-                      <button type="button" class="button button--ghost" @click="startSearchEntryEdit(entry)">수정</button>
+                      <button v-if="!entry.hasAdjustmentHistory && !entry.adjustmentType" type="button" class="button button--ghost" @click="startSearchEntryEdit(entry)">수정</button>
                       <button type="button" class="button button--ghost" @click="emit('move-search-entry', entry)">이동</button>
 </template>
-                    <button type="button" class="button button--danger" @click="emit('delete-search-entry', entry)">삭제</button>
+                    <button v-if="!entry.hasAdjustmentHistory && !entry.adjustmentType" type="button" class="button button--danger" @click="emit('delete-search-entry', entry)">삭제</button>
                   </div>
                   <p v-if="editingSearchEntryId === entry.id && searchEditErrors.length" class="stats-search-edit__hint">
                     {{ searchEditErrors.join(', ') }} 값을 확인해 주세요.

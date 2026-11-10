@@ -23,6 +23,7 @@ public class LedgerEmbeddingDocumentService {
     public EmbeddingDocument prepareEntry(Long authenticatedOwnerId, Long sourceId) {
         requireIds(authenticatedOwnerId, sourceId);
         return documentFactory.fromEntry(entryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(sourceId, authenticatedOwnerId)
+                .filter(entry -> !entry.isFinanciallyExcluded())
                 .orElseThrow(() -> new NotFoundException("임베딩할 가계부 거래를 찾을 수 없습니다.")));
     }
 
@@ -38,6 +39,7 @@ public class LedgerEmbeddingDocumentService {
         requireIds(ownerId, sourceId);
         return switch (type) {
             case LEDGER_ENTRY -> entryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(sourceId, ownerId)
+                    .filter(entry -> !entry.isFinanciallyExcluded())
                     .map(documentFactory::fromEntry);
             case RECURRING_RULE -> ruleRepository.findByIdAndOwnerId(sourceId, ownerId)
                     .map(documentFactory::fromRule);

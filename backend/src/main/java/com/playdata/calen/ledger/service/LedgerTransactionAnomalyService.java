@@ -61,6 +61,7 @@ public class LedgerTransactionAnomalyService {
                         range.from(),
                         range.to()
                 );
+        entries = entries.stream().filter(entry -> !entry.isFinanciallyExcluded()).toList();
         Map<Long, TravelPlan> ownerTravelPlans = ownerTravelPlansById(userId);
 
         List<LedgerTransactionAnomalyGroupResponse> groups = new ArrayList<>();

@@ -28,6 +28,13 @@ public record LedgerEntryRequest(
         Long categoryDetailId,
         Long paymentMethodId,
         Long travelPlanId,
-        Long travelRecordId
+        Long travelRecordId,
+        Integer installmentMonths
 ) {
+    public LedgerEntryRequest(LocalDate entryDate, LocalTime entryTime, String title, String memo, BigDecimal amount,
+            String foreignCurrencyCode, BigDecimal foreignAmount, BigDecimal exchangeRateToKrw, EntryType entryType,
+            Long categoryGroupId, Long categoryDetailId, Long paymentMethodId, Long travelPlanId, Long travelRecordId) {
+        this(entryDate, entryTime, title, memo, amount, foreignCurrencyCode, foreignAmount, exchangeRateToKrw,
+                entryType, categoryGroupId, categoryDetailId, paymentMethodId, travelPlanId, travelRecordId, null);
+    }
 }

@@ -33,6 +33,7 @@ import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchSummaryResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
+import com.playdata.calen.ledger.dto.LedgerSplitPaymentRequest;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryChangeHistoryRepository;
@@ -58,11 +59,14 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -675,6 +679,76 @@ public class LedgerEntryService {
         return toResponse(ledgerEntryRepository.save(ledgerEntry));
     }
 
+    /** Each part is a real expense, so existing payment and category aggregates remain accurate. */
+    @Transactional
+    public List<LedgerEntryResponse> createSplitPayment(Long userId, LedgerSplitPaymentRequest request) {
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
+        if (request == null || request.requestId() == null || request.entry() == null
+                || request.parts() == null || request.parts().size() < 2 || request.parts().size() > 10) {
+            throw new BadRequestException("분할 결제는 2~10개의 결제수단을 입력해 주세요.");
+        }
+        LedgerEntryRequest base = request.entry();
+        if (base.entryType() != EntryType.EXPENSE || base.entryDate() == null || base.categoryGroupId() == null
+                || base.title() == null || base.title().isBlank() || base.travelRecordId() != null
+                || (base.installmentMonths() != null && base.installmentMonths() != 0)
+                || (base.foreignCurrencyCode() != null && !base.foreignCurrencyCode().isBlank()
+                    && !"KRW".equalsIgnoreCase(base.foreignCurrencyCode()))
+                || base.foreignAmount() != null || base.exchangeRateToKrw() != null) {
+            throw new BadRequestException("분할 결제는 원화 지출에서 사용할 수 있으며 여행 기록과 직접 연결할 수 없습니다.");
+        }
+        BigDecimal total = splitMoney(base.amount());
+        BigDecimal sum = BigDecimal.ZERO;
+        for (var part : request.parts()) {
+            if (part == null || part.paymentMethodId() == null) throw new BadRequestException("각 결제수단을 선택해 주세요.");
+            sum = sum.add(splitMoney(part.amount()));
+        }
+        if (sum.compareTo(total) != 0) throw new BadRequestException("결제수단별 금액의 합계가 전체 거래 금액과 일치해야 합니다.");
+
+        String groupId = request.requestId().toString();
+        String fingerprint = splitRequestHash(request);
+        List<LedgerEntry> existing = ledgerEntryRepository.findAllByOwnerIdAndSplitPaymentGroupIdOrderBySplitPaymentIndexAsc(userId, groupId);
+        if (!existing.isEmpty()) {
+            if (existing.size() != request.parts().size() || existing.stream().anyMatch(item ->
+                    item.getDeletedAt() != null || !fingerprint.equals(item.getSplitPaymentRequestHash()))) {
+                throw new BadRequestException("이미 처리된 분할 결제 요청입니다. 내역을 확인해 주세요.");
+            }
+            return existing.stream().map(this::toResponse).toList();
+        }
+
+        List<LedgerEntryResponse> result = new ArrayList<>();
+        for (int index = 0; index < request.parts().size(); index++) {
+            var part = request.parts().get(index);
+            var partial = new LedgerEntryRequest(base.entryDate(), base.entryTime(), base.title(), base.memo(),
+                    part.amount(), null, null, null, EntryType.EXPENSE, base.categoryGroupId(), base.categoryDetailId(),
+                    part.paymentMethodId(), base.travelPlanId(), null, part.installmentMonths());
+            LedgerEntry entry = new LedgerEntry();
+            entry.setOwner(owner);
+            applyRequest(userId, entry, partial);
+            entry.setSplitPaymentGroupId(groupId);
+            entry.setSplitPaymentIndex(index + 1);
+            entry.setSplitPaymentCount(request.parts().size());
+            entry.setSplitPaymentRequestHash(fingerprint);
+            result.add(toResponse(ledgerEntryRepository.save(entry)));
+        }
+        return result;
+    }
+
+    private BigDecimal splitMoney(BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0 || amount.stripTrailingZeros().scale() > 2
+                || amount.compareTo(new BigDecimal("9999999999999.99")) > 0) {
+            throw new BadRequestException("금액은 0보다 크고 소수 둘째 자리 이하여야 합니다.");
+        }
+        return amount;
+    }
+
+    private String splitRequestHash(LedgerSplitPaymentRequest request) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(objectMapper.writeValueAsBytes(request)));
+        } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("분할 결제 요청을 확인할 수 없습니다.", exception);
+        }
+    }
+
     @Transactional
     public LedgerEntryResponse update(Long userId, Long entryId, LedgerEntryRequest request) {
         appUserService.getRequiredUserForWrite(userId);
@@ -741,6 +815,14 @@ public class LedgerEntryService {
 
         for (LedgerEntry entry : entries) {
             EntryType finalEntryType = targetGroup != null ? targetGroup.getEntryType() : entry.getEntryType();
+            if (entry.getSplitPaymentGroupId() != null && finalEntryType != EntryType.EXPENSE) {
+                throw new BadRequestException("분할 결제 내역은 지출로만 관리할 수 있습니다.");
+            }
+            PaymentMethod finalPayment = targetPaymentMethod != null ? targetPaymentMethod : entry.getPaymentMethod();
+            if (entry.getInstallmentMonths() != null && (finalEntryType != EntryType.EXPENSE
+                    || finalPayment.getKind() != PaymentMethodKind.CARD)) {
+                throw new BadRequestException("할부 정보가 있는 거래는 개별 수정에서 할부를 해제한 뒤 결제수단을 변경해 주세요.");
+            }
             entry.setEntryType(finalEntryType);
 
             if (targetGroup != null) {
@@ -752,6 +834,9 @@ public class LedgerEntryService {
                 entry.setPaymentMethod(resolvePaymentMethod(userId, EntryType.INCOME, null));
             } else if (targetPaymentMethod != null) {
                 entry.setPaymentMethod(targetPaymentMethod);
+            }
+            if (finalEntryType != EntryType.EXPENSE || entry.getPaymentMethod().getKind() != PaymentMethodKind.CARD) {
+                entry.setInstallmentMonths(null);
             }
         }
 
@@ -922,7 +1007,8 @@ public class LedgerEntryService {
                 entry.getPaymentMethod().getName(),
                 entry.getTravelPlanId(),
                 entry.getTravelRecordId(),
-                entry.getDeletedAt()
+                entry.getDeletedAt(),
+                entry.getInstallmentMonths(), true
         );
     }
 
@@ -955,6 +1041,11 @@ public class LedgerEntryService {
         entry.setCategoryGroup(group);
         entry.setCategoryDetail(detail);
         entry.setPaymentMethod(paymentMethod);
+        if (Boolean.TRUE.equals(snapshot.installmentRecorded())) {
+            entry.setInstallmentMonths(snapshot.installmentMonths());
+        } else if (snapshot.entryType() != EntryType.EXPENSE || paymentMethod.getKind() != PaymentMethodKind.CARD) {
+            entry.setInstallmentMonths(null);
+        }
         entry.setTravelPlanId(snapshot.travelPlanId());
         entry.setTravelRecordId(snapshot.travelRecordId());
         entry.setDeletedAt(snapshot.deletedAt());
@@ -1017,6 +1108,7 @@ public class LedgerEntryService {
         String paymentMethodName = base.paymentMethodName();
         Long travelPlanId = base.travelPlanId();
         Long travelRecordId = base.travelRecordId();
+        Integer installmentMonths = base.installmentMonths();
 
         for (LedgerEntryChangeFieldPatch field : patch.fields()) {
             String rawValue = useBeforeValue ? field.beforeRaw() : field.afterRaw();
@@ -1047,6 +1139,7 @@ public class LedgerEntryService {
                 }
                 case FIELD_TRAVEL_PLAN_ID -> travelPlanId = parseNullableLong(rawValue);
                 case FIELD_TRAVEL_RECORD_ID -> travelRecordId = parseNullableLong(rawValue);
+                case "installmentMonths" -> installmentMonths = rawValue == null || rawValue.isBlank() ? null : Integer.valueOf(rawValue);
                 default -> {
                     // Older clients may ignore unknown fields. Restore keeps the current value for them.
                 }
@@ -1074,7 +1167,7 @@ public class LedgerEntryService {
                 paymentMethodName,
                 travelPlanId,
                 travelRecordId,
-                base.deletedAt()
+                base.deletedAt(), installmentMonths, base.installmentRecorded()
         );
     }
 
@@ -1121,6 +1214,7 @@ public class LedgerEntryService {
         addPatch(fields, FIELD_CATEGORY_GROUP, "대분류", beforeSnapshot.categoryGroupName(), afterSnapshot.categoryGroupName(), toRawValue(beforeSnapshot.categoryGroupId()), toRawValue(afterSnapshot.categoryGroupId()));
         addPatch(fields, FIELD_CATEGORY_DETAIL, "소분류", beforeSnapshot.categoryDetailName(), afterSnapshot.categoryDetailName(), toRawValue(beforeSnapshot.categoryDetailId()), toRawValue(afterSnapshot.categoryDetailId()));
         addPatch(fields, FIELD_PAYMENT_METHOD, "결제수단", beforeSnapshot.paymentMethodName(), afterSnapshot.paymentMethodName(), toRawValue(beforeSnapshot.paymentMethodId()), toRawValue(afterSnapshot.paymentMethodId()));
+        addPatch(fields, "installmentMonths", "할부 개월", beforeSnapshot.installmentMonths(), afterSnapshot.installmentMonths(), toRawValue(beforeSnapshot.installmentMonths()), toRawValue(afterSnapshot.installmentMonths()));
         addPatch(fields, FIELD_TRAVEL_PLAN_ID, "Travel plan", beforeSnapshot.travelPlanId(), afterSnapshot.travelPlanId(), toRawValue(beforeSnapshot.travelPlanId()), toRawValue(afterSnapshot.travelPlanId()));
         addPatch(fields, FIELD_TRAVEL_RECORD_ID, "Travel record", beforeSnapshot.travelRecordId(), afterSnapshot.travelRecordId(), toRawValue(beforeSnapshot.travelRecordId()), toRawValue(afterSnapshot.travelRecordId()));
         addPatch(fields, FIELD_FOREIGN_CURRENCY, "외화 통화", beforeSnapshot.foreignCurrencyCode(), afterSnapshot.foreignCurrencyCode(), beforeSnapshot.foreignCurrencyCode(), afterSnapshot.foreignCurrencyCode());
@@ -1321,7 +1415,8 @@ public class LedgerEntryService {
                 entry.getTravelRecordId(),
                 entry.isFinanciallyExcluded(), entry.getCancelledAt(), entry.getRefundedPrincipal(),
                 entry.isHasAdjustmentHistory(), entry.getAdjustmentType(), entry.getAdjustmentOriginId(),
-                entry.getAdjustmentPrincipal(), entry.getAdjustmentDeduction(), entry.getAdjustmentExtra(), entry.getAdjustmentVoidedAt()
+                entry.getAdjustmentPrincipal(), entry.getAdjustmentDeduction(), entry.getAdjustmentExtra(), entry.getAdjustmentVoidedAt(),
+                entry.getInstallmentMonths(), entry.getSplitPaymentGroupId(), entry.getSplitPaymentIndex(), entry.getSplitPaymentCount()
         );
     }
 
@@ -1336,6 +1431,12 @@ public class LedgerEntryService {
     }
 
     private void applyRequest(Long userId, LedgerEntry ledgerEntry, LedgerEntryRequest request, boolean sharingPreview) {
+        if (ledgerEntry.getSplitPaymentGroupId() != null && (request.entryType() != EntryType.EXPENSE
+                || request.travelRecordId() != null || request.foreignAmount() != null || request.exchangeRateToKrw() != null
+                || (request.foreignCurrencyCode() != null && !request.foreignCurrencyCode().isBlank()
+                    && !"KRW".equalsIgnoreCase(request.foreignCurrencyCode())))) {
+            throw new BadRequestException("분할 결제 내역은 원화 지출로 관리하며 여행 기록에 직접 연결할 수 없습니다.");
+        }
         var prepared = preparation.prepare(userId, LedgerPreparationMapper.draft(request), sharingPreview);
         var draft = prepared.draft();
         var exchange = prepared.exchange();
@@ -1362,6 +1463,20 @@ public class LedgerEntryService {
         ledgerEntry.setCategoryGroup(categoryGroupRepository.getReferenceById(prepared.groupId()));
         ledgerEntry.setCategoryDetail(prepared.detailId() == null ? null : categoryDetailRepository.getReferenceById(prepared.detailId()));
         ledgerEntry.setPaymentMethod(paymentMethod);
+        Integer installment = request.installmentMonths();
+        if (installment != null) {
+            if (installment == 0) {
+                ledgerEntry.setInstallmentMonths(null);
+            } else if (installment < 2 || installment > 60 || draft.entryType() != EntryType.EXPENSE
+                    || prepared.payment().kind() != PaymentMethodKind.CARD) {
+                throw new BadRequestException("할부는 카드 지출에서 2~60개월로 입력해 주세요.");
+            } else {
+                ledgerEntry.setInstallmentMonths(installment);
+            }
+        } else if (ledgerEntry.getInstallmentMonths() != null
+                && (draft.entryType() != EntryType.EXPENSE || prepared.payment().kind() != PaymentMethodKind.CARD)) {
+            throw new BadRequestException("할부 정보를 해제한 뒤 결제수단을 변경해 주세요.");
+        }
         ledgerEntry.setTravelPlanId(draft.travelPlanId());
         ledgerEntry.setTravelRecordId(draft.travelRecordId());
     }
@@ -1450,7 +1565,9 @@ public class LedgerEntryService {
             String paymentMethodName,
             Long travelPlanId,
             Long travelRecordId,
-            LocalDateTime deletedAt
+            LocalDateTime deletedAt,
+            Integer installmentMonths,
+            Boolean installmentRecorded
     ) {
     }
 

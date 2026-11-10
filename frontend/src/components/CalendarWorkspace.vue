@@ -15,6 +15,7 @@ import { isLegacyDefaultCalendarLayout } from '../lib/calendarDefaultLayout'
 import HouseholdPersonalizationDialog from './HouseholdPersonalizationDialog.vue'
 import CalendarInlineEditor from './CalendarInlineEditor.vue'
 import HouseholdTransactionSheet from './HouseholdTransactionSheet.vue'
+import LedgerPaymentOptions from './LedgerPaymentOptions.vue'
 import ReceiptHistoryThumbnail from './ReceiptHistoryThumbnail.vue'
 import { pendingReceiptReviewIds, unreadReceiptReviewIds, receiptReviewPage, selectReceiptAnalysisItems } from '../lib/receiptReview'
 import { groupReceiptHistoryRequests } from '../lib/receiptHistoryGroups'
@@ -4757,8 +4758,8 @@ defineExpose({
 
             <div v-if="entryForm.entryType === 'EXPENSE'" class="entry-editor__field-row entry-editor__field-row--classification">
               <label class="field">
-                <span class="field__label">결제수단</span>
-                <select v-model="entryForm.paymentMethodId">
+                <span class="field__label">{{ entryForm.splitMode ? '결제수단 (아래 지정)' : '결제수단' }}</span>
+                <select v-model="entryForm.paymentMethodId" :disabled="entryForm.splitMode">
                   <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
                     {{ payment.name }}
                   </option>
@@ -4784,6 +4785,8 @@ defineExpose({
                 </select>
               </label>
             </div>
+
+            <LedgerPaymentOptions v-if="entryForm.entryType === 'EXPENSE'" :form="entryForm" :methods="paymentMethods" :editing="isEditingEntry" />
 
 <template v-if="entryForm.entryType === 'INCOME'">
   <div class="field field--full">
@@ -4821,7 +4824,7 @@ defineExpose({
                   : '거래 등록'
             }}
           </button>
-          <button v-if="isShareAfterSaveEnabled" type="button" class="button button--ghost" :disabled="isSubmitting" @click="emit('submit-entry-share')">{{ isEditingEntry ? '수정 후 공유' : '등록 후 공유' }}</button>
+          <button v-if="isShareAfterSaveEnabled && !entryForm.splitMode" type="button" class="button button--ghost" :disabled="isSubmitting" @click="emit('submit-entry-share')">{{ isEditingEntry ? '수정 후 공유' : '등록 후 공유' }}</button>
 
           <button
             v-if="canUndoLastEntryAction"

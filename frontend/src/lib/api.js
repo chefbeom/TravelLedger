@@ -632,6 +632,10 @@ export function createLedgerAdjustment(entryId, payload) {
   return request(`/entries/${encodeURIComponent(entryId)}/adjustments`, { method: 'POST', body: JSON.stringify(payload) })
 }
 
+export function createSplitLedgerPayment(payload) {
+  return request('/entries/split-payments', { method: 'POST', body: JSON.stringify(payload) })
+}
+
 export function fetchLedgerAdjustments(entryId) {
   return request(`/entries/${encodeURIComponent(entryId)}/adjustments`)
 }

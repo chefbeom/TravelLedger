@@ -232,6 +232,12 @@ function adjustmentLabel(entry) {
   if (Number(entry.refundedPrincipal || 0) > 0) return Number(entry.refundedPrincipal) >= Number(entry.amount) ? '환불 완료' : '부분 환불'
   return entry.hasAdjustmentHistory ? '처리 이력 있음' : ''
 }
+function paymentInfoLabel(entry) {
+  const labels = []
+  if (entry.splitPaymentGroupId) labels.push(`분할 ${entry.splitPaymentIndex}/${entry.splitPaymentCount} · 묶음 ${entry.splitPaymentGroupId.slice(0, 8)}`)
+  if (entry.installmentMonths) labels.push(`${entry.installmentMonths}개월 할부`)
+  return labels.join(' · ')
+}
 const trashResultSelection = useTableSelection(computed(() => props.trashResults))
 const editingSearchEntryId = ref(null)
 const isSearchBulkToolbarVisible = ref(false)
@@ -2561,6 +2567,7 @@ watch(
                   <td class="sheet-table__title">
                     <div class="stats-search-title-cell">
                       <strong>{{ entry.title }}</strong>
+                      <small v-if="paymentInfoLabel(entry)">{{ paymentInfoLabel(entry) }}</small>
                       <small v-if="adjustmentLabel(entry)">{{ adjustmentLabel(entry) }}<template v-if="entry.adjustmentOriginId"> · 원거래 #{{ entry.adjustmentOriginId }}</template></small>
                       <span v-if="entry.memo" class="stats-search-title-cell__memo">{{ entry.memo }}</span>
                     </div>
@@ -2679,7 +2686,7 @@ watch(
                 </td>
                 <td>{{ formatFullDate(entry.entryDate) }}</td>
                 <td>{{ formatTime(entry.entryTime) }}</td>
-                <td class="sheet-table__title">{{ entry.title }}</td>
+                <td class="sheet-table__title">{{ entry.title }}<small v-if="paymentInfoLabel(entry)"> · {{ paymentInfoLabel(entry) }}</small></td>
                 <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}
 </template></td>
                 <td class="sheet-table__textwrap">{{ entry.paymentMethodName }}</td>

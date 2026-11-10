@@ -134,4 +134,20 @@ public class LedgerEntry {
 
     @Column(name = "adjustment_voided_at")
     private LocalDateTime adjustmentVoidedAt;
+
+    /** Informational only: the amount remains the full amount paid by this method. */
+    @Column(name = "installment_months")
+    private Integer installmentMonths;
+
+    @Column(name = "split_payment_group_id", length = 36)
+    private String splitPaymentGroupId;
+
+    @Column(name = "split_payment_index")
+    private Integer splitPaymentIndex;
+
+    @Column(name = "split_payment_count")
+    private Integer splitPaymentCount;
+
+    @Column(name = "split_payment_request_hash", length = 64)
+    private String splitPaymentRequestHash;
 }

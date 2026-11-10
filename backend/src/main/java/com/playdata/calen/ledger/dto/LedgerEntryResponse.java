@@ -41,7 +41,11 @@ public record LedgerEntryResponse(
         BigDecimal adjustmentPrincipal,
         BigDecimal adjustmentDeduction,
         BigDecimal adjustmentExtra,
-        LocalDateTime adjustmentVoidedAt
+        LocalDateTime adjustmentVoidedAt,
+        Integer installmentMonths,
+        String splitPaymentGroupId,
+        Integer splitPaymentIndex,
+        Integer splitPaymentCount
 ) {
     /** Compatibility for existing internal callers and legacy share snapshots. */
     public LedgerEntryResponse(Long id, LocalDate entryDate, LocalTime entryTime, String title, String memo,
@@ -53,6 +57,7 @@ public record LedgerEntryResponse(
         this(id, entryDate, entryTime, title, memo, amount, foreignCurrencyCode, foreignAmount, exchangeRateToKrw,
                 exchangeRateDate, exchangeRateProvider, entryType, categoryGroupId, categoryGroupName,
                 categoryDetailId, categoryDetailName, paymentMethodId, paymentMethodName, paymentMethodKind,
-                travelPlanId, travelRecordId, false, null, BigDecimal.ZERO, false, null, null, null, null, null, null);
+                travelPlanId, travelRecordId, false, null, BigDecimal.ZERO, false, null, null, null, null, null, null,
+                null, null, null, null);
     }
 }

@@ -127,13 +127,18 @@ public class PaymentMethodService {
 
     @Transactional
     public void delete(Long userId, Long id, LedgerClassificationDeleteRequest request) {
+        appUserService.getRequiredUserForWrite(userId);
         LedgerClassificationDeleteRequest deleteRequest = normalizeDeleteRequest(request);
         PaymentMethod paymentMethod = paymentMethodRepository.findByIdAndOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("결제수단을 찾을 수 없습니다."));
         PaymentMethod replacementPaymentMethod = resolveReplacementPaymentMethod(userId, id, deleteRequest.replacementPaymentMethodId());
 
-        ledgerEntryRepository.findAllByOwnerIdAndPaymentMethodId(userId, id)
-                .forEach(entry -> entry.setPaymentMethod(replacementPaymentMethod));
+        var affectedEntries = ledgerEntryRepository.findAllByOwnerIdAndPaymentMethodId(userId, id);
+        if (replacementPaymentMethod.getKind() != PaymentMethodKind.CARD
+                && affectedEntries.stream().anyMatch(entry -> entry.getInstallmentMonths() != null)) {
+            throw new BadRequestException("할부 기록이 있는 결제수단은 다른 카드로 대체해 주세요.");
+        }
+        affectedEntries.forEach(entry -> entry.setPaymentMethod(replacementPaymentMethod));
 
         paymentMethodRepository.delete(paymentMethod);
     }

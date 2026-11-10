@@ -68,6 +68,7 @@ function submit() {
         <p v-else class="adjustment-note">결제 전액이 청구되지 않은 경우에 사용합니다. 원거래와 취소 기록은 남고, 원거래 지출은 해당 원거래 날짜의 집계에서 제외됩니다. 기존 공유 내역은 자동 변경되지 않습니다.</p>
         <p v-if="entry.foreignCurrencyCode && isRefund" class="adjustment-note">외화 원거래도 원화 환산 금액을 기준으로 처리합니다. 실제 수령액을 원화로 입력해 주세요.</p>
         <p v-if="entry.travelRecordId && isRefund" class="adjustment-note">환불은 가계부에 기록되며 연결된 여행 지출은 자동 변경되지 않습니다.</p>
+        <p v-if="entry.splitPaymentGroupId" class="adjustment-note">분할 결제 {{ entry.splitPaymentIndex }}/{{ entry.splitPaymentCount }} 중 이 결제수단의 금액만 처리합니다. 같은 묶음의 다른 수단에는 적용되지 않습니다.</p>
         <form class="adjustment-form" @submit.prevent="submit">
           <div class="adjustment-grid">
             <label class="field"><span class="field__label">{{ isRefund ? '환불받은 날짜' : '결제 취소 날짜' }}</span><input ref="dateInput" v-model="form.date" type="date" :min="entry.entryDate" required /></label>

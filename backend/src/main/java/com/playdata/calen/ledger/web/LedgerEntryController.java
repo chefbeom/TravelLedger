@@ -12,6 +12,7 @@ import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
+import com.playdata.calen.ledger.dto.LedgerSplitPaymentRequest;
 import com.playdata.calen.ledger.dto.LedgerAdjustmentRequest;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
 import com.playdata.calen.ledger.dto.LedgerExchangeRateResponse;
@@ -191,6 +192,14 @@ public class LedgerEntryController {
             @Valid @RequestBody LedgerEntryRequest request
     ) {
         return ledgerEntryService.create(currentUser.userId(), request);
+    }
+
+    @PostMapping("/split-payments")
+    public List<LedgerEntryResponse> createSplitPayment(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @Valid @RequestBody LedgerSplitPaymentRequest request
+    ) {
+        return ledgerEntryService.createSplitPayment(currentUser.userId(), request);
     }
 
     @PatchMapping("/bulk")

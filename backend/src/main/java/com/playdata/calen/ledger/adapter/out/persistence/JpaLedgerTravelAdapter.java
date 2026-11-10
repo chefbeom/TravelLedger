@@ -34,7 +34,8 @@ public class JpaLedgerTravelAdapter implements LedgerTravelStore {
     @Override public Optional<Plan> ownedPlan(Long owner, Long id) { return plans.findByIdAndOwnerId(id, owner).map(this::plan); }
     @Override public Optional<Entry> ownedEntry(Long owner, Long id) {
         return entries.findByIdAndOwnerIdAndDeletedAtIsNull(id, owner)
-                .filter(e -> !e.isFinanciallyExcluded() && !e.isHasAdjustmentHistory() && e.getAdjustmentType() == null)
+                .filter(e -> !e.isFinanciallyExcluded() && !e.isHasAdjustmentHistory()
+                        && e.getAdjustmentType() == null && e.getSplitPaymentGroupId() == null)
                 .map(e -> new Entry(e.getId(), e.getOwner().getId(), e.getEntryType(), e.getEntryDate(), e.getEntryTime(), e.getTitle(),
                 e.getMemo(), e.getAmount(), e.getForeignCurrencyCode(), e.getForeignAmount(), e.getExchangeRateToKrw(),
                 e.getCategoryGroup() == null ? null : new Named(e.getCategoryGroup().getId(), e.getCategoryGroup().getName()),

@@ -50,6 +50,9 @@ Updated: 2026-10-11
 | `V20261003_031__record_share_memo.sql` | Optional memo field for shared record requests. |
 | `V20261006_032__ledger_embedding_sync_jobs.sql` | Durable ledger embedding outbox, revision/claim/retry metadata, ready/expired-claim indexes. No source FK, payload, startup DDL or data backfill. |
 | `V20261013_033__record_map.sql` | Owner-scoped places, many-to-many collections, dated visits/photos, and hashed revocable public collection links. No travel data rewrite or backfill. |
+| `V20261030_033_1__ledger_payment_adjustments.sql` | Refund and payment-cancellation records for ledger transactions. |
+| `V20261030_033_2__ledger_split_installments.sql` | Linked split payments and informational installment metadata. |
+| `V20261111_058__record_map_undated_photos.sql` | Allows place photo groups without a visit date, preserving existing records. |
 
 ## Legacy Schema Updater Inventory
 
@@ -121,6 +124,9 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 | `V20261003_031__record_share_memo.sql` | Existing share requests remain readable with a null optional memo and new requests can persist the memo. | Restore the pre-migration backup if the column migration fails; preserve share request rows. | Adds optional field to `record_shares`. |
 | `V20261006_032__ledger_embedding_sync_jobs.sql` | Pending rehearsal; compile only on 2026-10-06. Before promotion, verify MariaDB capture/rollback, bulk trash delete, claim/recovery, concurrent changes and API failure paths as described in `docs/embedding_automatic_sync.md`. No tests or DB changes run in this implementation step. | Disable API and capture before app rollback; preserve outbox/tombstones and DB backup. Do not drop pending work. App rollback does not undo remote points; plan authorized reconciliation separately. | New Flyway-only table; no legacy updater added, changed or retired. Required before capture/API enablement; `ddl-auto=update` does not create this JDBC-managed table. |
 | `V20261013_033__record_map.sql` | Pending MariaDB/Flyway staging rehearsal. Verify owner/CSRF/media isolation, multi-collection membership, visit/photo retention, link expiry/revocation, and travel-reference preservation; local implementation evidence is tracked in `docs/record_map_implementation.md`. | Back up before rollout. On app rollback retain all six record-map tables and uploaded media; disabling the new UI does not require deleting records or changing legacy travel tables. | New Flyway-only schema; no startup updater added or retired. Existing travel records are not rewritten. |
+| `V20261030_033_1__ledger_payment_adjustments.sql` | Verify refund and payment-cancellation flows on staging MariaDB. | Preserve original transactions and adjustment history during rollback. | No legacy updater retired. |
+| `V20261030_033_2__ledger_split_installments.sql` | Verify split payments and installment metadata on staging MariaDB. | Preserve linked transactions and installment metadata during rollback. | No legacy updater retired. |
+| `V20261111_058__record_map_undated_photos.sql` | H2 migration and feature tests passed; MariaDB/Flyway rehearsal remains required. Apply before enabling undated place-photo saves. | Preserve visits and photos; older app versions may not display newly undated photos. | Relaxes an existing column; no legacy updater retired. |
 
 ## Operating Rules
 

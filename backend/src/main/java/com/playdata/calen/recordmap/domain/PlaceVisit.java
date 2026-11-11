@@ -16,7 +16,8 @@ public class PlaceVisit {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "place_id", nullable = false) private RecordPlace place;
     @Column(nullable = false, length = 160) private String title;
     @Column(length = 4000) private String memo;
-    @Column(name = "visit_date", nullable = false) private LocalDate visitDate;
+    // An undated row groups place photos without claiming a visit took place.
+    @Column(name = "visit_date") private LocalDate visitDate;
     @Column(name = "visit_time") private LocalTime visitTime;
     @Version private Long version;
     @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;

@@ -32,9 +32,11 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  plans: { type: Array, default: () => [] },
+  preferredPlanId: { type: [String, Number], default: '' },
 })
 
-const emit = defineEmits(['open-travel-manager', 'open-memories', 'open-routes', 'open-photos', 'open-photo-editor'])
+const emit = defineEmits(['open-travel-manager', 'open-memories', 'open-routes', 'open-photos', 'open-photo-editor', 'create-travel', 'select-plan'])
 
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
@@ -56,6 +58,9 @@ const viewMode = ref('cluster')
 const detailRecoveryClusterId = ref(null)
 const mapFilterMode = ref('all')
 const selectedPlanFilterKeys = ref([])
+const placeSearch = ref('')
+const travelListOpen = ref(false)
+const travelPickMode = ref(false)
 const selectedCountryKey = ref('all')
 const selectedRegionKey = ref('all')
 const mapFitRequestKey = ref(0)
@@ -949,6 +954,9 @@ function addCountOption(map, key, label, amount = 1) {
 
 const planFilterOptions = computed(() => {
   const options = new Map()
+  props.plans.forEach(plan => {
+    if (plan?.id != null) options.set(`plan:${plan.id}`, { key: `plan:${plan.id}`, label: plan.name || '여행', count: 0 })
+  })
   ;[...photoPins.value, ...markers.value, ...routes.value].forEach((item) => {
     addCountOption(options, getPlanFilterKey(item), getPlanFilterLabel(item))
   })
@@ -960,6 +968,21 @@ const planFilterOptions = computed(() => {
 })
 
 const selectedPlanKeySet = computed(() => new Set(selectedPlanFilterKeys.value.map(String)))
+const selectedSinglePlanId = computed(() => mapFilterMode.value === 'plans' && selectedPlanFilterKeys.value.length === 1
+  ? String(parsePlanIdFromFilterKey(selectedPlanFilterKeys.value[0]) || '') : '')
+watch(selectedSinglePlanId, id => emit('select-plan', id))
+function choosePlan(event) {
+  const id = event.target.value
+  travelPickMode.value = false
+  mapFilterMode.value = id ? 'plans' : 'all'
+  selectedPlanFilterKeys.value = id ? [`plan:${id}`] : []
+  emit('select-plan', id)
+}
+function pickTravelLocation(point) {
+  if (!travelPickMode.value || !selectedSinglePlanId.value) return
+  travelPickMode.value = false
+  emit('open-memories', { planId: selectedSinglePlanId.value, create: true, point })
+}
 
 const planLocationIndex = computed(() => {
   const index = new Map()
@@ -1069,6 +1092,26 @@ const mapPhotoPins = computed(() => selectedJourneyDay.value ? journeyPhotoPins.
 const mapMarkers = computed(() => selectedJourneyDay.value
   ? visibleMarkers.value.filter((marker) => matchesTravelJourneyDay(marker, selectedJourneyDay.value))
   : visibleMarkers.value)
+const mapListItems = computed(() => {
+  const items = [
+    ...mapMarkers.value.map(item => ({ key: `marker:${item.id}`, kind: 'marker', item })),
+    ...mapPhotoClusters.value.map(item => ({ key: `cluster:${item.id}`, kind: 'cluster', item })),
+    ...(selectedJourneyDay.value ? mapPhotoPins.value.map(item => ({ key: `photo:${item.mediaId}`, kind: 'photo', item })) : []),
+  ]
+  const needle = placeSearch.value.trim().toLocaleLowerCase()
+  return items.filter(({ item }) => !needle || [item.title, item.placeName, item.country, item.region, item.planName]
+    .some(value => String(value || '').toLocaleLowerCase().includes(needle)))
+    .sort((a, b) => String(a.item.memoryDate || '').localeCompare(String(b.item.memoryDate || ''))
+    || String(a.item.memoryTime || '').localeCompare(String(b.item.memoryTime || '')))
+})
+async function focusMapListItem(row) {
+  const item = row.item
+  travelListOpen.value = false
+  focusMapAtCoordinate(item.latitude, item.longitude, { zoom: 15 })
+  if (row.kind === 'photo') await handleSelectPhotoPin(item)
+  else if (row.kind === 'cluster') await handleSelectCluster(item)
+  else handleSelectMarker(item)
+}
 const mapRoutes = computed(() => selectedJourneyDay.value
   ? visibleRoutes.value.filter((route) => matchesTravelJourneyDay(route, selectedJourneyDay.value))
   : visibleRoutes.value)
@@ -1412,6 +1455,12 @@ const shouldShowFullscreenInspector = computed(() =>
 onMounted(async () => {
   await loadOverview({ autoSelect: false, reloadDetail: false })
 })
+watch(() => props.active, active => { if (active) loadOverview({ autoSelect: false, reloadDetail: false }) })
+watch(() => props.preferredPlanId, id => {
+  if (!id) return
+  mapFilterMode.value = 'plans'
+  selectedPlanFilterKeys.value = [`plan:${id}`]
+}, { immediate: true })
 
 onBeforeUnmount(() => {
   pauseJourneyPlayback()
@@ -1488,11 +1537,17 @@ watch(journeyRoutePath, (path) => {
           <h2>내 여행 지도</h2>
         </div>
         <div class="travel-my-map-header__actions">
+          <button class="button button--secondary" type="button" @click="emit('create-travel')">새 여행 만들기</button>
           <button class="button button--secondary" type="button" @click="emit('open-travel-manager')">여행 정보 수정</button>
-          <button class="button button--primary" type="button" @click="emit('open-memories')">사진 · GPS · GPX 등록</button>
+          <button class="button button--primary" type="button" @click="emit('open-memories', { planId: selectedSinglePlanId, create: true })">장소·사진 추가</button>
+          <button class="button button--secondary" type="button" :disabled="!selectedSinglePlanId" :aria-pressed="travelPickMode" @click="travelPickMode = !travelPickMode">{{ travelPickMode ? '위치 선택 취소' : '지도에 장소 찍기' }}</button>
+          <button class="button button--secondary" type="button" @click="emit('open-routes', { planId: selectedSinglePlanId })">경로 추가</button>
           <button class="button button--primary" type="button" @click="openShareDialog">지도 공유</button>
         </div>
       </div>
+      <label class="field travel-map-trip-select"><span class="field__label">여행 선택</span><select :value="selectedSinglePlanId" @change="choosePlan"><option value="">전체 여행</option><option v-for="plan in plans" :key="plan.id" :value="String(plan.id)">{{ plan.name }}</option></select></label>
+      <p class="travel-map-pick-hint" role="status">{{ travelPickMode ? '지도에서 추가할 위치를 눌러 주세요.' : !selectedSinglePlanId ? '지도에 장소를 찍으려면 먼저 여행 하나를 선택하세요.' : '' }}</p>
+      <details class="travel-map-advanced"><summary>지도 필터와 요약</summary>
       <div class="travel-summary-grid">
         <article class="travel-stat-card">
           <span>사진 핀</span>
@@ -1560,6 +1615,7 @@ watch(journeyRoutePath, (path) => {
           </select>
         </label>
       </div>
+      </details>
     </section>
 
     <section class="panel panel--map-fill travel-overview-map-panel">
@@ -1590,14 +1646,28 @@ watch(journeyRoutePath, (path) => {
 
       <p v-if="overviewErrorMessage" class="panel__empty">{{ overviewErrorMessage }}</p>
       <p v-else-if="isLoading" class="panel__empty">사진 지도 데이터를 불러오는 중입니다...</p>
+      <div v-else class="travel-map-workbench">
+      <aside class="travel-map-workbench__list" :class="{ 'is-open': travelListOpen }" aria-label="여행 장소 목록">
+        <header class="travel-map-workbench__list-header"><strong>장소와 사진 · {{ mapListItems.length }}개</strong><button type="button" class="button travel-map-workbench__list-toggle" :aria-expanded="travelListOpen" @click="travelListOpen = !travelListOpen">{{ travelListOpen ? '접기' : '목록 열기' }}</button></header>
+        <div class="travel-map-workbench__list-body">
+        <label class="field"><span>장소 검색</span><input v-model="placeSearch" type="search" placeholder="여행의 장소·지역 검색" /></label>
+        <label class="field"><span>날짜</span><select :value="selectedJourneyDayKey" @change="handleJourneyDayChange($event.target.value)"><option value="">전체 날짜</option><option v-for="day in journeyDays" :key="day.key" :value="day.key">{{ day.label }}</option></select></label>
+        <p v-if="!mapListItems.length">이 여행에 표시할 장소가 없습니다. 장소·사진을 추가해 보세요.</p>
+        <button v-for="row in mapListItems.slice(0, 100)" :key="row.key" type="button" class="travel-map-workbench__item" @click="focusMapListItem(row)">
+          <span class="travel-map-workbench__number" aria-hidden="true">●</span>
+          <span><strong>{{ row.item.placeName || row.item.title || '사진 장소' }}</strong><small>{{ [row.item.memoryDate, row.item.planName].filter(Boolean).join(' · ') || '날짜 미지정' }}</small></span>
+        </button>
+        <small v-if="mapListItems.length > 100">처음 100개를 표시합니다. 여행 또는 날짜로 범위를 좁혀 주세요.</small>
+        </div>
+      </aside>
       <TravelMyMapClusterPanel
         ref="mapPanelRef"
-        v-else
         :photo-clusters="mapPhotoClusters"
         :photo-pins="mapPhotoPins"
         :markers="mapMarkers"
         :routes="mapRoutes"
         :active="props.active"
+        :enable-pick-location="travelPickMode"
         :display-mode="mapDisplayMode"
         :selected-cluster-id="selectedClusterSummary?.id ?? null"
         :selected-photo-id="selectedPhotoId ?? null"
@@ -1609,6 +1679,7 @@ watch(journeyRoutePath, (path) => {
         @select-cluster="handleSelectCluster"
         @select-marker="handleSelectMarker"
         @select-photo-pin="handleSelectPhotoPin"
+        @pick-location="pickTravelLocation"
         @preview-cluster="handlePreviewClusterFromMap"
         @fullscreen-change="handleMapFullscreenChange"
         @clear-selection="clearSelection"
@@ -1685,6 +1756,7 @@ watch(journeyRoutePath, (path) => {
           />
         </template>
       </TravelMyMapClusterPanel>
+      </div>
     </section>
 
     <section v-if="detailErrorMessage && !selectedClusterDetail" class="panel">
@@ -1878,3 +1950,32 @@ watch(journeyRoutePath, (path) => {
     />
   </div>
 </template>
+
+<style scoped>
+.travel-map-trip-select { max-width:24rem; margin:.75rem 0; }
+.travel-map-pick-hint { margin:.4rem 0; font-size:.8rem; }
+.travel-map-advanced { border:1px solid var(--line); padding:.7rem; margin-top:.5rem; }
+.travel-map-advanced summary { cursor:pointer; font-weight:700; }
+.travel-map-advanced .travel-summary-grid { margin-top:.75rem; }
+.travel-map-workbench { position:relative; display:grid; grid-template-columns:minmax(13rem, 19rem) minmax(0,1fr); gap:.75rem; align-items:stretch; min-width:0; }
+.travel-map-workbench__list { display:flex; flex-direction:column; gap:.5rem; min-width:0; max-height:45rem; padding:.75rem; border:1px solid var(--line); background:var(--panel-bg); }
+.travel-map-workbench__list-header { display:flex; justify-content:space-between; align-items:center; gap:.5rem; }
+.travel-map-workbench__list-toggle { display:none; }
+.travel-map-workbench__list-body { display:flex; flex-direction:column; gap:.5rem; min-height:0; overflow-y:auto; }
+.travel-map-workbench__list p, .travel-map-workbench__list small { font-size:.8rem; }
+.travel-map-workbench__item { display:flex; align-items:flex-start; gap:.6rem; width:100%; min-width:0; padding:.6rem; border:1px solid var(--line); background:var(--panel-bg); color:var(--text); text-align:left; cursor:pointer; }
+.travel-map-workbench__item > span:last-child { display:grid; min-width:0; overflow-wrap:anywhere; }
+.travel-map-workbench__number { flex:0 0 1.5rem; height:1.5rem; display:grid; place-items:center; background:var(--accent-soft,#009e8c22); border-radius:50%; }
+.travel-map-workbench :deep(.travel-map:not(.travel-map--fullscreen)) { min-width:0; max-width:100%; }
+.travel-map-workbench :deep(.travel-map:not(.travel-map--fullscreen) .travel-map__toolbar),
+.travel-map-workbench :deep(.travel-map:not(.travel-map--fullscreen) .travel-map__toolbar-group) { box-sizing:border-box; min-width:0; max-width:100%; }
+@media (max-width:760px) {
+  .travel-map-workbench { grid-template-columns:minmax(0,1fr); }
+  .travel-map-workbench__list { position:absolute; z-index:1003; left:.5rem; right:.5rem; bottom:.5rem; max-height:55%; padding:.5rem; box-shadow:0 4px 18px #0004; }
+  .travel-map-workbench__list-toggle { display:block; width:auto; min-height:2.5rem; }
+  .travel-map-workbench__list:not(.is-open) .travel-map-workbench__list-body { display:none; }
+  .travel-map-workbench :deep(.travel-map:not(.travel-map--fullscreen) .travel-map__toolbar) { left:0; right:auto; top:0; }
+  .travel-map-workbench :deep(.travel-map:not(.travel-map--fullscreen) .travel-map__toolbar-group--navigation) { flex-wrap:wrap; width:100%; }
+  .travel-map-workbench :deep(.travel-map:not(.travel-map--fullscreen) .travel-map__toolbar-group--navigation .travel-map__toolbar-button) { flex:1 1 auto; min-width:0; }
+}
+</style>

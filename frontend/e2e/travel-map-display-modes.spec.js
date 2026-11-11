@@ -53,7 +53,9 @@ async function mountMap(page, kind = 'panel', day = false) {
     host.id = 'map-display-test'
     document.body.appendChild(host)
     if (kind !== 'panel') {
-      createApp(Component, kind === 'public' ? { token: 'grouped-photos' } : { active: true }).mount(host)
+      createApp(Component, kind === 'public' ? { token: 'grouped-photos' } : {
+        active: true, plans: [{ id: 1, name: '표시 방식 테스트' }, { id: 2, name: '아직 비어 있는 여행' }],
+      }).mount(host)
       return
     }
     const state = reactive({ active: true, photoClusters: day ? [] : clusters, photoPins: photos, displayMode: day ? 'pin' : 'cluster', selectedPhotoId: null, journeyPhotoId: null, journeyPlaybackActive: false, focusTarget: null })
@@ -66,6 +68,38 @@ async function mountMap(page, kind = 'panel', day = false) {
 }
 
 const markerSelector = '.leaflet-marker-pane .leaflet-marker-icon'
+
+test('travel list selects a trip, searches places and focuses the selected map item', async ({ page }, testInfo) => {
+  const fixture = await mountMap(page, 'private')
+  const select = page.locator('.travel-map-trip-select select')
+  await select.selectOption('1')
+  const list = page.getByRole('complementary', { name: '여행 장소 목록' })
+  const toggle = list.getByRole('button', { name: '목록 열기' })
+  if (await toggle.isVisible()) await toggle.click()
+  const metrics = await page.locator('.travel-map-workbench .travel-map__toolbar-group--navigation').evaluate(node => {
+    const parent = node.getBoundingClientRect()
+    const workbench = node.closest('.travel-map-workbench').getBoundingClientRect()
+    return { parent: { left: parent.left, right: parent.right, width: parent.width },
+      workbench: { left: workbench.left, right: workbench.right, width: workbench.width },
+      buttons: [...node.querySelectorAll('button')].map(button => { const box = button.getBoundingClientRect(); return { label: button.textContent.trim(), left: box.left, right: box.right } }) }
+  })
+  expect(metrics.parent.left, JSON.stringify(metrics)).toBeGreaterThanOrEqual(metrics.workbench.left - 1)
+  expect(metrics.parent.right, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.workbench.right + 1)
+  for (const button of metrics.buttons) {
+    expect(button.left, JSON.stringify(metrics)).toBeGreaterThanOrEqual(metrics.parent.left - 1)
+    expect(button.right, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.parent.right + 1)
+  }
+  await page.locator('.travel-map-workbench').screenshot({ path: testInfo.outputPath('travel-map-workbench.png') })
+  await list.getByLabel('장소 검색').fill('Place 4')
+  await expect(list.locator('.travel-map-workbench__item')).toHaveCount(1)
+  await list.getByRole('button', { name: /Place 4/ }).click()
+  await expect.poll(async () => Number(await page.locator('.travel-cluster-map__zoom').first().textContent())).toBeGreaterThanOrEqual(15)
+  if (await toggle.isVisible()) await toggle.click()
+  await list.getByLabel('장소 검색').clear()
+  await select.selectOption('2')
+  await expect(list).toContainText('이 여행에 표시할 장소가 없습니다')
+  expect(fixture.errors).toEqual([])
+})
 
 async function dragPreviewSize(page, handle, dx, dy, isMobile) {
   const box = await handle.boundingBox()
@@ -88,6 +122,24 @@ async function dragPreviewSize(page, handle, dx, dy, isMobile) {
     await page.mouse.move(x + dx, y + dy, { steps: 12 })
     await page.mouse.up()
   }
+}
+
+async function clickMapBackground(page, canvas) {
+  await canvas.scrollIntoViewIfNeeded()
+  const point = await canvas.evaluate(node => {
+    const box = node.getBoundingClientRect()
+    for (const yFraction of [.1, .2, .3, .5, .7, .9]) {
+      for (const xFraction of [.05, .95, .2, .8, .5]) {
+        const x = box.left + box.width * xFraction, y = box.top + box.height * yFraction
+        if (x < 1 || y < 1 || x >= innerWidth - 1 || y >= innerHeight - 1) continue
+        const target = document.elementFromPoint(x, y)
+        if (target && node.contains(target) && !target.closest('.leaflet-marker-icon, .leaflet-popup, .leaflet-control, .leaflet-interactive')) return { x, y }
+      }
+    }
+    return null
+  })
+  expect(point, 'A visible, unobstructed map background must be available').not.toBeNull()
+  await page.mouse.click(point.x, point.y)
 }
 
 for (const kind of ['private', 'public']) {
@@ -457,7 +509,7 @@ for (const kind of ['private', 'public']) {
     await page.mouse.up()
     await expect(preview).toBeVisible()
     await expect(card).toBeVisible()
-    await canvas.click({ position: { x: box.width * 0.95, y: box.height * 0.1 } })
+    await clickMapBackground(page, canvas)
     await expect(preview).toHaveCount(0)
     await expect(card).toHaveCount(0)
     await pin.click()

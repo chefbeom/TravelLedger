@@ -14,7 +14,7 @@ public final class RecordMapWritePolicy {
     }
 
     public static void requireNoVisits(long count) {
-        if (count > 0) throw new BadRequestException("방문 기록이 있는 장소는 삭제할 수 없습니다. 모음에서 제거하거나 방문 기록을 먼저 정리해 주세요.");
+        if (count > 0) throw new BadRequestException("사진이나 기록이 있는 장소는 삭제할 수 없습니다. 모음에서 제거하거나 사진과 기록을 먼저 정리해 주세요.");
     }
 
     public static void requireSamePlace(Long existingPlace, Long requestedPlace) {

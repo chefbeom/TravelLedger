@@ -28,6 +28,7 @@ const hubInitialLogTab = ref('overview')
 const hubInitialMoneyTab = ref('records')
 const financeLegacyOpen = ref(false)
 const travelPortfolio = ref(null)
+const currentPlanId = ref('')
 const travelSummaryLoading = ref(false)
 const travelSummaryError = ref('')
 const travelSummaryLoaded = ref(false)
@@ -121,8 +122,6 @@ async function loadTravelSummary() {
     travelPortfolio.value = await fetchTravelPortfolio()
     if (props.route === 'travel-log') {
       openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: hasTravelPlans.value ? 2 : 1 })
-    } else if (['travel', 'my-map'].includes(props.route) && !hasTravelPlans.value) {
-      openTravelSetup({ mode: 'create', step: 1 })
     }
   } catch (error) {
     travelSummaryError.value = error.message || '여행 요약을 불러오지 못했습니다.'
@@ -146,11 +145,7 @@ function applyRouteState(route) {
       break
     case 'my-map':
     case 'travel':
-      if (travelSummaryLoaded.value && !hasTravelPlans.value) {
-        openTravelSetup({ mode: 'create', step: 1 })
-      } else {
-        openMap()
-      }
+      openMap()
       break
     case 'public-trips':
       openMap()
@@ -195,13 +190,26 @@ function openFinanceEditor(initialMoneyTab = 'records') {
 function openTravelManager() {
   openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: 1 })
 }
+function createTravel() {
+  currentPlanId.value = ''
+  openTravelSetup({ mode: 'create', step: 1 })
+}
 
 function openMemories(clearPlaceFocus = true) {
+  let createEntry = false
+  let pickedPoint = null
+  if (typeof clearPlaceFocus === 'object') {
+    currentPlanId.value = String(clearPlaceFocus?.planId ?? currentPlanId.value ?? '')
+    createEntry = Boolean(clearPlaceFocus?.create)
+    pickedPoint = clearPlaceFocus?.point || null
+    clearPlaceFocus = true
+  }
   if (clearPlaceFocus) {
     hubPlaceFocusRequest.value = {
-      type: 'place',
+      type: createEntry ? 'create' : 'place',
       token: Date.now(),
-      planId: '',
+      planId: currentPlanId.value,
+      point: pickedPoint,
       country: '',
       region: '',
       placeName: '',
@@ -238,7 +246,8 @@ function openPhotoEditor(photo) {
 }
 
 function openRoutes(focusRequest = null) {
-  if (focusRequest) {
+  if (focusRequest?.planId) currentPlanId.value = String(focusRequest.planId)
+  if (focusRequest?.routeId || focusRequest?.id) {
     hubRouteFocusRequest.value = {
       type: 'route',
       token: Date.now(),
@@ -246,11 +255,12 @@ function openRoutes(focusRequest = null) {
       planId: focusRequest.planId || '',
       routeDate: focusRequest.routeDate || '',
     }
-  }
+  } else hubRouteFocusRequest.value = null
   openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: 3 })
 }
 
 function openMap() {
+  hubPlaceFocusRequest.value = null
   workflowMode.value = ''
   primaryTab.value = 'map'
   hubRoute.value = 'travel-log'
@@ -271,12 +281,15 @@ function openPhotos(focusRequest = null) {
   openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: 2 })
 }
 
-async function handleWorkflowComplete() {
+async function handleWorkflowComplete(payload) {
+  if (payload?.planId) currentPlanId.value = String(payload.planId)
+  hubPlaceFocusRequest.value = null
   await loadTravelSummary()
   openMap()
 }
 
 async function closeTravelSetup() {
+  hubPlaceFocusRequest.value = null
   await loadTravelSummary()
   openMap()
 }
@@ -408,6 +421,10 @@ onMounted(loadTravelSummary)
     <div v-show="primaryTab === 'map'" class="workspace-stack">
       <TravelMyMapWorkspace
         :active="primaryTab === 'map'"
+        :plans="travelPortfolio?.plans || []"
+        :preferred-plan-id="currentPlanId"
+        @select-plan="currentPlanId = $event"
+        @create-travel="createTravel"
         @open-memories="openMemories"
         @open-routes="openRoutes"
         @open-photos="openPhotos"
@@ -458,6 +475,7 @@ onMounted(loadTravelSummary)
         :initial-money-tab="hubInitialMoneyTab"
         :workflow-mode="workflowMode"
         :workflow-start-step="workflowStartStep"
+        :initial-plan-id="currentPlanId"
         :external-record-focus-request="hubRecordFocusRequest || recordFocusRequest"
         :external-memory-focus-request="hubPlaceFocusRequest"
         :external-photo-focus-request="hubPhotoFocusRequest"

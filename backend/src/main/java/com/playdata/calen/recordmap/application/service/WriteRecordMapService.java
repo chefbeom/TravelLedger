@@ -5,6 +5,7 @@ import com.playdata.calen.recordmap.application.port.out.RecordMapCatalogPort;
 import com.playdata.calen.recordmap.application.port.out.RecordMapMutationsPort;
 import com.playdata.calen.recordmap.domain.model.RecordMapWriteData.*;
 import com.playdata.calen.recordmap.domain.policy.RecordMapWritePolicy;
+import com.playdata.calen.common.exception.BadRequestException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -48,6 +49,7 @@ public final class WriteRecordMapService implements WriteRecordMapUseCase {
     }
 
     @Override public Long saveVisit(Long owner, Long placeId, Long id, VisitDraft draft) {
+        if (draft.date() == null && draft.time() != null) throw new BadRequestException("방문 날짜 없이 시간만 저장할 수 없습니다.");
         catalog.requireOwnedPlace(owner, placeId);
         if (id != null) RecordMapWritePolicy.requireSamePlace(catalog.ownedVisitPlace(owner, id, false), placeId);
         return mutations.saveVisit(owner, placeId, id, draft, now());

@@ -31,7 +31,8 @@ public final class RecordMapReadPolicy {
     }
 
     public static boolean inRange(LocalDate date, LocalDate from, LocalDate to) {
-        return date != null && (from == null || !date.isBefore(from)) && (to == null || !date.isAfter(to));
+        return date == null ? from == null && to == null
+                : (from == null || !date.isBefore(from)) && (to == null || !date.isAfter(to));
     }
 
     public static boolean privateFields(Scope scope) { return !scope.readOnly() || scope.includeVisits(); }

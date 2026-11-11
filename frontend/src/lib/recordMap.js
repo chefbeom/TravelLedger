@@ -7,13 +7,13 @@ export function buildRecordMapData(overview = {}) {
   for (const place of places) {
     const rows = visits.filter(v => v.placeId === place.id)
     const color = overview.collections?.find(c => place.collectionIds?.includes(c.id))?.colorHex || (place.visited ? '#009E8C' : '#C88623')
-    const common = { recordMap: true, recordMapPlaceId: place.id, planName: '일상 기록', planColorHex: color,
+    const common = { recordMap: true, recordMapPlaceId: place.id, planName: '내 장소', planColorHex: color,
       title: place.name, country: place.country, region: place.region, placeName: place.name,
       latitude: place.latitude, longitude: place.longitude }
     for (const visit of rows) for (const photo of visit.photos || []) {
       photoPins.push({ ...common, mediaId: photo.id, clusterId: 'place:' + place.id, recordId: visit.id,
         memoryDate: visit.date, memoryTime: visit.time, title: visit.title, photoUrl: photo.photoUrl,
-        planId: visit.travelPlanId, planName: visit.travelPlanName || '일상 기록', originalFileName: photo.name })
+        planId: visit.travelPlanId, planName: visit.travelPlanName || '내 장소', originalFileName: photo.name })
     }
     const pictures = photoPins.filter(p => p.recordMapPlaceId === place.id)
     if (pictures.length) {

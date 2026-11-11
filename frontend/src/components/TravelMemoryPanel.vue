@@ -461,6 +461,16 @@ watch(
 watch(
   () => props.focusRequest?.token,
   () => {
+    if (props.focusRequest?.type === 'create') {
+      clearPendingPoint()
+      openBlankEditor()
+      const point = props.focusRequest.point
+      if (Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude)) {
+        form.latitude = String(point.latitude)
+        form.longitude = String(point.longitude)
+      }
+      return
+    }
     if (props.focusRequest?.type === 'place') {
       applyPlaceFocusRequest(props.focusRequest)
       return

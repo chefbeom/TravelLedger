@@ -104,6 +104,7 @@ const props = defineProps({
     type: Number,
     default: 1,
   },
+  initialPlanId: { type: [String, Number], default: '' },
 })
 
 const emit = defineEmits([
@@ -298,11 +299,12 @@ const showPlanGate = computed(() =>
 )
 const canShareTravelPlan = computed(() => Boolean(travelPlan.value) && travelPlan.value.status === 'COMPLETED')
 const isTravelSetupWorkflow = computed(() => ['create', 'edit'].includes(props.workflowMode))
-const workflowTitle = computed(() => planFormMode.value === 'edit' ? '여행 수정' : '새 여행 만들기')
+const workflowTitle = computed(() => planFormMode.value === 'create' ? '새 여행 만들기'
+  : ({ 1: '여행 정보', 2: '장소·사진 추가', 3: '이동 경로', 4: '여행 요약' }[workflowStep.value] || '여행 관리'))
 const workflowDescription = computed(() => (
   planFormMode.value === 'edit'
-    ? '여행 정보와 사진 GPS, GPX 경로를 한 작업 화면에서 이어서 수정합니다.'
-    : '여행 기본 정보를 먼저 저장한 뒤 사진 GPS와 GPX 경로를 같은 작업 화면에서 이어서 등록합니다.'
+    ? '필요한 항목을 선택해 수정하고 지도에서 확인하세요.'
+    : '이름과 기간을 저장한 다음 지도에서 여행을 채워 보세요.'
 ))
 const selectedShareGroup = computed(() =>
   shareGroups.value.find((group) => group.name === shareForm.selectedGroupName) || null,
@@ -1565,9 +1567,20 @@ watch(
   },
 )
 
+watch(() => [props.workflowMode, props.initialPlanId], async ([mode, planId]) => {
+  if (mode !== 'edit' || !planId || !travelPlans.value.length || String(selectedPlanId.value) === String(planId)) return
+  await refreshTravelData(String(planId), props.route === 'photo-album')
+})
+
 watch(
   () => [props.externalMemoryFocusRequest?.token, travelPlans.value.length],
   async () => {
+    if (!props.externalMemoryFocusRequest?.token) {
+      if (String(memoryFocusRequest.value?.token || '') === String(appliedExternalMemoryFocusToken.value || '')) {
+        memoryFocusRequest.value = null
+      }
+      return
+    }
     await applyExternalMemoryFocusRequest(props.externalMemoryFocusRequest)
   },
   { immediate: true },
@@ -1611,7 +1624,7 @@ watch(
 
 onMounted(async () => {
   await loadTravelShareGroups()
-  await refreshTravelData()
+  await refreshTravelData(props.initialPlanId || undefined)
 })
 
 async function handleSelectPlan(planId) {
@@ -1851,7 +1864,7 @@ async function handleSubmitPlan() {
     await refreshTravelData(preferredPlanId, props.route === 'photo-album')
     if (isTravelSetupWorkflow.value && travelPlan.value) {
       fillPlanForm(travelPlan.value)
-      workflowStep.value = 2
+      emit('workflow-complete', { planId: preferredPlanId })
     } else {
       resetPlanForm()
     }
@@ -2206,7 +2219,7 @@ async function openPortfolioMemoryEditor(payload) {
           </div>
         </div>
 
-        <div class="travel-setup-workflow__steps" role="tablist" aria-label="여행 등록 단계">
+        <div v-if="planFormMode !== 'create' || workflowStep !== 1" class="travel-setup-workflow__steps" role="tablist" aria-label="여행 등록 단계">
           <button
             v-for="step in workflowSteps"
             :key="step.key"
@@ -2217,7 +2230,6 @@ async function openPortfolioMemoryEditor(payload) {
             :aria-current="workflowStep === step.key ? 'step' : undefined"
             @click="selectWorkflowStep(step.key)"
           >
-            <span>0{{ step.key }}</span>
             <strong>{{ step.label }}</strong>
             <small>{{ step.description }}</small>
           </button>
@@ -2226,26 +2238,27 @@ async function openPortfolioMemoryEditor(payload) {
         <section v-if="workflowStep === 1" class="travel-setup-workflow__stage">
           <div class="travel-setup-workflow__stage-header">
             <div>
-              <span>STEP 01</span>
               <h3>여행 기본 정보</h3>
-              <p>필수 정보만 먼저 저장하면 바로 사진·GPS와 GPX를 이어서 추가할 수 있습니다.</p>
+              <p>이름과 기간을 정한 뒤 지도에서 장소, 사진, 경로를 추가하세요.</p>
             </div>
           </div>
           <div class="travel-form-grid">
             <label class="field field--full"><span class="field__label">여행 이름</span><input v-model="planForm.name" type="text" placeholder="봄 일본 여행" /></label>
-            <label class="field field--full"><span class="field__label">목적지</span><input v-model="planForm.destination" type="text" placeholder="오사카, 교토, 도쿄" /></label>
             <label class="field"><span class="field__label">시작일</span><input v-model="planForm.startDate" type="date" /></label>
             <label class="field"><span class="field__label">종료일</span><input v-model="planForm.endDate" type="date" /></label>
+          </div>
+          <details class="travel-setup-workflow__advanced"><summary>상세 설정 · 목적지, 인원, 통화 등</summary><div class="travel-form-grid">
+            <label class="field field--full"><span class="field__label">목적지</span><input v-model="planForm.destination" type="text" placeholder="오사카, 교토, 도쿄" /></label>
             <label class="field"><span class="field__label">기준 통화</span><input v-model="planForm.homeCurrency" type="text" maxlength="3" placeholder="KRW" /></label>
             <label class="field"><span class="field__label">인원 수</span><input v-model="planForm.headCount" type="number" min="1" step="1" /></label>
             <label class="field"><span class="field__label">상태</span><select v-model="planForm.status"><option v-for="option in planStatusOptions" :key="option" :value="option">{{ planStatusLabel(option) }}</option></select></label>
             <label class="field"><span class="field__label">표시 색상</span><input v-model="planForm.colorHex" type="color" /></label>
             <label class="field field--full"><span class="field__label">메모</span><textarea v-model="planForm.memo" rows="3" placeholder="동행자, 여행 테마, 준비 메모를 적어두세요." /></label>
-          </div>
+          </div></details>
           <div class="entry-editor__actions">
             <button class="button button--ghost" type="button" @click="planFormMode === 'edit' && travelPlan ? fillPlanForm(travelPlan) : resetPlanForm()">되돌리기</button>
             <button class="button button--primary" type="button" :disabled="isSubmitting" @click="handleSubmitPlan">
-              {{ isSubmitting && activeSubmit === 'plan' ? '저장 중...' : planFormMode === 'edit' ? '저장 후 사진·GPS 계속하기' : '여행 만들고 사진·GPS 등록' }}
+              {{ isSubmitting && activeSubmit === 'plan' ? '저장 중...' : planFormMode === 'edit' ? '저장하고 지도 열기' : '만들고 지도 열기' }}
             </button>
             <button v-if="planFormMode === 'edit'" class="button button--danger" type="button" :disabled="!travelPlan || isSubmitting" @click="handleDeletePlan">선택 여행 삭제</button>
           </div>
@@ -2260,11 +2273,10 @@ async function openPortfolioMemoryEditor(payload) {
         <section v-else-if="workflowStep === 2" class="travel-setup-workflow__stage">
           <div class="travel-setup-workflow__stage-header">
             <div>
-              <span>STEP 02</span>
               <h3>사진 · 장소 · GPS 등록</h3>
               <p>사진을 올리면 EXIF의 날짜·시간·GPS를 읽어 기록에 채웁니다. 부족한 위치는 지도에서 바로 보완할 수 있습니다.</p>
             </div>
-            <button class="button button--secondary" type="button" @click="selectWorkflowStep(3)">다음: GPX 경로</button>
+            <button class="button button--secondary" type="button" @click="selectWorkflowStep(3)">경로 관리</button>
           </div>
           <TravelMemoryPanel
             :travel-plan="travelPlan"
@@ -2279,19 +2291,18 @@ async function openPortfolioMemoryEditor(payload) {
             @delete-media="handleDeleteMedia"
           />
           <div class="entry-editor__actions travel-setup-workflow__stage-actions">
-            <button class="button button--ghost" type="button" @click="selectWorkflowStep(1)">여행 정보로</button>
-            <button class="button button--primary" type="button" @click="selectWorkflowStep(3)">GPX 경로 등록으로</button>
+            <button class="button button--ghost" type="button" @click="selectWorkflowStep(1)">여행 정보</button>
+            <button class="button button--primary" type="button" @click="emit('workflow-complete', { planId: selectedPlanId })">지도에서 확인</button>
           </div>
         </section>
 
         <section v-else-if="workflowStep === 3" class="travel-setup-workflow__stage">
           <div class="travel-setup-workflow__stage-header">
             <div>
-              <span>STEP 03</span>
               <h3>GPX 이동 경로 등록</h3>
               <p>여러 GPX 파일을 한 번에 올리거나, 지도에서 직접 경로를 그려 같은 여행에 저장할 수 있습니다.</p>
             </div>
-            <button class="button button--secondary" type="button" @click="selectWorkflowStep(4)">등록 완료 확인</button>
+            <button class="button button--secondary" type="button" @click="selectWorkflowStep(4)">여행 요약</button>
           </div>
           <TravelRouteWorkspace
             :travel-plan="travelPlan"
@@ -2303,15 +2314,14 @@ async function openPortfolioMemoryEditor(payload) {
             @delete-route="handleDeleteRoute"
           />
           <div class="entry-editor__actions travel-setup-workflow__stage-actions">
-            <button class="button button--ghost" type="button" @click="selectWorkflowStep(2)">사진 · GPS로</button>
-            <button class="button button--primary" type="button" @click="selectWorkflowStep(4)">등록 내용 확인</button>
+            <button class="button button--ghost" type="button" @click="selectWorkflowStep(2)">장소 · 사진</button>
+            <button class="button button--primary" type="button" @click="emit('workflow-complete', { planId: selectedPlanId })">지도에서 확인</button>
           </div>
         </section>
 
         <section v-else class="travel-setup-workflow__complete">
           <div>
-            <span>STEP 04</span>
-            <h3>여행 등록을 마쳤습니다</h3>
+            <h3>여행 요약</h3>
             <p>사진 위치와 GPX 경로는 여행 지도에서 함께 확인할 수 있습니다. 언제든 이 작업 화면으로 돌아와 내용을 보완할 수 있습니다.</p>
           </div>
           <div class="travel-summary-grid">
@@ -2866,3 +2876,9 @@ async function openPortfolioMemoryEditor(payload) {
     </template>
   </div>
 </template>
+
+<style scoped>
+.travel-setup-workflow__advanced { margin-top: 1rem; border:1px solid var(--line); padding:.75rem; }
+.travel-setup-workflow__advanced summary { cursor:pointer; font-weight:700; }
+.travel-setup-workflow__advanced .travel-form-grid { margin-top:.75rem; }
+</style>

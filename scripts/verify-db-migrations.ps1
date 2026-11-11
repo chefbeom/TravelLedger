@@ -11,7 +11,11 @@ if ($LASTEXITCODE -ne 0) {
     throw 'git ls-files failed. Run this script inside a Git working tree.'
 }
 
-$versionedPattern = [regex]'^(?<version>V\d{8}_\d{3})__(?<description>[a-z0-9][a-z0-9_]*?)\.sql$'
+$versionedPattern = [regex]'^(?<version>V\d{8}_\d{3}(?:_[1-9]\d*)?)__(?<description>[a-z0-9][a-z0-9_]*?)\.sql$'
+$historicalSubversions = @(
+    'V20261030_033_1__ledger_payment_adjustments.sql',
+    'V20261030_033_2__ledger_split_installments.sql'
+)
 $repeatablePattern = [regex]'^R__(?<description>[a-z0-9][a-z0-9_]*?)\.sql$'
 $versions = @{}
 $findings = [System.Collections.Generic.List[string]]::new()
@@ -28,6 +32,10 @@ foreach ($path in $trackedMigrations) {
 
     if ($versionedMatch.Success) {
         $version = $versionedMatch.Groups['version'].Value
+        if ($version -match '^V\d{8}_\d{3}_' -and $fileName -notin $historicalSubversions) {
+            $findings.Add("${path}: subversions are reserved for existing historical migrations") | Out-Null
+            continue
+        }
         if ($versions.ContainsKey($version)) {
             $findings.Add("${path}: duplicate migration version also used by $($versions[$version])") | Out-Null
         } else {

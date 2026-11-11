@@ -26,8 +26,8 @@ function overview(state, url, shared = false) {
   const status = url.searchParams.get('state') || 'ALL'
   const from = url.searchParams.get('from'), to = url.searchParams.get('to')
   const keyword = (url.searchParams.get('q') || '').toLowerCase()
-  const matching = state.places.map(p => ({ ...p, visited: p.visited || state.visits.some(v => v.placeId === p.id),
-    visitCount: state.visits.filter(v => v.placeId === p.id).length }))
+  const matching = state.places.map(p => ({ ...p, visited: p.visited || state.visits.some(v => v.placeId === p.id && v.date),
+    visitCount: state.visits.filter(v => v.placeId === p.id && v.date).length }))
     .filter(p => (!collectionId || p.collectionIds.includes(collectionId))
       && (status === 'ALL' || (status === 'VISITED') === p.visited)
       && ((!from && !to) || state.visits.some(v => v.placeId === p.id && (!from || v.date >= from) && (!to || v.date <= to)))
@@ -69,6 +69,11 @@ async function mock(page, state, authenticated = true) {
       if (method === 'GET') return route.fulfill({ json: state.visits.filter(v => v.placeId === placeId && v.id.startsWith('visit:')) })
       const id = state.visits.length + 1
       state.visits.push({ id: 'visit:' + id, placeId, ...body, photos: [] })
+      return route.fulfill({ json: { id } })
+    }
+    if (/\/places\/\d+\/visits\/\d+$/.test(path) && method === 'PUT') {
+      const id = Number(path.split('/').at(-1))
+      Object.assign(state.visits.find(v => v.id === 'visit:' + id), body)
       return route.fulfill({ json: { id } })
     }
     if (/\/visits\/\d+\/photos$/.test(path) && method === 'POST') {
@@ -120,7 +125,8 @@ async function mock(page, state, authenticated = true) {
 }
 
 async function action(page, name) {
-  const button = page.getByRole('button', { name, exact:true })
+  const names = { '장소 저장': '＋ 장소 추가', '모음 관리': '카테고리·모음 관리' }
+  const button = page.getByRole('button', { name: names[name] || name, exact:true })
   if (!await button.isVisible()) await page.locator('.record-map-add > summary').click()
   await button.click()
 }
@@ -131,6 +137,115 @@ async function tab(page, name) {
   await page.getByRole('button', { name, exact:true }).click()
 }
 
+test('a place can have a new category and photo without inventing a visit date', async ({ page }) => {
+  const state = fixture()
+  await mock(page, state)
+  await page.goto('/#travel')
+  await action(page, '장소 저장')
+  const dialog = page.getByRole('dialog', { name: '장소 저장', exact: true })
+  await dialog.getByLabel('장소 이름', { exact: true }).fill('사진으로 남긴 장소')
+  await dialog.getByText('국가·지역 및 좌표 직접 입력').click()
+  await dialog.getByLabel('위도', { exact: true }).fill('37.55')
+  await dialog.getByLabel('경도', { exact: true }).fill('126.97')
+  await dialog.getByLabel('새 카테고리 이름').fill('산책')
+  await dialog.getByRole('button', { name: '추가', exact: true }).click()
+  await expect(dialog.getByLabel('산책', { exact: true })).toBeChecked()
+  await dialog.getByLabel('사진 · 선택').setInputFiles({ name: 'place.png', mimeType: 'image/png', buffer: png })
+  await dialog.getByRole('button', { name: '장소 저장', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await expect.poll(() => state.visits.flatMap(v => v.photos).length, { message: JSON.stringify(state.requests) }).toBe(1)
+  const saved = state.places.find(place => place.name === '사진으로 남긴 장소')
+  const visit = state.visits.find(row => row.placeId === saved.id)
+  expect(saved.visited).toBe(false)
+  expect(saved.collectionIds).toContain(state.collections.find(c => c.name === '산책').id)
+  expect(visit.date).toBeNull()
+  expect(visit.photos, JSON.stringify({ requests: state.requests.filter(r => r.path.includes('record-map')), visits: state.visits, errors: state.errors })).toHaveLength(1)
+  if (await page.getByRole('button', { name: '목록 열기', exact: true }).isVisible()) await page.getByRole('button', { name: '목록 열기', exact: true }).click()
+  await expect(page.getByRole('button', { name: '산책', exact: true })).toBeVisible()
+  expect(state.errors).toEqual([])
+})
+
+test('retrying a failed photo upload keeps the original place and record', async ({ page }) => {
+  const state = fixture()
+  await mock(page, state)
+  let uploadAttempts = 0
+  await page.route('**/api/record-map/visits/*/photos', route => {
+    if (++uploadAttempts === 1) return route.fulfill({ status: 503, json: { message: '사진 업로드 오류' } })
+    return route.fallback()
+  })
+  await page.goto('/#travel')
+  await action(page, '장소 저장')
+  const dialog = page.locator('.record-map-dialog')
+  await dialog.getByLabel('장소 이름', { exact: true }).fill('다시 올릴 사진')
+  await dialog.getByText('국가·지역 및 좌표 직접 입력').click()
+  await dialog.getByLabel('위도', { exact: true }).fill('37.55')
+  await dialog.getByLabel('경도', { exact: true }).fill('126.97')
+  await dialog.getByLabel('사진 · 선택').setInputFiles({ name: 'place.png', mimeType: 'image/png', buffer: png })
+  await dialog.getByRole('button', { name: '장소 저장', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('남은 사진만')
+  await dialog.getByRole('button', { name: '장소 저장', exact: true }).click()
+  await expect.poll(() => state.visits.flatMap(visit => visit.photos).length).toBe(1)
+  expect(state.places).toHaveLength(1)
+  expect(state.visits).toHaveLength(1)
+  expect(uploadAttempts).toBe(2)
+  expect(state.errors).toEqual([])
+})
+
+test('travel creation starts from the map and returns with the new trip selected', async ({ page }) => {
+  const state = fixture()
+  await mock(page, state)
+  const plans = [{ id: 90, name: '기존 여행', startDate: '2026-10-01', endDate: '2026-10-03', homeCurrency: 'KRW', headCount: 1, status: 'PLANNED', colorHex: '#3182F6', budgetItems: [], records: [], memoryRecords: [], mediaItems: [], routeSegments: [] }]
+  await page.route('**/api/travel/**', route => {
+    const request = route.request(), path = new URL(request.url()).pathname
+    if (path === '/api/travel/portfolio') return route.fulfill({ json: { includedPlanCount: plans.length, plans, memoryRecords: [], routeSegments: [], mediaItems: [] } })
+    if (path === '/api/travel/my-map') return route.fulfill({ json: { includedPlanCount: plans.length, markers: [], routes: [], photoPins: [], photoClusters: [] } })
+    if (path === '/api/travel/plans' && request.method() === 'POST') {
+      const created = { id: 91, ...request.postDataJSON(), budgetItems: [], records: [], memoryRecords: [], mediaItems: [], routeSegments: [] }
+      plans.push(created)
+      return route.fulfill({ json: created })
+    }
+    if (path === '/api/travel/plans') return route.fulfill({ json: plans })
+    const match = path.match(/^\/api\/travel\/plans\/(\d+)$/)
+    if (match) return route.fulfill({ json: plans.find(plan => String(plan.id) === match[1]) })
+    return route.fulfill({ json: [] })
+  })
+  await page.goto('/#travel')
+  await page.getByRole('button', { name: '여행 · 일정 · 경로' }).click()
+  await expect(page.getByRole('heading', { name: '내 여행 지도' })).toBeVisible()
+  await page.getByRole('button', { name: '새 여행 만들기', exact: true }).click()
+  const setup = page.locator('.travel-setup-workflow')
+  await expect(setup.getByLabel('여행 이름')).toBeVisible()
+  await setup.getByLabel('여행 이름').fill('새 가족 여행')
+  await setup.getByLabel('시작일').fill('2026-11-20')
+  await setup.getByLabel('종료일').fill('2026-11-22')
+  await setup.getByRole('button', { name: '만들고 지도 열기' }).click()
+  await expect(page.getByRole('heading', { name: '내 여행 지도' })).toBeVisible()
+  await expect(page.locator('select').filter({ has: page.getByRole('option', { name: '새 가족 여행' }) }).first()).toHaveValue('91')
+  expect(plans[1]).toMatchObject({ name: '새 가족 여행', homeCurrency: 'KRW', headCount: 1 })
+  await page.getByRole('button', { name: '지도에 장소 찍기' }).click()
+  const canvas = page.locator('.travel-map__canvas').first()
+  await expect(canvas).toBeVisible()
+  const box = await canvas.boundingBox()
+  await canvas.click({ position: { x: box.width * .5, y: box.height * .3 } })
+  const editor = page.locator('.travel-modal__dialog').filter({ has: page.getByRole('heading', { name: '새 여행 기록 작성' }) })
+  await expect(editor).toBeVisible()
+  await expect(editor.getByLabel('위도', { exact: true })).not.toHaveValue('')
+  await expect(editor.getByLabel('경도', { exact: true })).not.toHaveValue('')
+  await editor.getByRole('button', { name: '닫기', exact: true }).click()
+  await page.getByRole('button', { name: '지도에서 확인', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '내 여행 지도' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => JSON.stringify({
+    position: document.body.style.position,
+    modals: [...document.querySelectorAll('[role="dialog"][aria-modal="true"], .travel-modal, .receipt-ocr-modal')]
+      .map(node => ({ cls: node.className, rects: node.getClientRects().length, text: node.textContent.trim().slice(0, 80) })),
+  }))).toContain('"position":""')
+  await page.getByRole('button', { name: '장소·사진 추가', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '장소·사진 추가' })).toBeVisible()
+  await expect(page.getByLabel('작업할 여행')).toHaveValue('91')
+  await expect(page.getByRole('heading', { name: '새 여행 기록 작성' })).toBeVisible()
+  expect(state.errors).toEqual([])
+})
+
 test('a date-free bookmark is saved without a trip and rendered as a transparent map pin', async ({ page }, testInfo) => {
   const state = fixture()
   await mock(page, state)
@@ -138,6 +253,7 @@ test('a date-free bookmark is saved without a trip and rendered as a transparent
   await action(page, '장소 저장')
   const dialog = page.getByRole('dialog', { name: '장소 저장', exact: true })
   await dialog.getByLabel('장소 이름', { exact: true }).fill('아직 안 간 도쿄 서점')
+  await dialog.getByText('국가·지역 및 좌표 직접 입력').click()
   await dialog.getByLabel('위도', { exact: true }).fill('35.6812')
   await dialog.getByLabel('경도', { exact: true }).fill('139.7671')
   await dialog.getByLabel('주말 맛집', { exact: true }).check()
@@ -205,7 +321,7 @@ test('record maps never expose travel playback and share the actual travel map t
     await expect(page.locator('.travel-unified-shell .travel-map__canvas').first()).toBeVisible()
     const travelFilter = await page.locator('.travel-unified-shell .leaflet-tile-pane').first().evaluate(node => getComputedStyle(node).filter)
     expect(recordFilter).toBe(travelFilter)
-    await page.getByRole('button', { name:'일상 기록 · 장소 모음', exact:true }).click()
+    await page.getByRole('button', { name:'내 장소', exact:true }).click()
     await expect(page.locator('.record-map-frame .travel-map__canvas')).toBeVisible()
   }
   expect(state.requests.some(r => r.method !== 'GET' && r.path.startsWith('/api/record-map'))).toBe(false)
@@ -256,6 +372,7 @@ test('fullscreen detail closes one layer and the mobile form stays inside the vi
   const foreground = luminance(searchColors.foreground), background = luminance(searchColors.background)
   expect((Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05), JSON.stringify(searchColors)).toBeGreaterThanOrEqual(4.5)
   await dialog.getByLabel('장소 이름', { exact: true }).fill('검색만 하는 장소')
+  await dialog.getByText('국가·지역 및 좌표 직접 입력').click()
   await dialog.getByLabel('위도', { exact: true }).fill('37.55')
   await dialog.getByLabel('경도', { exact: true }).fill('126.97')
   await dialog.getByRole('searchbox').fill('서울역')
@@ -406,11 +523,45 @@ test('location lookup is explicit and saving requires confirmation', async ({pag
   await result.getByRole('button',{name:'이 위치 저장',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'장소 저장',exact:true})
   await expect(dialog.getByLabel('장소 이름',{exact:true})).toHaveValue('서울역')
+  await dialog.getByText('국가·지역 및 좌표 직접 입력').click()
   await expect(dialog.getByLabel('위도',{exact:true})).toHaveValue('37.556')
   expect(state.places).toHaveLength(3)
   await dialog.getByRole('button',{name:'장소 저장',exact:true}).click()
   await expect(dialog).not.toBeVisible(); expect(state.places).toHaveLength(4)
   await page.locator('.record-map-frame').screenshot({path:testInfo.outputPath('location-search-map.png')})
+  expect(state.errors).toEqual([])
+})
+
+test('repeated map drags and page scrolling do not grow or displace the workspace', async ({page},testInfo)=>{
+  const state=fixture(); await mock(page,state)
+  await page.goto('/#travel')
+  const frame=page.locator('.record-map-frame'), canvas=frame.locator('.travel-map__canvas')
+  await expect(canvas).toBeVisible()
+  await expect.poll(async()=> (await canvas.boundingBox()).height).toBeGreaterThan(280)
+  const before=await frame.boundingBox()
+  const beforePan=await frame.locator('.leaflet-map-pane').evaluate(node=>node.style.transform)
+  for(let i=0;i<5;i++) {
+    await page.evaluate(()=>window.scrollBy(0,120))
+    await page.waitForTimeout(100)
+    const box=await canvas.boundingBox()
+    const x=box.x+box.width*.72, y=Math.max(30, Math.min(testInfo.project.use.viewport.height-50, box.y+box.height*.5))
+    await page.mouse.move(x,y); await page.mouse.down(); await page.mouse.move(x-65,y-30,{steps:6}); await page.mouse.up()
+  }
+  await page.waitForTimeout(250)
+  const after=await frame.boundingBox()
+  const afterPan=await frame.locator('.leaflet-map-pane').evaluate(node=>node.style.transform)
+  expect(afterPan).not.toBe(beforePan)
+  expect(Math.abs(after.height-before.height)).toBeLessThanOrEqual(2)
+  expect(after.height).toBeLessThanOrEqual(testInfo.project.use.viewport.height)
+  expect(Math.abs(after.width-before.width)).toBeLessThanOrEqual(2)
+  await page.evaluate(()=>window.scrollTo(0,0))
+  await page.waitForTimeout(150)
+  const restored=await frame.boundingBox()
+  expect(Math.abs(restored.height-before.height)).toBeLessThanOrEqual(2)
+  await page.getByRole('button',{name:'전체 화면',exact:true}).click()
+  const fullscreen=await canvas.boundingBox()
+  expect(fullscreen.height).toBeLessThanOrEqual(testInfo.project.use.viewport.height+1)
+  expect(fullscreen.width).toBeLessThanOrEqual(testInfo.project.use.viewport.width+1)
   expect(state.errors).toEqual([])
 })
 
@@ -480,6 +631,7 @@ test('numbered search pins and real related exits remain visible, selectable and
   await expect(popup.locator('strong')).toHaveText('우장산역 2번 출구')
   await popup.getByRole('button',{name:'이 위치 저장',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'장소 저장',exact:true})
+  await dialog.getByText('국가·지역 및 좌표 직접 입력').click()
   await expect(dialog.getByLabel('위도',{exact:true})).toHaveValue('37.5481')
   expect(state.places).toHaveLength(0)
   await page.keyboard.press('Escape')

@@ -14,7 +14,7 @@ public final class RecordMapDtos {
     public record CollectionRequest(@NotBlank @Size(max=100) String name, @Size(max=1000) String memo,
         @NotNull @Pattern(regexp="^#[0-9A-Fa-f]{6}$") String colorHex) {}
     public record VisitRequest(@NotBlank @Size(max=160) String title, @Size(max=4000) String memo,
-        @NotNull LocalDate date, LocalTime time) {}
+        LocalDate date, LocalTime time) {}
     public record TravelImportRequest(@NotNull @Positive Long recordId, @Size(max=100) List<@NotNull @Positive Long> collectionIds) {}
     public record ShareRequest(boolean includeVisits, @Min(1) @Max(365) int expiresInDays) {}
     public record CollectionView(Long id, String name, String memo, String colorHex, long placeCount, boolean shared) {}

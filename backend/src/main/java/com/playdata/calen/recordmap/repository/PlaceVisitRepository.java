@@ -12,7 +12,7 @@ import jakarta.persistence.LockModeType;
 public interface PlaceVisitRepository extends JpaRepository<PlaceVisit, Long> {
     Optional<PlaceVisit> findByIdAndOwnerId(Long id, Long ownerId);
     long countByPlaceIdAndOwnerId(Long placeId, Long ownerId);
-    @Query("select v.place.id as placeId, count(v) as total from PlaceVisit v where v.ownerId = :owner and v.place.id in :ids group by v.place.id")
+    @Query("select v.place.id as placeId, count(v) as total from PlaceVisit v where v.ownerId = :owner and v.place.id in :ids and v.visitDate is not null group by v.place.id")
     List<VisitCount> countVisits(@Param("owner") Long owner, @Param("ids") Collection<Long> ids);
     interface VisitCount { Long getPlaceId(); long getTotal(); }
     @Lock(LockModeType.PESSIMISTIC_WRITE)

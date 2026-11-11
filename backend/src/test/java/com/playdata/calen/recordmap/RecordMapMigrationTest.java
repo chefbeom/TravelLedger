@@ -24,6 +24,12 @@ class RecordMapMigrationTest {
             sql.execute("insert into record_map_places(owner_id, name, latitude, longitude, source_travel_record_id, created_at, updated_at) values(1, 'cafe', 37.5, 127, 42, current_timestamp, current_timestamp)");
             sql.execute("insert into record_map_collection_places values(1, 1)");
             sql.execute("insert into record_map_visits(owner_id, place_id, title, visit_date, created_at) values(1, 1, 'visit', '2026-10-13', current_timestamp)");
+            new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261111_058__record_map_undated_photos.sql")).populate(connection);
+            sql.execute("insert into record_map_visits(owner_id, place_id, title, visit_date, created_at) values(1, 1, 'undated', null, current_timestamp)");
+            try (var dates = sql.executeQuery("select visit_date from record_map_visits where title = 'visit'")) {
+                assertThat(dates.next()).isTrue();
+                assertThat(dates.getDate(1).toLocalDate()).isEqualTo(java.time.LocalDate.of(2026, 10, 13));
+            }
             sql.execute("insert into record_map_photos(owner_id, visit_id, original_name, storage_path, content_type, file_size, created_at) values(1, 1, 'test.png', 'test-only.png', 'image/png', 1, current_timestamp)");
             sql.execute("insert into record_map_shares(owner_id, collection_id, token_hash, expires_at, created_at) values(1, 1, 'test-only-hash', current_timestamp, current_timestamp)");
             assertThatThrownBy(() -> sql.execute("insert into record_map_places(owner_id, name, latitude, longitude, source_travel_record_id, created_at, updated_at) values(1, 'duplicate', 37.5, 127, 42, current_timestamp, current_timestamp)"))

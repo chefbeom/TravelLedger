@@ -163,6 +163,7 @@ let fullscreenScrollPosition = null
 let previewResizeSession = null
 let lastUsableMapSize = ''
 let observedPreviewElement = null
+let focusZoomInFlight = null
 
 function isTouchMapDevice() {
   if (typeof window === 'undefined') {
@@ -679,11 +680,11 @@ function queueMapResize() {
       debounceMoveend: true,
     })
     updatePinPopupLayout()
-    if (previewAggregate.value && !props.journeyPlaybackActive) {
+    if (previewAggregate.value && !props.journeyPlaybackActive && focusZoomInFlight == null) {
       // Fullscreen/window resize may run Leaflet's own resize first. Reapply
       // the selected position so its anchor is centered in the actual canvas.
       map.setView(getUnobscuredCenter(center, zoom, true), zoom, { animate: false })
-    } else if (layoutChanged && !props.focusTarget?.requestId && !props.journeyPlaybackActive && !isPreparingJourneyLeg) {
+    } else if (!previewAggregate.value && layoutChanged && !props.focusTarget?.requestId && !props.journeyPlaybackActive && !isPreparingJourneyLeg) {
       fitToAll({ animate: false })
     }
   }
@@ -778,6 +779,7 @@ function fitToAll({ animate = true } = {}) {
   if (!mapInstance) {
     return
   }
+  focusZoomInFlight = null
 
   const bounds = collectBounds()
   if (!bounds.length) {
@@ -1093,6 +1095,7 @@ function renderClusters() {
 
     marker.on('click', (event) => {
       if (event?.originalEvent) {
+        focusZoomInFlight = null
         L.DomEvent.stopPropagation(event.originalEvent)
         L.DomEvent.preventDefault(event.originalEvent)
       }
@@ -1199,9 +1202,18 @@ function handleViewportStart() {
   cancelScheduledClusterRender()
 }
 
+function cancelFocusZoom() {
+  focusZoomInFlight = null
+}
+
 function handleViewportEnd() {
   isMapMoving.value = false
   zoomLabel.value = mapInstance?.getZoom() ?? DEFAULT_ZOOM
+
+  if (focusZoomInFlight != null && Math.abs(zoomLabel.value - focusZoomInFlight) < 0.001) {
+    focusZoomInFlight = null
+    queueMapResize()
+  }
 
   if (Date.now() < suppressViewportClusterRenderUntil) {
     scheduleRenderClusters(suppressViewportClusterRenderUntil - Date.now())
@@ -1216,6 +1228,7 @@ function handleZoomEnd() {
 }
 
 function zoomMap(direction) {
+  focusZoomInFlight = null
   if (direction > 0) {
     mapInstance?.zoomIn()
   } else {
@@ -1348,6 +1361,7 @@ async function prepareJourneyLeg(currentPoint, nextPoint, { focusCurrent = true 
 function cancelJourneyLeg() {
   journeyLegSequence += 1
   isPreparingJourneyLeg = false
+  focusZoomInFlight = null
   mapInstance?.stop()
 }
 
@@ -1396,6 +1410,7 @@ function handleCanvasBackgroundClick(event) {
 
 let canvasPointerGesture = null
 function beginCanvasPointer(event) {
+  cancelFocusZoom()
   canvasPointerGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
 }
 function moveCanvasPointer(event) {
@@ -1500,6 +1515,7 @@ onMounted(() => {
   routeLayer = L.layerGroup().addTo(mapInstance)
   routeRenderer = L.canvas({ padding: 0.5 })
   mapInstance.on('movestart zoomstart', handleViewportStart)
+  mapInstance.on('dragstart', cancelFocusZoom)
   mapInstance.on('moveend', handleViewportEnd)
   mapInstance.on('zoomend', handleZoomEnd)
   mapInstance.on('click', event => {
@@ -1531,6 +1547,7 @@ onBeforeUnmount(() => {
   if (mapInstance) {
     cancelScheduledClusterRender()
     mapInstance.off('movestart zoomstart', handleViewportStart)
+    mapInstance.off('dragstart', cancelFocusZoom)
     mapInstance.off('moveend', handleViewportEnd)
     mapInstance.off('zoomend', handleZoomEnd)
     mapInstance.remove()
@@ -1667,9 +1684,11 @@ watch(
           : Math.min(20, Math.max(mapInstance.getZoom(), 15))
     const duration = Number.isFinite(Number(rawDuration)) ? Math.max(0.05, Number(rawDuration)) : 0.8
     if (keepZoom) {
+      focusZoomInFlight = null
       mapInstance.panTo(getUnobscuredCenter(L.latLng(latitude, longitude), targetZoom, showPreview || Boolean(previewPhoto.value)), { animate: true, duration, easeLinearity: 0.2 })
       return
     }
+    focusZoomInFlight = targetZoom
     mapInstance.flyTo(getUnobscuredCenter(L.latLng(latitude, longitude), targetZoom, showPreview || Boolean(previewPhoto.value)), targetZoom, { animate: true, duration })
   },
 )
@@ -1749,7 +1768,7 @@ watch(
           <span aria-hidden="true">⤡</span>
         </button>
       </aside>
-      <div ref="mapElement" class="travel-map__canvas" @pointerdown="beginCanvasPointer" @pointermove="moveCanvasPointer" @pointercancel="cancelCanvasPointer" @click="handleCanvasBackgroundClick" />
+      <div ref="mapElement" class="travel-map__canvas" @pointerdown="beginCanvasPointer" @pointermove="moveCanvasPointer" @pointercancel="cancelCanvasPointer" @wheel.passive="cancelFocusZoom" @click="handleCanvasBackgroundClick" />
       <Teleport v-if="previewPhoto && pinPopupContent" :to="pinPopupContent">
         <TravelMapPhotoPreview
           compact

@@ -12,7 +12,7 @@ function filter(key, event) { emit('filter', key, event.target.value) }
 </script>
 <template>
   <aside class="record-map-sidebar" :class="{ 'is-open': open }" aria-label="장소와 기록 목록" data-map-overlay @click.stop @pointerdown.stop @wheel.stop>
-    <header class="record-map-sidebar__header"><strong>{{ readOnly ? '공유 장소와 기록' : '내 장소와 기록' }}</strong><div class="record-map-sidebar__actions"><slot name="actions" /><button class="button" type="button" :aria-expanded="open" :aria-label="open ? '목록 접기' : '목록 열기'" @click="emit('toggle')">{{ open ? '접기' : searchMode === 'location' && locations?.length ? '후보 ' + locations.length : '목록' }}</button></div></header>
+    <header class="record-map-sidebar__header"><strong>{{ readOnly ? '공유 장소와 기록' : '내 장소' }}</strong><div class="record-map-sidebar__actions"><slot name="actions" /><button class="button" type="button" :aria-expanded="open" :aria-label="open ? '목록 접기' : '목록 열기'" @click="emit('toggle')">{{ open ? '접기' : searchMode === 'location' && locations?.length ? '후보 ' + locations.length : '목록' }}</button></div></header>
     <div class="record-map-search-modes" v-if="!readOnly"><button type="button" :aria-pressed="searchMode === 'saved'" @click="emit('search-mode', 'saved')">내 장소 검색</button><button type="button" :aria-pressed="searchMode === 'location'" @click="emit('search-mode', 'location')">새 위치 찾기</button></div>
     <form class="record-map-search" @submit.stop.prevent="emit('search')">
       <input :value="searchText" maxlength="100" type="search" autocomplete="off" :aria-label="searchMode === 'location' ? '주소·지역 검색' : '저장 장소 검색'" :placeholder="searchMode === 'location' ? '장소명·역·출구·주소 검색' : '장소명·지역·기록 검색'" @input="emit('search-text', $event.target.value)" />
@@ -32,6 +32,11 @@ function filter(key, event) { emit('filter', key, event.target.value) }
         <p class="record-map-sidebar__hint">위치 검색 © OpenStreetMap contributors · <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener noreferrer">사용 정책</a></p>
       </template>
       <template v-else>
+        <div v-if="!readOnly" class="record-map-categories" aria-label="카테고리 필터">
+          <button type="button" :aria-pressed="!filters.collectionId" @click="emit('collection', '')">전체</button>
+          <button v-for="category in snapshot.collections" :key="category.id" type="button" :aria-pressed="String(category.id) === String(filters.collectionId)" @click="emit('collection', category.id)">{{ category.name }}</button>
+          <button type="button" @click="emit('collections')">+ 관리</button>
+        </div>
         <nav class="record-map-sidebar__tabs" aria-label="지도 목록 종류">
           <button type="button" :aria-pressed="tab === 'places'" @click="emit('tab', 'places')">장소 목록</button><button type="button" :aria-pressed="tab === 'collections'" @click="emit('tab', 'collections')">모음</button><button v-if="hasVisits" type="button" :aria-pressed="tab === 'diary'" @click="emit('tab', 'diary')">일상 기록</button>
         </nav>
@@ -86,6 +91,9 @@ function filter(key, event) { emit('filter', key, event.target.value) }
 .record-map-suggestions strong { width:100%; }
 .record-map-suggestions button { padding:6px 8px; min-height:32px; border:1px solid var(--line); background:var(--panel-bg); color:var(--text); font:inherit; text-align:left; cursor:pointer; }
 .record-map-sidebar__body { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; display:flex; flex-direction:column; gap:10px; scrollbar-gutter:stable; }
+.record-map-categories { display:flex; gap:5px; overflow-x:auto; padding-bottom:3px; }
+.record-map-categories button { flex:0 0 auto; min-height:36px; padding:5px 10px; border:1px solid var(--line); background:var(--panel-bg); color:var(--text); font:inherit; cursor:pointer; }
+.record-map-categories button[aria-pressed="true"] { border-color:var(--accent,#009E8C); background:var(--accent-soft,#009e8c22); font-weight:700; }
 .record-map-sidebar :is(button,input,select) { box-sizing:border-box; min-width:0 !important; max-width:100% !important; }
 .record-map-sidebar__body :is(input,select) { width:100%; min-width:0; min-height:36px; box-sizing:border-box; }
 .record-map-list-filter { display:flex; flex-direction:column; gap:8px; }

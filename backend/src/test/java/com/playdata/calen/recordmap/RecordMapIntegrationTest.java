@@ -74,6 +74,42 @@ class RecordMapIntegrationTest {
             .isInstanceOf(IllegalTransactionStateException.class);
     }
 
+    @Test void undatedPlacePhotosDoNotMarkAPlaceVisitedOrLeakIntoPrivateShares() throws Exception {
+        long collection = collection("hana", "undated photos");
+        long place = place("hana", List.of(collection));
+        long visit = postJson("hana", "/api/record-map/places/" + place + "/visits",
+                Map.of("title", "장소 사진")).path("id").asLong();
+        long photo = upload("hana", visit);
+        mvc.perform(get("/api/record-map/map").with(as("hana")).param("collectionId", "" + collection))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.places[0].visited").value(false))
+                .andExpect(jsonPath("$.places[0].visitCount").value(0))
+                .andExpect(jsonPath("$.visits[0].date").doesNotExist())
+                .andExpect(jsonPath("$.visits[0].photos[0].id").value("photo:" + photo));
+        mvc.perform(get("/api/record-map/map").with(as("hana")).param("collectionId", "" + collection).param("state", "WANTED"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(1));
+        mvc.perform(get("/api/record-map/map").with(as("hana")).param("collectionId", "" + collection).param("state", "VISITED"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(0));
+        mvc.perform(put("/api/record-map/places/{place}/visits/{id}", place, visit).with(as("hana")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"수정한 사진\",\"memo\":\"날짜 없음\",\"date\":null}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/record-map/places/{id}/visits", place).with(as("hana")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].title").value("수정한 사진"))
+                .andExpect(jsonPath("$[0].date").doesNotExist());
+        mvc.perform(post("/api/record-map/places/{place}/visits", place).with(as("hana")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"시간만\",\"time\":\"12:00:00\"}"))
+                .andExpect(status().isBadRequest());
+        String hidden = postJson("hana", "/api/record-map/collections/" + collection + "/shares",
+                Map.of("includeVisits", false, "expiresInDays", 7)).path("token").asText();
+        mvc.perform(get("/api/record-map/public/" + hidden + "/map"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.visits.length()").value(0));
+        mvc.perform(get("/api/record-map/public/" + hidden + "/photos/" + photo + "/content"))
+                .andExpect(status().isNotFound());
+        String included = postJson("hana", "/api/record-map/collections/" + collection + "/shares",
+                Map.of("includeVisits", true, "expiresInDays", 7)).path("token").asText();
+        mvc.perform(get("/api/record-map/public/" + included + "/photos/" + photo + "/content"))
+                .andExpect(status().isOk());
+    }
+
     @Test @org.springframework.transaction.annotation.Transactional
     void boundedReadProjectionPreservesImportedPrivacyPhotoUrlsAndVisitLimits() throws Exception {
         long owner = userId("hana"), collection = collection("hana", "read projection"), other = collection("hana", "private other collection");

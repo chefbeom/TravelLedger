@@ -4,6 +4,7 @@ import { recordMapApi as api } from '../lib/recordMapApi'
 import { buildRecordMapData } from '../lib/recordMap'
 import { locationSuggestions, normalizeLocationResults, relatedLocationQueries } from '../lib/recordMapLocationSearch'
 import { extractPhotoMetadata } from '../lib/photoMetadata'
+import { photosHaveDistantLocations } from '../lib/recordMapPhotoLocation'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { todayIso } from '../lib/uiFormat'
 import TravelMyMapClusterPanel from './TravelMyMapClusterPanel.vue'
@@ -33,6 +34,7 @@ const photosPending = ref([]), selectedPhoto = ref(null), gpsLoading = ref(false
 const placeForm = reactive({ id: null, name: '', memo: '', country: '', region: '', latitude: '', longitude: '', visited: false, collectionIds: [], recordNow: false, sourceTravelRecordId: null })
 const visitForm = reactive({ id: null, placeId: null, title: '', memo: '', date: todayIso(), time: '' })
 const collectionForm = reactive({ id: null, name: '', memo: '', colorHex: '#009E8C' })
+const inlineCategoryName = ref('')
 const detailVisits = ref([]), detailPage = ref(0), detailHasMore = ref(false), detailLoading = ref(false)
 const candidates = ref({ content: [], number: 0, totalPages: 0 }), candidateCollections = ref([])
 const shareCollectionId = ref(''), shareList = ref([]), includeVisits = ref(false), expiresDays = ref(7), shareUrl = ref(''), newestShareId = ref(null)
@@ -54,7 +56,7 @@ const data = computed(() => {
   return result
 })
 const listPlaces = computed(() => listSnapshot.value.places.map(p => ({ ...p, thumbnail: thumbnail(p.id) })))
-const diaryVisits = computed(() => [...listSnapshot.value.visits].sort((a,b) => (b.date+(b.time||'')).localeCompare(a.date+(a.time||''))))
+const diaryVisits = computed(() => listSnapshot.value.visits.filter(v => v.date).sort((a,b) => (b.date+(b.time||'')).localeCompare(a.date+(a.time||''))))
 const suggestions = computed(() => searchMode.value === 'location' && searchText.value.trim() !== lastLocationQuery.value
   ? locationSuggestions(searchText.value, locationHistory.value) : [])
 const relatedQueries = computed(() => searchMode.value === 'location' ? relatedLocationQueries(searchText.value) : [])
@@ -164,7 +166,12 @@ function setFilter(key, value) { filters[key] = value }
 function switchTab(tab) { view.value = tab; sidebarOpen.value = true }
 function refreshFrame() {
   compact.value = window.matchMedia('(max-width: 760px)').matches
-  if (frameRef.value) frameHeight.value = Math.max(280, window.innerHeight - frameRef.value.getBoundingClientRect().top - 12)
+  if (frameRef.value) {
+    // The document position is stable while scrolling; viewport-relative top is not.
+    // Using the latter grows the map on each scroll and creates more scroll space.
+    const documentTop = Math.max(0, frameRef.value.getBoundingClientRect().top + window.scrollY)
+    frameHeight.value = Math.max(280, Math.floor(window.innerHeight - documentTop - 12))
+  }
 }
 watch(() => sidebarOpen.value, async open => {
   // Automatic collapse on a place click must not replace its explicit zoom
@@ -176,7 +183,7 @@ watch(() => sidebarOpen.value, async open => {
   if (target) focusTarget.value = { requestId: ++focusSequence, ...target, keepZoom: true, duration: .35 }
 })
 onMounted(() => {
-  refreshFrame(); requestAnimationFrame(refreshFrame); window.addEventListener('resize', refreshFrame); window.addEventListener('scroll', refreshFrame, { passive:true })
+  refreshFrame(); requestAnimationFrame(refreshFrame); window.addEventListener('resize', refreshFrame)
   frameObserver = new ResizeObserver(refreshFrame)
   if (frameRef.value) { frameObserver.observe(frameRef.value); frameObserver.observe(frameRef.value.parentElement) }
 })
@@ -205,6 +212,7 @@ function resetVisit(placeId = null) {
 }
 function beginPlace(point = null, recordNow = false) {
   metadataSequence++; metadataLoading.value = false; gpsLoading.value = false; dirty.value = false; error.value = ''
+  inlineCategoryName.value = ''
   Object.assign(placeForm, { id: null, name: '', memo: '', country: '', region: '', latitude: point?.latitude ?? '', longitude: point?.longitude ?? '',
     visited: false, collectionIds: defaultCollections(), recordNow, sourceTravelRecordId: null })
   resetVisit(); modal.value = 'place'; pickMode.value = false
@@ -212,6 +220,7 @@ function beginPlace(point = null, recordNow = false) {
 function editPlace(place) {
   metadataSequence++; metadataLoading.value = false; gpsLoading.value = false; dirty.value = false
   Object.assign(placeForm, { ...place, recordNow: false, collectionIds: [...place.collectionIds] })
+  inlineCategoryName.value = ''
   resetVisit(place.id); modal.value = 'place'
 }
 function pickPoint(point) {
@@ -223,7 +232,8 @@ async function photoPicked(event) {
   const files = [...(event.target.files || [])]
   event.target.value = ''
   if (!files.length) return
-  beginPlace(null, true)
+  beginPlace(null, false)
+  visitForm.date = ''
   photosPending.value = files
   dirty.value = true
   placeForm.name = files[0].name.replace(/\.[^.]+$/, '')
@@ -276,17 +286,35 @@ function savePlace() {
   act(async () => {
     if (placeForm.latitude === '' || placeForm.longitude === '' || !Number.isFinite(Number(placeForm.latitude)) || !Number.isFinite(Number(placeForm.longitude))) throw new Error('지도에서 장소를 찍거나 위도·경도를 입력해 주세요.')
     validateFiles()
+    if (placeForm.recordNow && !visitForm.date) throw new Error('방문 날짜를 입력해 주세요.')
+    if (await photosHaveDistantLocations(photosPending.value)
+        && !window.confirm('선택한 사진의 촬영 위치가 서로 멀리 떨어져 있습니다. 모두 이 장소에 함께 저장할까요?')) return
     const result = await api.place(placeForm.id, { name: placeForm.name, memo: placeForm.memo, country: placeForm.country, region: placeForm.region,
       latitude: Number(placeForm.latitude), longitude: Number(placeForm.longitude), visited: placeForm.visited, collectionIds: placeForm.collectionIds })
     placeForm.id = result.id
-    if (placeForm.recordNow) {
-      const visit = await api.visit(result.id, visitForm.id, { title: visitForm.title || placeForm.name, memo: visitForm.memo, date: visitForm.date, time: visitForm.time || null })
+    if (placeForm.recordNow || photosPending.value.length || visitForm.id) {
+      const visit = await api.visit(result.id, visitForm.id, { title: visitForm.title || placeForm.name, memo: visitForm.memo, date: placeForm.recordNow ? visitForm.date : null, time: placeForm.recordNow ? (visitForm.time || null) : null })
       visitForm.id = visit.id
-      await uploadPending(visit.id)
+      try { await uploadPending(visit.id) }
+      catch (e) { throw new Error('장소와 기록은 저장됐지만 일부 사진을 올리지 못했습니다. 창을 닫지 말고 다시 저장하면 남은 사진만 올립니다. ' + (e.message || '')) }
     }
     dirty.value = false; modal.value = ''; await load()
     clearLocationResults(); selectedPlaceId.value = result.id
     feedback.value = allPlaces.value.some(p => p.id === result.id) ? '장소와 기록을 저장했습니다.' : '저장했습니다. 현재 검색·필터 조건을 바꾸면 저장한 장소를 확인할 수 있습니다.'
+  })
+}
+function addInlineCategory() {
+  const name = inlineCategoryName.value.trim()
+  if (!name) { error.value = '카테고리 이름을 입력해 주세요.'; return }
+  act(async () => {
+    const existing = snapshot.value.collections.find(c => c.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())
+    const category = existing || await api.collection(null, { name, memo: '', colorHex: '#009E8C' })
+    if (!existing) {
+      snapshot.value = { ...snapshot.value, collections: [...snapshot.value.collections, category] }
+      listSnapshot.value = { ...listSnapshot.value, collections: [...listSnapshot.value.collections, category] }
+    }
+    if (!placeForm.collectionIds.includes(category.id)) placeForm.collectionIds.push(category.id)
+    inlineCategoryName.value = ''; dirty.value = true
   })
 }
 function beginVisit(visit = null) {
@@ -299,10 +327,13 @@ function beginVisit(visit = null) {
 function saveVisit() {
   act(async () => {
     validateFiles()
+    if (await photosHaveDistantLocations(photosPending.value)
+        && !window.confirm('선택한 사진의 촬영 위치가 서로 멀리 떨어져 있습니다. 모두 이 장소에 함께 저장할까요?')) return
     const result = await api.visit(visitForm.placeId, visitForm.id, { title: visitForm.title || snapshot.value.places.find(p => p.id === visitForm.placeId)?.name || '방문 기록',
-      memo: visitForm.memo, date: visitForm.date, time: visitForm.time || null })
+      memo: visitForm.memo, date: visitForm.date || null, time: visitForm.date ? (visitForm.time || null) : null })
     visitForm.id = result.id
-    await uploadPending(result.id)
+    try { await uploadPending(result.id) }
+    catch (e) { throw new Error('기록은 저장됐지만 일부 사진을 올리지 못했습니다. 창을 닫지 말고 다시 저장하면 남은 사진만 올립니다. ' + (e.message || '')) }
     dirty.value = false; modal.value = ''; await load(); feedback.value = '방문 기록을 저장했습니다.'
   })
 }
@@ -318,11 +349,11 @@ function deleteCollection(collection) {
   act(async () => { await api.deleteCollection(collection.id); if (String(filters.collectionId) === String(collection.id)) filters.collectionId = ''; await load(); feedback.value = '모음만 삭제했습니다.' })
 }
 function deletePlace(place) {
-  if (!window.confirm('“' + place.name + '” 저장 장소를 삭제할까요? 여행 원본은 유지됩니다. 방문 기록이 있으면 먼저 정리해야 합니다.')) return
+  if (!window.confirm('“' + place.name + '” 저장 장소를 삭제할까요? 여행 원본은 유지됩니다. 사진이나 기록이 있으면 먼저 정리해야 합니다.')) return
   act(async () => { await api.deletePlace(place.id); modal.value = ''; selectedPlaceId.value = null; await load() })
 }
 function deleteVisit(visit) {
-  if (!window.confirm('이 방문 기록과 첨부 사진을 삭제할까요? 장소와 모음은 유지됩니다.')) return
+  if (!window.confirm(visit.date ? '이 방문 기록과 첨부 사진을 삭제할까요? 장소와 모음은 유지됩니다.' : '이 사진 묶음과 첨부 사진을 삭제할까요? 장소와 모음은 유지됩니다.')) return
   act(async () => { await api.deleteVisit(Number(visit.id.split(':')[1])); await load(); await loadDetail(0) })
 }
 function deletePhoto(photo) {
@@ -430,7 +461,7 @@ function leaveGuard(event) { if (dirty.value) { event.preventDefault(); event.re
 window.addEventListener('beforeunload', leaveGuard)
 onBeforeUnmount(() => {
   requestSequence++; listSequence++; locationSequence++; detailSequence++; metadataSequence++
-  clearTimeout(searchTimer); locationAbort?.abort(); frameObserver?.disconnect(); window.removeEventListener('resize', refreshFrame); window.removeEventListener('scroll', refreshFrame)
+  clearTimeout(searchTimer); locationAbort?.abort(); frameObserver?.disconnect(); window.removeEventListener('resize', refreshFrame)
   window.removeEventListener('beforeunload', leaveGuard)
   window.dispatchEvent(new CustomEvent('calen-route-leave-guard', { detail: { active: false } }))
 })
@@ -439,16 +470,15 @@ onBeforeUnmount(() => {
 <template>
   <div class="workspace-stack record-map-workspace">
     <header class="panel record-map-header">
-      <div><h2>{{ snapshot.title || '기록 지도' }}</h2><span v-if="readOnly" class="record-map-note">공유된 자료 · 읽기 전용</span></div>
-      <Teleport :to="actionsTarget || 'body'" :disabled="!actionsTarget"><details v-if="!readOnly" class="record-map-add"><summary class="button button--primary">＋ 추가·관리</summary><div class="record-map-add__menu" @click="$event.target.closest('button') && ($event.currentTarget.closest('details').open = false)">
-        <button class="button button--primary" @click="beginPlace()" :disabled="busy">장소 저장</button>
+      <div><h2>{{ readOnly ? (snapshot.title || '공유 지도') : '내 장소' }}</h2><span v-if="readOnly" class="record-map-note">공유된 자료 · 읽기 전용</span></div>
+      <Teleport :to="actionsTarget || 'body'" :disabled="!actionsTarget"><div v-if="!readOnly" class="record-map-add-actions"><button class="button button--primary record-map-add-primary" @click="beginPlace()" :disabled="busy">＋ 장소 추가</button><details class="record-map-add"><summary class="button">더보기</summary><div class="record-map-add__menu" @click="$event.target.closest('button') && ($event.currentTarget.closest('details').open = false)">
         <button class="button" @click="photoInput.click()" :disabled="busy">사진으로 기록</button>
         <button class="button" @click="beginVisit()" :disabled="busy">방문 기록 남기기</button>
-        <button class="button" @click="beginCollections">모음 관리</button>
+        <button class="button" @click="beginCollections">카테고리·모음 관리</button>
         <button class="button" @click="beginTravelImport">여행 장소 가져오기</button>
         <button class="button" :disabled="!snapshot.collections.length" @click="beginShare">모음 공유</button>
         <input ref="photoInput" type="file" accept="image/*" multiple hidden @change="photoPicked" />
-      </div></details></Teleport>
+      </div></details></div></Teleport>
     </header>
     <p v-if="error" class="feedback feedback--error" role="alert">{{ error }}</p>
     <p v-if="feedback" class="feedback feedback--success" role="status">{{ feedback }}</p>
@@ -479,22 +509,21 @@ onBeforeUnmount(() => {
           <form v-if="modal === 'place'" class="record-map-form" @submit.prevent="savePlace" @input="dirty = true">
             <p v-if="metadataLoading" role="status">사진의 촬영 날짜·위치를 읽는 중입니다. 직접 입력한 값은 유지됩니다.</p>
             <label class="field">장소 이름<input v-model="placeForm.name" required maxlength="160" placeholder="예: 성수동 A식당" /></label>
-            <div class="record-map-form-grid"><label class="field">국가<input v-model="placeForm.country" maxlength="80" /></label><label class="field">지역<input v-model="placeForm.region" maxlength="120" /></label></div>
-            <p class="record-map-note">지도를 클릭해 장소를 선택하거나 좌표를 입력하세요.</p>
+            <p class="record-map-note">검색하거나 지도를 눌러 위치를 선택하세요. 위치는 저장할 때 필요합니다.</p>
             <TravelMapPanel :markers="[]" :zoom-animation="false" :location-search="api.searchLocations" :selected-point="placeForm.latitude !== '' && placeForm.longitude !== '' ? { latitude: Number(placeForm.latitude), longitude: Number(placeForm.longitude) } : null" initial-map-size="compact" @pick-location="pickPoint" />
-            <div class="record-map-form-grid"><label class="field">위도<input v-model="placeForm.latitude" required type="number" step="any" min="-90" max="90" /></label><label class="field">경도<input v-model="placeForm.longitude" required type="number" step="any" min="-180" max="180" /></label></div>
             <button type="button" class="button" :disabled="gpsLoading" @click="useGps">{{ gpsLoading ? '위치 확인 중' : '현재 위치 사용' }}</button>
-            <label class="field">장소 메모<textarea v-model="placeForm.memo" maxlength="2000" rows="3" /></label>
-            <fieldset><legend>넣을 모음 · 여러 개 선택 가능</legend><label v-for="c in snapshot.collections" :key="c.id" class="checkbox-row"><input v-model="placeForm.collectionIds" type="checkbox" :value="c.id" /><span>{{ c.name }}</span></label><p v-if="!snapshot.collections.length">모음 없이 저장한 후 모음 관리에서 목록을 만들 수 있습니다.</p></fieldset>
+            <label class="field">장소 설명 · 선택<textarea v-model="placeForm.memo" maxlength="2000" rows="2" /></label>
+            <fieldset><legend>카테고리 · 여러 개 선택 가능</legend><label v-for="c in snapshot.collections" :key="c.id" class="checkbox-row"><input v-model="placeForm.collectionIds" type="checkbox" :value="c.id" /><span>{{ c.name }}</span></label><p v-if="!snapshot.collections.length">카테고리 없이 저장할 수 있습니다.</p><div class="record-map-category-create"><input v-model="inlineCategoryName" maxlength="100" aria-label="새 카테고리 이름" placeholder="새 카테고리 이름" /><button type="button" class="button" :disabled="busy" @click="addInlineCategory">추가</button></div><small>새 카테고리는 추가 즉시 저장됩니다.</small></fieldset>
             <label class="checkbox-row"><input v-model="placeForm.visited" type="checkbox" /><span>이미 방문한 곳으로 표시</span></label>
-            <label v-if="!placeForm.id" class="checkbox-row"><input v-model="placeForm.recordNow" type="checkbox" /><span>방문 날짜와 사진도 함께 기록</span></label>
+            <label class="field">사진 · 선택<input type="file" accept="image/*" multiple @change="visitFilesPicked" /></label>
+            <span class="record-map-note">선택한 사진 {{ photosPending.length }}장 · 모두 이 장소에 첨부됩니다. 방문 날짜는 선택 사항입니다. 한 장당 15MB, 최대 20장</span>
+            <label class="checkbox-row"><input v-model="placeForm.recordNow" type="checkbox" /><span>방문 날짜와 이야기도 기록</span></label>
             <div v-if="placeForm.recordNow" class="record-map-form">
               <div class="record-map-form-grid"><label class="field">방문 날짜<input v-model="visitForm.date" type="date" required /></label><label class="field">시간 · 선택<input v-model="visitForm.time" type="time" /></label></div>
               <label class="field">방문 제목<input v-model="visitForm.title" maxlength="160" :placeholder="placeForm.name || '방문 제목'" /></label>
               <label class="field">이날의 이야기<textarea v-model="visitForm.memo" maxlength="4000" rows="4" /></label>
-              <label class="field">사진 · 같은 장소에 첨부<input type="file" accept="image/*" multiple @change="visitFilesPicked" /></label>
-              <span>업로드할 사진 {{ photosPending.length }}장 · 1장당 15MB, 방문당 최대 20장</span>
             </div>
+            <details class="record-map-advanced"><summary>국가·지역 및 좌표 직접 입력</summary><div class="record-map-form-grid"><label class="field">국가<input v-model="placeForm.country" maxlength="80" /></label><label class="field">지역<input v-model="placeForm.region" maxlength="120" /></label><label class="field">위도<input v-model="placeForm.latitude" type="number" step="any" min="-90" max="90" /></label><label class="field">경도<input v-model="placeForm.longitude" type="number" step="any" min="-180" max="180" /></label></div></details>
             <p v-if="placeForm.sourceTravelRecordId" class="record-map-note">연결된 여행 기록은 원본 여행에서 관리합니다. 여기서 수정하는 장소 정보는 원본 여행에 영향을 주지 않습니다.</p>
             <button class="button button--primary" :disabled="busy || gpsLoading">{{ busy ? '저장 중...' : '장소 저장' }}</button>
           </form>
@@ -502,7 +531,7 @@ onBeforeUnmount(() => {
           <form v-else-if="modal === 'visit'" class="record-map-form" @submit.prevent="saveVisit" @input="dirty = true">
             <label class="field">방문 장소<select v-model="visitForm.placeId" :disabled="Boolean(visitForm.id)" required><option v-for="p in allPlaces" :key="p.id" :value="p.id">{{ p.name }}</option></select></label>
             <label class="field">제목<input v-model="visitForm.title" maxlength="160" placeholder="이날의 방문 기록" /></label>
-            <div class="record-map-form-grid"><label class="field">날짜<input v-model="visitForm.date" type="date" required /></label><label class="field">시간 · 선택<input v-model="visitForm.time" type="time" /></label></div>
+            <div class="record-map-form-grid"><label class="field">날짜{{ visitForm.id ? ' · 선택' : '' }}<input v-model="visitForm.date" type="date" :required="!visitForm.id" /></label><label class="field">시간 · 선택<input v-model="visitForm.time" type="time" :disabled="!visitForm.date" /></label></div>
             <label class="field">메모<textarea v-model="visitForm.memo" maxlength="4000" rows="5" /></label>
             <label class="field">첨부 사진<input type="file" accept="image/*" multiple @change="visitFilesPicked" /></label><span>업로드할 사진 {{ photosPending.length }}장 · 한 장당 15MB 이하</span>
             <button class="button button--primary" :disabled="busy">{{ busy ? '저장 중...' : '방문 기록 저장' }}</button>
@@ -537,9 +566,9 @@ onBeforeUnmount(() => {
             <p>{{ [selectedPlace.country, selectedPlace.region].filter(Boolean).join(' · ') }} · {{ selectedPlace.visited ? '방문한 곳' : '가고 싶은 곳' }}</p>
             <p class="record-map-memo">{{ selectedPlace.memo }}</p>
             <div v-if="!readOnly" class="record-map-actions"><button class="button" @click="editPlace(selectedPlace)">장소·모음 수정</button><button class="button button--primary" @click="beginVisit()">방문 기록 남기기</button><button class="button button--danger" @click="deletePlace(selectedPlace)" :disabled="busy">장소 삭제</button></div>
-            <h3>날짜별 방문 기록</h3><p v-if="detailLoading" role="status">방문 기록을 불러오는 중입니다.</p>
+            <h3>사진과 방문 기록</h3><p v-if="detailLoading" role="status">방문 기록을 불러오는 중입니다.</p>
             <article v-for="visit in detailVisits" :key="visit.id" class="record-map-visit">
-              <header><div><strong>{{ visit.title }}</strong><p>{{ visit.date }} {{ visit.time?.slice(0, 5) }}<span v-if="visit.travelPlanName"> · {{ visit.travelPlanName }}</span></p></div><div v-if="!readOnly && visit.id.startsWith('visit:')" class="record-map-actions"><button class="button" @click="beginVisit(visit)">수정</button><button class="button button--danger" @click="deleteVisit(visit)" :disabled="busy">삭제</button></div></header>
+              <header><div><strong>{{ visit.title }}</strong><p>{{ visit.date || '날짜 미지정' }} {{ visit.time?.slice(0, 5) }}<span v-if="visit.travelPlanName"> · {{ visit.travelPlanName }}</span></p></div><div v-if="!readOnly && visit.id.startsWith('visit:')" class="record-map-actions"><button class="button" @click="beginVisit(visit)">수정</button><button class="button button--danger" @click="deleteVisit(visit)" :disabled="busy">삭제</button></div></header>
               <p class="record-map-memo">{{ visit.memo }}</p>
               <div class="record-map-photo-grid"><button v-for="photo in visit.photos" :key="photo.id" type="button" @click="openPhoto(photo, visit)"><img :src="buildThumbnailUrl(photo.photoUrl, 'mini')" :alt="photo.name" loading="lazy" /></button></div>
               <small v-if="visit.id.startsWith('travel:')">연결된 여행 원본 기록입니다. 여행 화면에서 수정할 수 있습니다.</small>
@@ -550,7 +579,7 @@ onBeforeUnmount(() => {
 
           <div v-else-if="modal === 'photo' && selectedPhoto" class="record-map-form">
             <img class="record-map-large-photo" :src="selectedPhoto.photoUrl" :alt="selectedPhoto.name" />
-            <p>{{ selectedPhoto.visit?.title }} · {{ selectedPhoto.visit?.date }} {{ selectedPhoto.visit?.time?.slice(0,5) }}</p>
+            <p>{{ selectedPhoto.visit?.title }} · {{ selectedPhoto.visit?.date || '날짜 미지정' }} {{ selectedPhoto.visit?.time?.slice(0,5) }}</p>
             <p class="record-map-memo">{{ selectedPhoto.visit?.memo }}</p>
             <div class="record-map-actions"><button class="button" :disabled="activePhotoIndex <= 0" @click="changePhoto(-1)">이전 사진</button><button class="button" :disabled="activePhotoIndex < 0 || activePhotoIndex + 1 >= photoSequence.length" @click="changePhoto(1)">다음 사진</button><button class="button button--danger" v-if="!readOnly && selectedPhoto.id.startsWith('photo:')" :disabled="busy" @click="deletePhoto(selectedPhoto)">사진 삭제</button></div>
           </div>
@@ -568,6 +597,8 @@ onBeforeUnmount(() => {
 .record-map-header h2 { margin: 5px 0; } .record-map-header p { margin: 0; }
 .record-map-header h2 { font-size:1.1rem; }
 .record-map-add { position:relative; z-index:1100; }
+.record-map-add-actions { display:grid; gap:4px; min-width:0; }
+.record-map-add-primary { min-width:0; white-space:nowrap; font-size:.78rem; padding:7px 8px; }
 .record-map-add summary { cursor:pointer; list-style:none; font-size:.78rem; padding:7px 4px; }
 :global(html body .app-shell .record-map-workspace .travel-map .record-map-tools .record-map-add summary.button--primary) { background:#365b45 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; text-shadow:none !important; }
 :global(html body .app-shell .record-map-workspace .travel-map .record-map-sidebar .record-map-sidebar__header .record-map-add summary.button--primary) { background:#365b45 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; text-shadow:none !important; font-size:12px !important; padding:6px !important; }
@@ -620,6 +651,10 @@ onBeforeUnmount(() => {
 .record-map-filters input, .record-map-filters select { width: 100%; min-width: 0; }
 .record-map-form { display: grid; gap: 14px; min-width: 0; }
 .record-map-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+.record-map-category-create { display:flex; gap:6px; width:100%; min-width:0; }
+.record-map-category-create input { flex:1; min-width:0; }
+.record-map-category-create .button { flex:0 0 auto; width:auto; }
+.record-map-advanced summary { cursor:pointer; margin-bottom:8px; }
 .record-map-form .field { min-width: 0; }
 .record-map-form :deep(.travel-map) { min-width: 0; max-width: 100%; width: 100%; margin: 0; padding: 12px; box-sizing: border-box; }
 .record-map-form :deep(.travel-map__toolbar), .record-map-form :deep(.travel-map__search), .record-map-form :deep(.travel-map__search-form), .record-map-form :deep(.travel-map__toolbar-group) { min-width: 0; max-width: 100%; box-sizing: border-box; }

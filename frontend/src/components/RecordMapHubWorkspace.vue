@@ -21,7 +21,7 @@ const legacyRoute = computed(() => props.route === 'travel' ? 'my-map' : props.r
 <template>
   <div class="workspace-stack">
     <nav class="panel record-map-mode-switch" aria-label="기록 지도 사용 방식">
-      <button class="button" :class="{ 'button--primary': mode === 'records' }" :aria-pressed="mode === 'records'" type="button" @click="changeMode('records')">일상 기록 · 장소 모음</button>
+      <button class="button" :class="{ 'button--primary': mode === 'records' }" :aria-pressed="mode === 'records'" type="button" @click="changeMode('records')">내 장소</button>
       <button class="button" :class="{ 'button--primary': mode === 'travel' }" :aria-pressed="mode === 'travel'" type="button" @click="changeMode('travel')">여행 · 일정 · 경로</button>
     </nav>
     <RecordMapWorkspace v-if="mode === 'records'" @open-travel="mode = 'travel'" />

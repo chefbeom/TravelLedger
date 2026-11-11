@@ -15,8 +15,8 @@ public interface RecordPlaceRepository extends JpaRepository<RecordPlace, Long> 
         select p from RecordPlace p where p.ownerId = :ownerId
         and (:collectionId is null or exists (select c.id from RecordPlace linked join linked.collections c where linked.id = p.id and c.id = :collectionId))
         and (:state = 'ALL'
-            or (:state = 'VISITED' and (p.manuallyVisited = true or exists (select t.id from TravelExpenseRecord t where t.id = p.sourceTravelRecordId and t.plan.owner.id = :ownerId) or exists (select v.id from PlaceVisit v where v.place.id = p.id and v.ownerId = :ownerId)))
-            or (:state = 'WANTED' and p.manuallyVisited = false and not exists (select t.id from TravelExpenseRecord t where t.id = p.sourceTravelRecordId and t.plan.owner.id = :ownerId) and not exists (select v.id from PlaceVisit v where v.place.id = p.id and v.ownerId = :ownerId)))
+            or (:state = 'VISITED' and (p.manuallyVisited = true or exists (select t.id from TravelExpenseRecord t where t.id = p.sourceTravelRecordId and t.plan.owner.id = :ownerId) or exists (select v.id from PlaceVisit v where v.place.id = p.id and v.ownerId = :ownerId and v.visitDate is not null)))
+            or (:state = 'WANTED' and p.manuallyVisited = false and not exists (select t.id from TravelExpenseRecord t where t.id = p.sourceTravelRecordId and t.plan.owner.id = :ownerId) and not exists (select v.id from PlaceVisit v where v.place.id = p.id and v.ownerId = :ownerId and v.visitDate is not null)))
         and ((:fromDate is null and :toDate is null)
             or exists (select v.id from PlaceVisit v where v.place.id = p.id and (:fromDate is null or v.visitDate >= :fromDate) and (:toDate is null or v.visitDate <= :toDate))
             or exists (select t.id from TravelExpenseRecord t where t.id = p.sourceTravelRecordId and t.plan.owner.id = :ownerId and (:fromDate is null or t.expenseDate >= :fromDate) and (:toDate is null or t.expenseDate <= :toDate)))

@@ -102,7 +102,7 @@ import { useRecordShareNotifications } from '../lib/useRecordShareNotifications'
 import { createReceiptSelectionRequestIds } from '../lib/receiptHistoryGroups'
 import { summarizeReceiptBatch } from '../lib/receiptReview'
 import { normalizeReceiptConcurrency, runReceiptRequestBatches } from '../lib/receiptRequestQueue'
-import { newSplitRequestId, normalizeInstallmentMonths, prepareSplitPayment } from '../lib/splitPayment'
+import { newSplitRequestId, normalizeInstallmentMonths, normalizeInstallmentInterest, prepareSplitPayment } from '../lib/splitPayment'
 
 const RecordSharingWorkspace = defineAsyncComponent(() => import('./RecordSharingWorkspace.vue'))
 const entryToShare = ref(null)
@@ -689,6 +689,9 @@ const entryForm = reactive({
   travelPlanId: '',
   travelRecordId: '',
   installmentMonths: '',
+  installmentInterestType: '',
+  installmentEnabled: false,
+  installmentInterestUnknown: false,
   splitMode: false,
   splitPayments: [],
   splitPaymentGroupId: '',
@@ -1771,6 +1774,9 @@ function buildEntryFormSnapshot() {
     travelPlanId: entryForm.travelPlanId,
     travelRecordId: entryForm.travelRecordId,
     installmentMonths: entryForm.installmentMonths,
+    installmentInterestType: entryForm.installmentInterestType,
+    installmentEnabled: entryForm.installmentEnabled,
+    installmentInterestUnknown: entryForm.installmentInterestUnknown,
     amountInput: amountInput.value,
     isTimeEnabled: isEntryTimeEnabled.value,
   }
@@ -1801,6 +1807,9 @@ function buildEntryFormSnapshotFromEntry(entry) {
     travelPlanId: entry.travelPlanId != null ? String(entry.travelPlanId) : '',
     travelRecordId: entry.travelRecordId != null ? String(entry.travelRecordId) : '',
     installmentMonths: entry.installmentMonths != null ? String(entry.installmentMonths) : '',
+    installmentInterestType: entry.installmentInterestType || '',
+    installmentEnabled: Boolean(entry.installmentMonths),
+    installmentInterestUnknown: Boolean(entry.installmentMonths && !entry.installmentInterestType),
     isTimeEnabled: hasEntryTimeValue(entry.entryTime),
   }
 }
@@ -1829,6 +1838,9 @@ function restoreEntryFormSnapshot(snapshot) {
   entryForm.travelPlanId = snapshot.travelPlanId || ''
   entryForm.travelRecordId = snapshot.travelRecordId || ''
   entryForm.installmentMonths = snapshot.installmentMonths || ''
+  entryForm.installmentInterestType = snapshot.installmentInterestType || ''
+  entryForm.installmentEnabled = Boolean(snapshot.installmentEnabled ?? snapshot.installmentMonths)
+  entryForm.installmentInterestUnknown = Boolean(snapshot.installmentInterestUnknown)
   entryForm.splitMode = false
   entryForm.splitPayments = []
   entryForm.splitPaymentGroupId = ''
@@ -1874,6 +1886,7 @@ function buildEntryPayloadFromEntry(entry) {
     travelPlanId: entry.travelPlanId != null ? Number(entry.travelPlanId) : null,
     travelRecordId: entry.travelRecordId != null ? Number(entry.travelRecordId) : null,
     installmentMonths: entry.installmentMonths ?? 0,
+    installmentInterestType: entry.installmentInterestType || null,
   }
 }
 
@@ -3062,6 +3075,9 @@ function resetEntryForm({ entryDate = calendarAnchorDate.value } = {}) {
   entryForm.travelPlanId = ''
   entryForm.travelRecordId = ''
   entryForm.installmentMonths = ''
+  entryForm.installmentInterestType = ''
+  entryForm.installmentEnabled = false
+  entryForm.installmentInterestUnknown = false
   entryForm.splitMode = false
   entryForm.splitPayments = []
   entryForm.splitPaymentGroupId = ''
@@ -3091,6 +3107,9 @@ function fillEntryForm(entry) {
   entryForm.travelPlanId = entry.travelPlanId != null ? String(entry.travelPlanId) : ''
   entryForm.travelRecordId = entry.travelRecordId != null ? String(entry.travelRecordId) : ''
   entryForm.installmentMonths = entry.installmentMonths != null ? String(entry.installmentMonths) : ''
+  entryForm.installmentInterestType = entry.installmentInterestType || ''
+  entryForm.installmentEnabled = Boolean(entry.installmentMonths)
+  entryForm.installmentInterestUnknown = Boolean(entry.installmentMonths && !entry.installmentInterestType)
   entryForm.splitMode = false
   entryForm.splitPayments = []
   entryForm.splitPaymentGroupId = entry.splitPaymentGroupId || ''
@@ -4707,6 +4726,9 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
 
   editingEntryId.value = null
   entryForm.installmentMonths = ''
+  entryForm.installmentInterestType = ''
+  entryForm.installmentEnabled = false
+  entryForm.installmentInterestUnknown = false
   entryForm.splitMode = false
   entryForm.splitPayments = []
   entryForm.splitPaymentGroupId = ''
@@ -4753,6 +4775,14 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
 
 function buildEntryPayload() {
   const payment = paymentMethods.value.find(item => String(item.id) === String(entryForm.paymentMethodId))
+  let installmentMonths = 0
+  let installmentInterestType = null
+  if (entryForm.installmentEnabled && !entryForm.splitMode && entryForm.entryType === 'EXPENSE') {
+    if (payment?.kind !== 'CARD') throw new Error('할부는 카드 결제수단을 선택해 주세요.')
+    installmentMonths = normalizeInstallmentMonths(entryForm.installmentMonths, payment)
+    if (!installmentMonths) throw new Error('할부 개월을 입력해 주세요.')
+    installmentInterestType = normalizeInstallmentInterest(entryForm.installmentInterestType, { allowUnknown: entryForm.installmentInterestUnknown })
+  }
   const payload = {
     entryDate: entryForm.entryDate,
     entryTime: isEntryTimeEnabled.value ? normalizeEntryTimePayload(entryForm.entryTime) : '00:00',
@@ -4765,8 +4795,8 @@ function buildEntryPayload() {
     paymentMethodId: resolveEntryPaymentMethodPayload(entryForm.entryType, entryForm.paymentMethodId),
     travelPlanId: entryForm.travelPlanId ? Number(entryForm.travelPlanId) : null,
     travelRecordId: entryForm.travelRecordId ? Number(entryForm.travelRecordId) : null,
-    installmentMonths: !entryForm.splitMode && entryForm.entryType === 'EXPENSE' && payment?.kind === 'CARD'
-      ? (normalizeInstallmentMonths(entryForm.installmentMonths, payment) ?? 0) : 0,
+    installmentMonths,
+    installmentInterestType,
   }
   if (entryForm.currencyMode === 'FOREIGN') {
     payload.foreignCurrencyCode = normalizeForeignCurrencyCode(entryForm.foreignCurrencyCode)
@@ -5013,7 +5043,14 @@ async function submitEntry(shareAfterSave = false) {
       setFeedback('가계부 내역을 수정했습니다.')
     } else if (entryForm.splitMode) {
       if (shareAfterSave) throw new Error('분할 결제는 저장 후 각 거래에서 공유해 주세요.')
-      const parts = prepareSplitPayment(submittedPayload, entryForm.splitPayments, paymentMethods.value)
+      const rows = entryForm.splitPayments.map(row => {
+        if (!entryForm.installmentEnabled || !row.installmentEnabled) return { ...row, installmentMonths: '', installmentInterestType: '' }
+        if (!normalizeInstallmentMonths(row.installmentMonths, paymentMethods.value.find(method => String(method.id) === String(row.paymentMethodId)))) throw new Error('할부 개월을 입력해 주세요.')
+        normalizeInstallmentInterest(row.installmentInterestType)
+        return row
+      })
+      if (entryForm.installmentEnabled && !rows.some(row => row.installmentMonths)) throw new Error('할부를 적용할 카드를 선택해 주세요.')
+      const parts = prepareSplitPayment(submittedPayload, rows, paymentMethods.value)
       const fingerprint = JSON.stringify({ entry: submittedPayload, parts })
       if (!pendingSplitRequest || pendingSplitRequest.fingerprint !== fingerprint) {
         pendingSplitRequest = { fingerprint, requestId: newSplitRequestId() }

@@ -53,6 +53,7 @@ Updated: 2026-10-11
 | `V20261030_033_1__ledger_payment_adjustments.sql` | Refund and payment-cancellation records for ledger transactions. |
 | `V20261030_033_2__ledger_split_installments.sql` | Linked split payments and informational installment metadata. |
 | `V20261111_058__record_map_undated_photos.sql` | Allows place photo groups without a visit date, preserving existing records. |
+| `V20261111_059__ledger_installment_interest_type.sql` | Adds nullable interest classification for card installments without changing existing records. |
 
 ## Legacy Schema Updater Inventory
 
@@ -127,6 +128,7 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 | `V20261030_033_1__ledger_payment_adjustments.sql` | Verify refund and payment-cancellation flows on staging MariaDB. | Preserve original transactions and adjustment history during rollback. | No legacy updater retired. |
 | `V20261030_033_2__ledger_split_installments.sql` | Verify split payments and installment metadata on staging MariaDB. | Preserve linked transactions and installment metadata during rollback. | No legacy updater retired. |
 | `V20261111_058__record_map_undated_photos.sql` | H2 migration and feature tests passed; MariaDB/Flyway rehearsal remains required. Apply before enabling undated place-photo saves. | Preserve visits and photos; older app versions may not display newly undated photos. | Relaxes an existing column; no legacy updater retired. |
+| `V20261111_059__ledger_installment_interest_type.sql` | H2 integration tests passed; MariaDB/Flyway rehearsal remains required. Check the target's migration history before rollout. | Preserve existing transactions and interest metadata; legacy installments remain unclassified. | Adds a nullable column; no legacy updater retired. |
 
 ## Operating Rules
 

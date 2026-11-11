@@ -152,7 +152,7 @@ function updatePage(offset) {
             </td>
             <td class="sheet-table__title">
               <div class="adjustment-title-content">
-                <div class="adjustment-title-line"><span>{{ entry.title }}</span><span v-if="statusLabel(entry)" class="adjustment-status">{{ statusLabel(entry) }}</span><span v-if="entry.splitPaymentGroupId" class="adjustment-status">분할 {{ entry.splitPaymentIndex }}/{{ entry.splitPaymentCount }}</span><span v-if="entry.installmentMonths" class="adjustment-status">{{ entry.installmentMonths }}개월 할부</span></div>
+                <div class="adjustment-title-line"><span>{{ entry.title }}</span><span v-if="statusLabel(entry)" class="adjustment-status">{{ statusLabel(entry) }}</span><span v-if="entry.splitPaymentGroupId" class="adjustment-status">분할 {{ entry.splitPaymentIndex }}/{{ entry.splitPaymentCount }}</span><span v-if="entry.installmentMonths" class="adjustment-status">{{ entry.installmentMonths }}개월 {{ entry.installmentInterestType === 'FREE' ? '무이자 ' : entry.installmentInterestType === 'INTEREST' ? '유이자 ' : '' }}할부</span></div>
                 <small v-if="entry.splitPaymentGroupId" class="adjustment-detail">묶음 {{ entry.splitPaymentGroupId.slice(0, 8) }} · 수단별 개별 거래</small>
                 <small v-if="entry.adjustmentType === 'REFUND'" class="adjustment-detail">
                   원거래 #{{ entry.adjustmentOriginId }} · 기준 {{ money(entry.adjustmentPrincipal) }} · 차감 {{ money(entry.adjustmentDeduction) }} · 추가 {{ money(entry.adjustmentExtra) }}

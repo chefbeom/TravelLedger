@@ -129,6 +129,29 @@ class LedgerSplitPaymentIntegrationTest {
         assertThat(statistics.getOverview(f.id(), DATE, DATE).expense()).isEqualByComparingTo("100");
     }
 
+    @Test void interestTypeIsPersistedForEachCardAndRestoredWithHistory() {
+        Fixture f = fixture();
+        var request = new LedgerSplitPaymentRequest(UUID.randomUUID(), base(f, "100", null), List.of(
+                new LedgerSplitPaymentRequest.Part(f.cardId(), new BigDecimal("60"), 3, "FREE"),
+                new LedgerSplitPaymentRequest.Part(f.cashId(), new BigDecimal("40"), null, null)));
+        var saved = ledger.createSplitPayment(f.id(), request);
+        assertThat(saved.get(0).installmentInterestType()).isEqualTo("FREE");
+        assertThat(saved.get(1).installmentInterestType()).isNull();
+        var changed = new LedgerEntryRequest(DATE, null, "변경", null, new BigDecimal("60"), null, null, null,
+                EntryType.EXPENSE, f.expenseGroupId(), null, f.cardId(), null, null, 6, "INTEREST");
+        assertThat(ledger.update(f.id(), saved.get(0).id(), changed).installmentInterestType()).isEqualTo("INTEREST");
+        Long historyId = ledger.getChangeHistories(f.id(), 0, 20).content().get(0).id();
+        ledger.restoreChangeHistory(f.id(), historyId);
+        var restored = ledger.getEntries(f.id(), DATE, DATE).stream()
+                .filter(item -> item.id().equals(saved.get(0).id())).findFirst().orElseThrow();
+        assertThat(restored.installmentMonths()).isEqualTo(3);
+        assertThat(restored.installmentInterestType()).isEqualTo("FREE");
+        var invalid = new LedgerSplitPaymentRequest(UUID.randomUUID(), base(f, "100", null), List.of(
+                new LedgerSplitPaymentRequest.Part(f.cardId(), new BigDecimal("60"), 3, "INVALID"),
+                new LedgerSplitPaymentRequest.Part(f.cashId(), new BigDecimal("40"), null, null)));
+        assertThatThrownBy(() -> ledger.createSplitPayment(f.id(), invalid)).isInstanceOf(BadRequestException.class);
+    }
+
     @Test void simultaneousRetriesWithSameRequestIdNeverCreateDuplicateParts() throws Exception {
         Fixture f = fixture(); var request = split(f, UUID.randomUUID(), "60", "40", 3);
         var start = new CountDownLatch(1); var pool = Executors.newFixedThreadPool(2);

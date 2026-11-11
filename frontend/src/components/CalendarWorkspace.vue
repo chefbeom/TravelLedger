@@ -4578,7 +4578,7 @@ defineExpose({
 
             <template v-if="!isForeignCurrencyMode">
               <label class="field field--amount">
-                <span class="field__label">금액</span>
+                <span class="field__label">{{ entryForm.splitMode ? '총 금액' : '금액' }}</span>
                 <div class="amount-input">
                   <span>₩</span>
                   <input

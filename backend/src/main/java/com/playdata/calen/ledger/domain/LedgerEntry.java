@@ -139,6 +139,9 @@ public class LedgerEntry {
     @Column(name = "installment_months")
     private Integer installmentMonths;
 
+    @Column(name = "installment_interest_type", length = 16)
+    private String installmentInterestType;
+
     @Column(name = "split_payment_group_id", length = 36)
     private String splitPaymentGroupId;
 

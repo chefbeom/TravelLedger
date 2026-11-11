@@ -15,5 +15,10 @@ public record LedgerSplitPaymentRequest(
 ) {
     public record Part(@NotNull Long paymentMethodId,
             @NotNull @DecimalMin("0.01") BigDecimal amount,
-            Integer installmentMonths) { }
+            Integer installmentMonths,
+            String installmentInterestType) {
+        public Part(Long paymentMethodId, BigDecimal amount, Integer installmentMonths) {
+            this(paymentMethodId, amount, installmentMonths, null);
+        }
+    }
 }

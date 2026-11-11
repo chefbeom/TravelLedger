@@ -29,8 +29,16 @@ public record LedgerEntryRequest(
         Long paymentMethodId,
         Long travelPlanId,
         Long travelRecordId,
-        Integer installmentMonths
+        Integer installmentMonths,
+        String installmentInterestType
 ) {
+    public LedgerEntryRequest(LocalDate entryDate, LocalTime entryTime, String title, String memo, BigDecimal amount,
+            String foreignCurrencyCode, BigDecimal foreignAmount, BigDecimal exchangeRateToKrw, EntryType entryType,
+            Long categoryGroupId, Long categoryDetailId, Long paymentMethodId, Long travelPlanId, Long travelRecordId,
+            Integer installmentMonths) {
+        this(entryDate, entryTime, title, memo, amount, foreignCurrencyCode, foreignAmount, exchangeRateToKrw,
+                entryType, categoryGroupId, categoryDetailId, paymentMethodId, travelPlanId, travelRecordId, installmentMonths, null);
+    }
     public LedgerEntryRequest(LocalDate entryDate, LocalTime entryTime, String title, String memo, BigDecimal amount,
             String foreignCurrencyCode, BigDecimal foreignAmount, BigDecimal exchangeRateToKrw, EntryType entryType,
             Long categoryGroupId, Long categoryDetailId, Long paymentMethodId, Long travelPlanId, Long travelRecordId) {

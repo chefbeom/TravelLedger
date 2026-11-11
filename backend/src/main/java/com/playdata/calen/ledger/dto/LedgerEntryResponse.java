@@ -45,7 +45,8 @@ public record LedgerEntryResponse(
         Integer installmentMonths,
         String splitPaymentGroupId,
         Integer splitPaymentIndex,
-        Integer splitPaymentCount
+        Integer splitPaymentCount,
+        String installmentInterestType
 ) {
     /** Compatibility for existing internal callers and legacy share snapshots. */
     public LedgerEntryResponse(Long id, LocalDate entryDate, LocalTime entryTime, String title, String memo,
@@ -58,6 +59,6 @@ public record LedgerEntryResponse(
                 exchangeRateDate, exchangeRateProvider, entryType, categoryGroupId, categoryGroupName,
                 categoryDetailId, categoryDetailName, paymentMethodId, paymentMethodName, paymentMethodKind,
                 travelPlanId, travelRecordId, false, null, BigDecimal.ZERO, false, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
     }
 }

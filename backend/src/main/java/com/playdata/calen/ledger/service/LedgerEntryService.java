@@ -691,6 +691,7 @@ public class LedgerEntryService {
         if (base.entryType() != EntryType.EXPENSE || base.entryDate() == null || base.categoryGroupId() == null
                 || base.title() == null || base.title().isBlank() || base.travelRecordId() != null
                 || (base.installmentMonths() != null && base.installmentMonths() != 0)
+                || base.installmentInterestType() != null
                 || (base.foreignCurrencyCode() != null && !base.foreignCurrencyCode().isBlank()
                     && !"KRW".equalsIgnoreCase(base.foreignCurrencyCode()))
                 || base.foreignAmount() != null || base.exchangeRateToKrw() != null) {
@@ -720,7 +721,7 @@ public class LedgerEntryService {
             var part = request.parts().get(index);
             var partial = new LedgerEntryRequest(base.entryDate(), base.entryTime(), base.title(), base.memo(),
                     part.amount(), null, null, null, EntryType.EXPENSE, base.categoryGroupId(), base.categoryDetailId(),
-                    part.paymentMethodId(), base.travelPlanId(), null, part.installmentMonths());
+                    part.paymentMethodId(), base.travelPlanId(), null, part.installmentMonths(), part.installmentInterestType());
             LedgerEntry entry = new LedgerEntry();
             entry.setOwner(owner);
             applyRequest(userId, entry, partial);
@@ -1008,7 +1009,7 @@ public class LedgerEntryService {
                 entry.getTravelPlanId(),
                 entry.getTravelRecordId(),
                 entry.getDeletedAt(),
-                entry.getInstallmentMonths(), true
+                entry.getInstallmentMonths(), true, entry.getInstallmentInterestType(), true
         );
     }
 
@@ -1045,6 +1046,11 @@ public class LedgerEntryService {
             entry.setInstallmentMonths(snapshot.installmentMonths());
         } else if (snapshot.entryType() != EntryType.EXPENSE || paymentMethod.getKind() != PaymentMethodKind.CARD) {
             entry.setInstallmentMonths(null);
+        }
+        if (Boolean.TRUE.equals(snapshot.installmentInterestRecorded())) {
+            entry.setInstallmentInterestType(snapshot.installmentInterestType());
+        } else if (entry.getInstallmentMonths() == null) {
+            entry.setInstallmentInterestType(null);
         }
         entry.setTravelPlanId(snapshot.travelPlanId());
         entry.setTravelRecordId(snapshot.travelRecordId());
@@ -1109,6 +1115,7 @@ public class LedgerEntryService {
         Long travelPlanId = base.travelPlanId();
         Long travelRecordId = base.travelRecordId();
         Integer installmentMonths = base.installmentMonths();
+        String installmentInterestType = base.installmentInterestType();
 
         for (LedgerEntryChangeFieldPatch field : patch.fields()) {
             String rawValue = useBeforeValue ? field.beforeRaw() : field.afterRaw();
@@ -1140,6 +1147,7 @@ public class LedgerEntryService {
                 case FIELD_TRAVEL_PLAN_ID -> travelPlanId = parseNullableLong(rawValue);
                 case FIELD_TRAVEL_RECORD_ID -> travelRecordId = parseNullableLong(rawValue);
                 case "installmentMonths" -> installmentMonths = rawValue == null || rawValue.isBlank() ? null : Integer.valueOf(rawValue);
+                case "installmentInterestType" -> installmentInterestType = rawValue == null || rawValue.isBlank() ? null : rawValue;
                 default -> {
                     // Older clients may ignore unknown fields. Restore keeps the current value for them.
                 }
@@ -1167,7 +1175,7 @@ public class LedgerEntryService {
                 paymentMethodName,
                 travelPlanId,
                 travelRecordId,
-                base.deletedAt(), installmentMonths, base.installmentRecorded()
+                base.deletedAt(), installmentMonths, base.installmentRecorded(), installmentInterestType, base.installmentInterestRecorded()
         );
     }
 
@@ -1215,6 +1223,7 @@ public class LedgerEntryService {
         addPatch(fields, FIELD_CATEGORY_DETAIL, "소분류", beforeSnapshot.categoryDetailName(), afterSnapshot.categoryDetailName(), toRawValue(beforeSnapshot.categoryDetailId()), toRawValue(afterSnapshot.categoryDetailId()));
         addPatch(fields, FIELD_PAYMENT_METHOD, "결제수단", beforeSnapshot.paymentMethodName(), afterSnapshot.paymentMethodName(), toRawValue(beforeSnapshot.paymentMethodId()), toRawValue(afterSnapshot.paymentMethodId()));
         addPatch(fields, "installmentMonths", "할부 개월", beforeSnapshot.installmentMonths(), afterSnapshot.installmentMonths(), toRawValue(beforeSnapshot.installmentMonths()), toRawValue(afterSnapshot.installmentMonths()));
+        addPatch(fields, "installmentInterestType", "할부 이자", beforeSnapshot.installmentInterestType(), afterSnapshot.installmentInterestType(), beforeSnapshot.installmentInterestType(), afterSnapshot.installmentInterestType());
         addPatch(fields, FIELD_TRAVEL_PLAN_ID, "Travel plan", beforeSnapshot.travelPlanId(), afterSnapshot.travelPlanId(), toRawValue(beforeSnapshot.travelPlanId()), toRawValue(afterSnapshot.travelPlanId()));
         addPatch(fields, FIELD_TRAVEL_RECORD_ID, "Travel record", beforeSnapshot.travelRecordId(), afterSnapshot.travelRecordId(), toRawValue(beforeSnapshot.travelRecordId()), toRawValue(afterSnapshot.travelRecordId()));
         addPatch(fields, FIELD_FOREIGN_CURRENCY, "외화 통화", beforeSnapshot.foreignCurrencyCode(), afterSnapshot.foreignCurrencyCode(), beforeSnapshot.foreignCurrencyCode(), afterSnapshot.foreignCurrencyCode());
@@ -1416,7 +1425,7 @@ public class LedgerEntryService {
                 entry.isFinanciallyExcluded(), entry.getCancelledAt(), entry.getRefundedPrincipal(),
                 entry.isHasAdjustmentHistory(), entry.getAdjustmentType(), entry.getAdjustmentOriginId(),
                 entry.getAdjustmentPrincipal(), entry.getAdjustmentDeduction(), entry.getAdjustmentExtra(), entry.getAdjustmentVoidedAt(),
-                entry.getInstallmentMonths(), entry.getSplitPaymentGroupId(), entry.getSplitPaymentIndex(), entry.getSplitPaymentCount()
+                entry.getInstallmentMonths(), entry.getSplitPaymentGroupId(), entry.getSplitPaymentIndex(), entry.getSplitPaymentCount(), entry.getInstallmentInterestType()
         );
     }
 
@@ -1464,14 +1473,23 @@ public class LedgerEntryService {
         ledgerEntry.setCategoryDetail(prepared.detailId() == null ? null : categoryDetailRepository.getReferenceById(prepared.detailId()));
         ledgerEntry.setPaymentMethod(paymentMethod);
         Integer installment = request.installmentMonths();
+        String interestType = request.installmentInterestType();
+        if (interestType != null && !interestType.equals("FREE") && !interestType.equals("INTEREST")) {
+            throw new BadRequestException("할부 이자는 무이자 또는 유이자를 선택해 주세요.");
+        }
+        if (interestType != null && (installment == null || installment == 0)) {
+            throw new BadRequestException("할부 개월을 입력해 주세요.");
+        }
         if (installment != null) {
             if (installment == 0) {
                 ledgerEntry.setInstallmentMonths(null);
+                ledgerEntry.setInstallmentInterestType(null);
             } else if (installment < 2 || installment > 60 || draft.entryType() != EntryType.EXPENSE
                     || prepared.payment().kind() != PaymentMethodKind.CARD) {
                 throw new BadRequestException("할부는 카드 지출에서 2~60개월로 입력해 주세요.");
             } else {
                 ledgerEntry.setInstallmentMonths(installment);
+                if (interestType != null) ledgerEntry.setInstallmentInterestType(interestType);
             }
         } else if (ledgerEntry.getInstallmentMonths() != null
                 && (draft.entryType() != EntryType.EXPENSE || prepared.payment().kind() != PaymentMethodKind.CARD)) {
@@ -1567,7 +1585,9 @@ public class LedgerEntryService {
             Long travelRecordId,
             LocalDateTime deletedAt,
             Integer installmentMonths,
-            Boolean installmentRecorded
+            Boolean installmentRecorded,
+            String installmentInterestType,
+            Boolean installmentInterestRecorded
     ) {
     }
 

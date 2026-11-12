@@ -84,6 +84,35 @@ class TravelPlanRefactoringIntegrationTest {
         assertThat(plans.findById(fixture.plan()).orElseThrow().getPublicSharedAt()).isEqualTo(LocalDateTime.of(2026,10,10,0,0));
     }
 
+    @Test void periodlessPlanCanBeCreatedAndExistingRecordsSurviveAnExplicitConversion() throws Exception {
+        var body = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(planBody());
+        body.putNull("startDate"); body.putNull("endDate"); body.put("noPeriod", true);
+        String created = mvc.perform(post("/api/travel/plans").with(as("hana")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(body)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long newId = json.readTree(created).path("id").asLong();
+        assertThat(plans.findById(newId).orElseThrow().getStartDate()).isNull();
+        mvc.perform(get("/api/travel/plans/{id}", newId).with(as("hana"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.startDate").doesNotExist()).andExpect(jsonPath("$.endDate").doesNotExist());
+
+        Fixture existing = populate(createPlan());
+        mvc.perform(put("/api/travel/plans/{id}", existing.plan()).with(as("hana")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(body))).andExpect(status().isOk());
+        assertThat(plans.findById(existing.plan()).orElseThrow().getStartDate()).isNull();
+        assertRowsPresent(existing);
+        mvc.perform(put("/api/travel/plans/{id}", existing.plan()).with(as("hana")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(planBody())).andExpect(status().isOk());
+        assertThat(plans.findById(existing.plan()).orElseThrow().getStartDate()).isEqualTo(start);
+        assertRowsPresent(existing);
+
+        body.put("noPeriod", false);
+        mvc.perform(post("/api/travel/plans").with(as("hana")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(body))).andExpect(status().isBadRequest());
+        body.put("noPeriod", true); body.put("startDate", "2026-10-10");
+        mvc.perform(post("/api/travel/plans").with(as("hana")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(body))).andExpect(status().isBadRequest());
+    }
+
     @Test void deletionRollbackPreservesAllRowsDriveLinksAndFilesThenCommitCleansThem() throws Exception {
         Fixture fixture = populate(createPlan());
         clearMocks();

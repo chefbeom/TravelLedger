@@ -246,6 +246,71 @@ test('travel creation starts from the map and returns with the new trip selected
   expect(state.errors).toEqual([])
 })
 
+test('periodless travel is saved without fabricated dates and hides day tabs', async ({ page }) => {
+  const state = fixture()
+  await mock(page, state)
+  const plans = []
+  await page.route('**/api/travel/**', route => {
+    const request = route.request(), path = new URL(request.url()).pathname
+    if (path === '/api/travel/portfolio') return route.fulfill({ json: { includedPlanCount: plans.length, plans, memoryRecords: [], routeSegments: [], mediaItems: [] } })
+    if (path === '/api/travel/my-map') return route.fulfill({ json: { includedPlanCount: plans.length, markers: [], routes: [], photoPins: [], photoClusters: [] } })
+    if (path === '/api/travel/plans' && request.method() === 'POST') {
+      const created = { id: 91, ...request.postDataJSON(), budgetItems: [], records: [], memoryRecords: [], mediaItems: [], routeSegments: [] }
+      plans.push(created)
+      return route.fulfill({ json: created })
+    }
+    if (path === '/api/travel/plans') return route.fulfill({ json: plans })
+    if (path === '/api/travel/plans/91') return route.fulfill({ json: plans[0] })
+    return route.fulfill({ json: [] })
+  })
+  await page.goto('/#travel')
+  await page.getByRole('button', { name: '여행 · 일정 · 경로' }).click()
+  await page.getByRole('button', { name: '새 여행 만들기', exact: true }).click()
+  const setup = page.locator('.travel-setup-workflow')
+  await setup.getByLabel('여행 이름').fill('기간 없는 장소 모음')
+  await setup.getByLabel('기간 없음').check()
+  await expect(setup.getByLabel('시작일')).toHaveCount(0)
+  await setup.getByRole('button', { name: '만들고 지도 열기' }).click()
+  await expect(page.getByRole('heading', { name: '내 여행 지도' })).toBeVisible()
+  expect(plans[0]).toMatchObject({ noPeriod: true, startDate: null, endDate: null })
+  await page.getByRole('button', { name: '장소·사진 추가', exact: true }).click()
+  const dialog = page.locator('.travel-modal__dialog').filter({ has: page.getByRole('heading', { name: '새 여행 기록 작성' }) })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '닫기', exact: true }).click()
+  await expect(page.locator('.travel-day-tabs')).toHaveCount(0)
+  expect(state.errors).toEqual([])
+})
+
+test('converting a dated trip requires confirmation and preserves its saved records', async ({ page }) => {
+  await mock(page, fixture())
+  const plan = { id: 90, name: '기존 여행', startDate: '2026-10-01', endDate: '2026-10-03', homeCurrency: 'KRW', headCount: 1,
+    status: 'PLANNED', colorHex: '#3182F6', budgetItems: [], records: [],
+    memoryRecords: [{ id: 7, title: '기존 장소', memoryDate: '2026-10-02' }], mediaItems: [], routeSegments: [] }
+  let updates = 0
+  await page.route('**/api/travel/**', route => {
+    const request = route.request(), path = new URL(request.url()).pathname
+    if (path === '/api/travel/portfolio') return route.fulfill({ json: { includedPlanCount: 1, plans: [plan], memoryRecords: [], routeSegments: [], mediaItems: [] } })
+    if (path === '/api/travel/my-map') return route.fulfill({ json: { includedPlanCount: 1, markers: [], routes: [], photoPins: [], photoClusters: [] } })
+    if (path === '/api/travel/plans') return route.fulfill({ json: [plan] })
+    if (path === '/api/travel/plans/90' && request.method() === 'PUT') { updates++; Object.assign(plan, request.postDataJSON()); return route.fulfill({ json: plan }) }
+    if (path === '/api/travel/plans/90') return route.fulfill({ json: plan })
+    return route.fulfill({ json: [] })
+  })
+  await page.goto('/#travel')
+  await page.getByRole('button', { name: '여행 · 일정 · 경로' }).click()
+  await page.getByRole('button', { name: '여행 정보 수정', exact: true }).click()
+  const setup = page.locator('.travel-setup-workflow')
+  await setup.getByLabel('기간 없음').check()
+  page.once('dialog', dialog => dialog.dismiss())
+  await setup.getByRole('button', { name: '저장하고 지도 열기' }).click()
+  expect(updates).toBe(0)
+  expect(plan.startDate).toBe('2026-10-01')
+  page.once('dialog', dialog => dialog.accept())
+  await setup.getByRole('button', { name: '저장하고 지도 열기' }).click()
+  await expect.poll(() => updates).toBe(1)
+  expect(plan).toMatchObject({ startDate: null, endDate: null, noPeriod: true, memoryRecords: [{ id: 7, title: '기존 장소', memoryDate: '2026-10-02' }] })
+})
+
 test('a date-free bookmark is saved without a trip and rendered as a transparent map pin', async ({ page }, testInfo) => {
   const state = fixture()
   await mock(page, state)

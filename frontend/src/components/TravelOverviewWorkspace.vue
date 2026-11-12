@@ -32,6 +32,7 @@ function resolvePinPreset(category) {
 }
 
 const tripDays = computed(() => {
+  if (!props.travelPlan?.startDate && !props.travelPlan?.endDate) return []
   const startText = props.travelPlan?.startDate || todayIso()
   const endText = props.travelPlan?.endDate || startText
   const start = new Date(`${startText}T00:00:00`)
@@ -94,7 +95,7 @@ const knownDates = computed(() => {
 })
 
 const scopeOptions = computed(() => [
-  { key: 'ALL', label: '전체 보기', subtitle: `${tripDays.value.length}일 전체` },
+  { key: 'ALL', label: '전체 보기', subtitle: tripDays.value.length ? `${tripDays.value.length}일 전체` : '기간 없음' },
   ...tripDays.value.map((day) => ({
     key: day.date,
     label: day.label,
@@ -284,6 +285,10 @@ watch(
   { immediate: true },
 )
 
+watch(() => [props.travelPlan?.startDate, props.travelPlan?.endDate], ([start, end]) => {
+  if (!start && !end) activeScope.value = 'ALL'
+})
+
 watch(
   knownDates,
   (dates) => {
@@ -470,7 +475,7 @@ function itemTypeLabel(type) {
         @select-marker="handleSelectMarker"
       >
         <template #toolbar>
-          <div class="travel-map__toolbar-group">
+          <div v-if="tripDays.length" class="travel-map__toolbar-group">
             <span class="travel-map__toolbar-label">일차</span>
             <select class="travel-map__toolbar-select" :value="activeScope" @change="selectScope($event.target.value)">
               <option v-for="option in scopeOptions" :key="option.key" :value="option.key">
@@ -482,7 +487,7 @@ function itemTypeLabel(type) {
       </TravelMapPanel>
     </section>
 
-    <section v-if="activeScope === 'ALL'" class="panel">
+    <section v-if="activeScope === 'ALL' && tripDays.length" class="panel">
       <div class="panel__header">
         <div>
           <h2>일차별 요약</h2>

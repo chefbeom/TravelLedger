@@ -208,6 +208,7 @@ const planForm = reactive({
   destination: '',
   startDate: todayIso(),
   endDate: todayIso(),
+  noPeriod: false,
   homeCurrency: 'KRW',
   headCount: 1,
   status: 'PLANNED',
@@ -1020,6 +1021,7 @@ function resetPlanForm() {
   planForm.destination = ''
   planForm.startDate = todayIso()
   planForm.endDate = todayIso()
+  planForm.noPeriod = false
   planForm.homeCurrency = 'KRW'
   planForm.headCount = 1
   planForm.status = 'PLANNED'
@@ -1034,6 +1036,7 @@ function fillPlanForm(plan) {
   planForm.destination = plan.destination || ''
   planForm.startDate = plan.startDate || todayIso()
   planForm.endDate = plan.endDate || todayIso()
+  planForm.noPeriod = !plan.startDate && !plan.endDate
   planForm.homeCurrency = plan.homeCurrency || 'KRW'
   planForm.headCount = Number(plan.headCount || 1)
   planForm.status = plan.status || 'PLANNED'
@@ -1136,8 +1139,9 @@ function buildPlanPayload() {
   return {
     name: planForm.name.trim(),
     destination: planForm.destination.trim() || null,
-    startDate: planForm.startDate,
-    endDate: planForm.endDate,
+    startDate: planForm.noPeriod ? null : planForm.startDate,
+    endDate: planForm.noPeriod ? null : planForm.endDate,
+    noPeriod: planForm.noPeriod,
     homeCurrency: String(planForm.homeCurrency || 'KRW').trim().toUpperCase(),
     headCount: Number(planForm.headCount || 1),
     status: planForm.status,
@@ -1847,6 +1851,8 @@ function handleOpenTravelPlanner() {
 }
 
 async function handleSubmitPlan() {
+  if (planFormMode.value === 'edit' && planForm.noPeriod && (travelPlan.value?.startDate || travelPlan.value?.endDate)
+      && !window.confirm('기간 없음으로 저장하면 여행의 시작일과 종료일이 삭제됩니다. 장소·사진·경로에 저장된 날짜는 유지됩니다. 계속할까요?')) return
   isSubmitting.value = true
   activeSubmit.value = 'plan'
   setFeedback()
@@ -2244,8 +2250,10 @@ async function openPortfolioMemoryEditor(payload) {
           </div>
           <div class="travel-form-grid">
             <label class="field field--full"><span class="field__label">여행 이름</span><input v-model="planForm.name" type="text" placeholder="봄 일본 여행" /></label>
-            <label class="field"><span class="field__label">시작일</span><input v-model="planForm.startDate" type="date" /></label>
-            <label class="field"><span class="field__label">종료일</span><input v-model="planForm.endDate" type="date" /></label>
+            <label class="checkbox-row field--full"><input v-model="planForm.noPeriod" type="checkbox" /> <span>기간 없음</span></label>
+            <label v-if="!planForm.noPeriod" class="field"><span class="field__label">시작일</span><input v-model="planForm.startDate" type="date" /></label>
+            <label v-if="!planForm.noPeriod" class="field"><span class="field__label">종료일</span><input v-model="planForm.endDate" type="date" /></label>
+            <small v-else class="field--full">일차별 일정은 표시하지 않으며, 각 장소·사진·경로에 기록된 날짜는 유지됩니다.</small>
           </div>
           <details class="travel-setup-workflow__advanced"><summary>상세 설정 · 목적지, 인원, 통화 등</summary><div class="travel-form-grid">
             <label class="field field--full"><span class="field__label">목적지</span><input v-model="planForm.destination" type="text" placeholder="오사카, 교토, 도쿄" /></label>
@@ -2369,7 +2377,7 @@ async function openPortfolioMemoryEditor(payload) {
 
       <div v-if="travelPlan" class="travel-plan-banner" :style="{ '--travel-plan-color': travelPlan.colorHex || '#3182F6' }">
         <strong>{{ travelPlan.destination || '목적지 미정' }}</strong>
-        <span>{{ travelPlan.startDate }} - {{ travelPlan.endDate }}</span>
+        <span>{{ travelPlan.startDate ? `${travelPlan.startDate} - ${travelPlan.endDate}` : '기간 없음' }}</span>
         <small>{{ formatTravelPlanBannerMeta(travelPlan) }}</small>
       </div>
       <p v-else class="panel__empty">{{ emptyTravelPlanMessage }}</p>
@@ -2394,7 +2402,7 @@ async function openPortfolioMemoryEditor(payload) {
           >
             <strong>{{ plan.name }}</strong>
             <span>{{ plan.destination || '목적지 미정' }}</span>
-            <small>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</small>
+            <small>{{ plan.startDate ? `${formatDate(plan.startDate)} - ${formatDate(plan.endDate)}` : '기간 없음' }}</small>
             <small>{{ formatTravelPlanActivityMeta(plan) }}</small>
           </button>
         </div>
@@ -2439,8 +2447,9 @@ async function openPortfolioMemoryEditor(payload) {
           <div class="travel-form-grid">
             <label class="field field--full"><span class="field__label">여행 이름</span><input v-model="planForm.name" type="text" placeholder="봄 일본 여행" /></label>
             <label class="field field--full"><span class="field__label">목적지</span><input v-model="planForm.destination" type="text" placeholder="오사카, 교토, 도쿄" /></label>
-            <label class="field"><span class="field__label">시작일</span><input v-model="planForm.startDate" type="date" /></label>
-            <label class="field"><span class="field__label">종료일</span><input v-model="planForm.endDate" type="date" /></label>
+            <label class="checkbox-row field--full"><input v-model="planForm.noPeriod" type="checkbox" /> <span>기간 없음</span></label>
+            <label v-if="!planForm.noPeriod" class="field"><span class="field__label">시작일</span><input v-model="planForm.startDate" type="date" /></label>
+            <label v-if="!planForm.noPeriod" class="field"><span class="field__label">종료일</span><input v-model="planForm.endDate" type="date" /></label>
             <label class="field"><span class="field__label">기준 통화</span><input v-model="planForm.homeCurrency" type="text" maxlength="3" placeholder="KRW" /></label>
             <label class="field"><span class="field__label">인원 수</span><input v-model="planForm.headCount" type="number" min="1" step="1" /></label>
             <label class="field"><span class="field__label">상태</span><select v-model="planForm.status"><option v-for="option in planStatusOptions" :key="option" :value="option">{{ planStatusLabel(option) }}</option></select></label>
@@ -2461,7 +2470,7 @@ async function openPortfolioMemoryEditor(payload) {
               <thead><tr><th class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox" :checked="planTableSelection.allVisibleSelected" :indeterminate.prop="planTableSelection.someVisibleSelected" @change="planTableSelection.toggleAllVisible()" /></th><th>이름</th><th>목적지</th><th>상태</th><th>예산안</th><th>실사용</th><th>여행 기간</th></tr></thead>
               <tbody>
                 <tr v-for="plan in travelPlans" :key="plan.id" @click="handleSelectPlan(plan.id)">
-                  <td class="sheet-table__select" @click.stop><input class="sheet-table__checkbox" type="checkbox" :checked="planTableSelection.isSelected(plan)" @change="planTableSelection.toggleItem(plan)" /></td><td>{{ plan.name }}</td><td>{{ plan.destination || '-' }}</td><td>{{ planStatusLabel(plan.status) }}</td><td>{{ formatCurrency(plan.plannedTotalKrw) }}</td><td>{{ formatCurrency(plan.actualTotalKrw) }}</td><td>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</td>
+                  <td class="sheet-table__select" @click.stop><input class="sheet-table__checkbox" type="checkbox" :checked="planTableSelection.isSelected(plan)" @change="planTableSelection.toggleItem(plan)" /></td><td>{{ plan.name }}</td><td>{{ plan.destination || '-' }}</td><td>{{ planStatusLabel(plan.status) }}</td><td>{{ formatCurrency(plan.plannedTotalKrw) }}</td><td>{{ formatCurrency(plan.actualTotalKrw) }}</td><td>{{ plan.startDate ? `${formatDate(plan.startDate)} - ${formatDate(plan.endDate)}` : '기간 없음' }}</td>
                 </tr>
                 <tr v-if="!travelPlans.length"><td colspan="7" class="sheet-table__empty">등록된 여행이 아직 없습니다.</td></tr>
               </tbody>

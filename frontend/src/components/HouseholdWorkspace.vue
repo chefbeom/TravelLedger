@@ -2136,9 +2136,11 @@ function resetHouseholdTravelPlanForm() {
 
 function isDateInSelectedTravelPlan(dateValue) {
   const plan = selectedHouseholdTravelPlan.value
-  if (!plan?.startDate || !plan?.endDate || !dateValue) {
+  if (!plan || !dateValue) {
     return false
   }
+  if (!plan.startDate && !plan.endDate) return true
+  if (!plan.startDate || !plan.endDate) return false
   return String(dateValue) >= String(plan.startDate) && String(dateValue) <= String(plan.endDate)
 }
 
@@ -2147,7 +2149,7 @@ function resolveSelectedTravelEntryDate() {
   if (!plan) {
     return statsControls.anchorDate || householdAnchorDate.value || today
   }
-  const anchor = statsControls.anchorDate || householdAnchorDate.value || plan.startDate
+  const anchor = statsControls.anchorDate || householdAnchorDate.value || plan.startDate || today
   return isDateInSelectedTravelPlan(anchor) ? anchor : plan.startDate
 }
 

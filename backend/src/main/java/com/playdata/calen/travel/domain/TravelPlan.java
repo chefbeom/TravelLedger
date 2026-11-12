@@ -46,10 +46,10 @@ public class TravelPlan {
     @Column(length = 120)
     private String destination;
 
-    @Column(nullable = false)
+    @Column
     private LocalDate startDate;
 
-    @Column(nullable = false)
+    @Column
     private LocalDate endDate;
 
     @Column(nullable = false, length = 3)

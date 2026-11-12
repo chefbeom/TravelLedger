@@ -1389,7 +1389,7 @@ onMounted(() => {
                 <strong>{{ plan.planName }}</strong>
                 <small>{{ formatShareVisibilityLabel(plan) }}</small>
                 <small>{{ resolvePlanLocation(plan) }}</small>
-                <small>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</small>
+                <small>{{ plan.startDate ? `${formatDate(plan.startDate)} - ${formatDate(plan.endDate)}` : '기간 없음' }}</small>
                 <small v-if="isPlanBookmarked(plan)">북마크 저장됨</small>
               </div>
               <div class="travel-public-trip-card__stats">

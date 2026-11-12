@@ -474,7 +474,7 @@ function startTravelEntryFromSelectedDate() {
           >
             <option value="">연결하지 않고 보기</option>
             <option v-for="plan in travelPlans" :key="plan.id" :value="String(plan.id)">
-              {{ plan.name }} / {{ plan.destination || '목적지 미정' }} / {{ plan.startDate }} - {{ plan.endDate }}
+              {{ plan.name }} / {{ plan.destination || '목적지 미정' }} / {{ plan.startDate ? `${plan.startDate} - ${plan.endDate}` : '기간 없음' }}
             </option>
           </select>
         </label>

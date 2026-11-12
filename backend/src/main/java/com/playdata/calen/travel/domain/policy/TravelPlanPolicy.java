@@ -10,7 +10,9 @@ public final class TravelPlanPolicy {
     private TravelPlanPolicy() {}
 
     public static Value prepare(Draft draft) {
-        if (draft.startDate().isAfter(draft.endDate()))
+        if ((draft.startDate() == null) != (draft.endDate() == null))
+            throw new BadRequestException("시작일과 종료일을 모두 입력하거나 기간 없음을 선택해 주세요.");
+        if (draft.startDate() != null && draft.startDate().isAfter(draft.endDate()))
             throw new BadRequestException("Travel start date cannot be after end date.");
         return new Value(draft.name().trim(), trimToNull(draft.destination()), draft.startDate(), draft.endDate(),
                 TravelMoneyPolicy.currency(draft.homeCurrency()), draft.headCount(), status(draft.status()), color(draft.colorHex()), trimToNull(draft.memo()));

@@ -136,6 +136,7 @@ const memoryMediaItems = computed(() =>
   (props.travelPlan?.mediaItems ?? []).filter((item) => item.recordType === 'MEMORY' && item.mediaType === 'PHOTO'),
 )
 const tripDays = computed(() => {
+  if (!props.travelPlan?.startDate && !props.travelPlan?.endDate) return []
   const startText = props.travelPlan?.startDate || todayIso()
   const endText = props.travelPlan?.endDate || startText
   const start = new Date(`${startText}T00:00:00`)
@@ -1076,7 +1077,7 @@ function submitMemory() {
         </div>
       </div>
 
-      <div class="travel-day-tabs">
+      <div v-if="tripDays.length" class="travel-day-tabs">
         <button
           class="travel-day-tabs__button"
           :class="{ 'is-active': !activeDayDate }"

@@ -74,6 +74,7 @@ const appliedRouteFocusToken = ref('')
 
 const routeSegments = computed(() => props.travelPlan?.routeSegments ?? [])
 const tripDays = computed(() => {
+  if (!props.travelPlan?.startDate && !props.travelPlan?.endDate) return []
   const startText = props.travelPlan?.startDate || todayIso()
   const endText = props.travelPlan?.endDate || startText
   const start = new Date(`${startText}T00:00:00`)
@@ -386,7 +387,7 @@ watch(
   tripDays,
   (days) => {
     if (activeDayDate.value && !days.some((day) => day.date === activeDayDate.value)) {
-      activeDayDate.value = days[0]?.date || props.travelPlan?.startDate || todayIso()
+      activeDayDate.value = days[0]?.date || ''
     }
     if (!editingRouteId.value || activeDayDate.value) {
       draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
@@ -437,8 +438,8 @@ watch(
 )
 
 function initializeDaySelection() {
-  activeDayDate.value = tripDays.value[0]?.date || props.travelPlan?.startDate || todayIso()
-  draft.routeDate = activeDayDate.value
+  activeDayDate.value = tripDays.value[0]?.date || ''
+  draft.routeDate = activeDayDate.value || todayIso()
   highlightedDraftIndex.value = -1
   focusedRouteId.value = ''
 }
@@ -1114,12 +1115,12 @@ function routeSummary(route) {
       <div class="panel__header">
         <div>
           <h2>이동 경로 작성</h2>
-          <p>여행 기간에 맞게 일차 버튼이 자동으로 생기고, 선택한 날짜 기준으로 경로를 만들 수 있습니다.</p>
+          <p>{{ tripDays.length ? '여행 기간에 맞게 일차 버튼이 자동으로 생기고, 선택한 날짜 기준으로 경로를 만들 수 있습니다.' : '기간 없이 전체 경로를 보며 각 경로의 날짜를 지정할 수 있습니다.' }}</p>
         </div>
         <span class="panel__badge">{{ routeSegments.length }}개 경로</span>
       </div>
 
-      <div class="travel-day-tabs">
+      <div v-if="tripDays.length" class="travel-day-tabs">
         <button
           class="travel-day-tabs__button"
           :class="{ 'is-active': !activeDayDate }"

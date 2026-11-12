@@ -54,6 +54,7 @@ Updated: 2026-10-11
 | `V20261030_033_2__ledger_split_installments.sql` | Linked split payments and informational installment metadata. |
 | `V20261111_058__record_map_undated_photos.sql` | Allows place photo groups without a visit date, preserving existing records. |
 | `V20261111_059__ledger_installment_interest_type.sql` | Adds nullable interest classification for card installments without changing existing records. |
+| `V20261112_060__travel_plan_optional_period.sql` | Allows explicitly periodless travel plans; preserves existing dates and all related records. |
 
 ## Legacy Schema Updater Inventory
 
@@ -129,6 +130,7 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 | `V20261030_033_2__ledger_split_installments.sql` | Verify split payments and installment metadata on staging MariaDB. | Preserve linked transactions and installment metadata during rollback. | No legacy updater retired. |
 | `V20261111_058__record_map_undated_photos.sql` | H2 migration and feature tests passed; MariaDB/Flyway rehearsal remains required. Apply before enabling undated place-photo saves. | Preserve visits and photos; older app versions may not display newly undated photos. | Relaxes an existing column; no legacy updater retired. |
 | `V20261111_059__ledger_installment_interest_type.sql` | H2 integration tests passed; MariaDB/Flyway rehearsal remains required. Check the target's migration history before rollout. | Preserve existing transactions and interest metadata; legacy installments remain unclassified. | Adds a nullable column; no legacy updater retired. |
+| `V20261112_060__travel_plan_optional_period.sql` | H2 migration and API tests passed; MariaDB/Flyway rehearsal remains required. | Preserve travel plans, dates and records; an older application may not handle newly periodless plans. | Relaxes two date columns; no legacy updater retired. |
 
 ## Operating Rules
 

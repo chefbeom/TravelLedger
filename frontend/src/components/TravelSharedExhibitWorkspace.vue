@@ -129,7 +129,7 @@ function goToExhibitPage(page) {
         >
           <strong>{{ item.planName }}</strong>
           <span>{{ item.destination || '목적지 미정' }}</span>
-          <small>{{ formatDate(item.startDate) }} - {{ formatDate(item.endDate) }}</small>
+          <small>{{ item.startDate ? `${formatDate(item.startDate)} - ${formatDate(item.endDate)}` : '기간 없음' }}</small>
           <small>{{ item.sharedByDisplayName }} ({{ item.sharedByLoginId }}) / {{ statusLabel(item.status) }}</small>
         </button>
       </div>

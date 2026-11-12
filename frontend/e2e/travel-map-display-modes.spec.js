@@ -69,13 +69,45 @@ async function mountMap(page, kind = 'panel', day = false) {
 
 const markerSelector = '.leaflet-marker-pane .leaflet-marker-icon'
 
-test('travel list selects a trip, searches places and focuses the selected map item', async ({ page }, testInfo) => {
+test('periodless route and overview show all saved dates without generated day tabs', async ({ page }) => {
+  const fixture = await mockMap(page)
+  await page.evaluate(async () => {
+    const { createApp } = await import('/node_modules/.vite/deps/vue.js')
+    const plan = { id: 80, name: '기간 없는 계획', startDate: null, endDate: null, colorHex: '#3182F6',
+      memoryRecords: [], mediaItems: [], routeSegments: [
+        { id: 1, title: '첫 번째 경로', routeDate: '2025-01-01', distanceKm: 1, points: [] },
+        { id: 2, title: '두 번째 경로', routeDate: '2026-02-02', distanceKm: 2, points: [] },
+      ] }
+    document.querySelector('#app').style.display = 'none'
+    for (const name of ['TravelRouteWorkspace', 'TravelOverviewWorkspace']) {
+      const { default: Component } = await import(`/src/components/${name}.vue`)
+      const host = document.createElement('section')
+      host.className = 'app-shell'
+      host.id = name
+      document.body.appendChild(host)
+      createApp(Component, { travelPlan: plan }).mount(host)
+    }
+  })
+  const routes = page.locator('#TravelRouteWorkspace')
+  const overview = page.locator('#TravelOverviewWorkspace')
+  await expect(routes.getByText('선택 범위 경로 2개')).toBeVisible()
+  await expect(routes.locator('.travel-day-tabs')).toHaveCount(0)
+  await expect(overview.getByRole('heading', { name: '일차별 요약' })).toHaveCount(0)
+  await expect(overview.getByText('첫 번째 경로').first()).toBeVisible()
+  await expect(overview.getByText('두 번째 경로').first()).toBeVisible()
+  expect(fixture.errors).toEqual([])
+})
+
+test('travel photo map uses the full workbench without a place list', async ({ page }, testInfo) => {
   const fixture = await mountMap(page, 'private')
   const select = page.locator('.travel-map-trip-select select')
   await select.selectOption('1')
-  const list = page.getByRole('complementary', { name: '여행 장소 목록' })
-  const toggle = list.getByRole('button', { name: '목록 열기' })
-  if (await toggle.isVisible()) await toggle.click()
+  await expect(page.getByRole('complementary', { name: '여행 장소 목록' })).toHaveCount(0)
+  const geometry = await page.locator('.travel-map-workbench').evaluate(node => {
+    const area = node.getBoundingClientRect(), map = node.querySelector('.travel-map').getBoundingClientRect()
+    return { area: area.width, map: map.width }
+  })
+  expect(Math.abs(geometry.area - geometry.map)).toBeLessThan(2)
   const metrics = await page.locator('.travel-map-workbench .travel-map__toolbar-group--navigation').evaluate(node => {
     const parent = node.getBoundingClientRect()
     const workbench = node.closest('.travel-map-workbench').getBoundingClientRect()
@@ -90,14 +122,8 @@ test('travel list selects a trip, searches places and focuses the selected map i
     expect(button.right, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.parent.right + 1)
   }
   await page.locator('.travel-map-workbench').screenshot({ path: testInfo.outputPath('travel-map-workbench.png') })
-  await list.getByLabel('장소 검색').fill('Place 4')
-  await expect(list.locator('.travel-map-workbench__item')).toHaveCount(1)
-  await list.getByRole('button', { name: /Place 4/ }).click()
-  await expect.poll(async () => Number(await page.locator('.travel-cluster-map__zoom').first().textContent())).toBeGreaterThanOrEqual(15)
-  if (await toggle.isVisible()) await toggle.click()
-  await list.getByLabel('장소 검색').clear()
   await select.selectOption('2')
-  await expect(list).toContainText('이 여행에 표시할 장소가 없습니다')
+  await expect(select).toHaveValue('2')
   expect(fixture.errors).toEqual([])
 })
 

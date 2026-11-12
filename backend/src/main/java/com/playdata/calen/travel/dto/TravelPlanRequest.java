@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.AssertTrue;
 import java.time.LocalDate;
 
 public record TravelPlanRequest(
@@ -15,10 +16,8 @@ public record TravelPlanRequest(
         @Size(max = 120, message = "Destination must be 120 characters or fewer.")
         String destination,
 
-        @NotNull(message = "Select a travel start date.")
         LocalDate startDate,
 
-        @NotNull(message = "Select a travel end date.")
         LocalDate endDate,
 
         @NotBlank(message = "Enter the home currency.")
@@ -36,6 +35,16 @@ public record TravelPlanRequest(
         String colorHex,
 
         @Size(max = 500, message = "Memo must be 500 characters or fewer.")
-        String memo
+        String memo,
+        Boolean noPeriod
 ) {
+    public TravelPlanRequest(String name, String destination, LocalDate startDate, LocalDate endDate, String homeCurrency,
+            Integer headCount, String status, String colorHex, String memo) {
+        this(name, destination, startDate, endDate, homeCurrency, headCount, status, colorHex, memo, false);
+    }
+
+    @AssertTrue(message = "여행 기간을 입력하거나 기간 없음을 선택해 주세요.")
+    public boolean isPeriodValid() {
+        return Boolean.TRUE.equals(noPeriod) ? startDate == null && endDate == null : startDate != null && endDate != null;
+    }
 }

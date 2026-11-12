@@ -5,6 +5,7 @@ import 'gridstack/dist/gridstack.min.css'
 import { formatCompactNumber } from '../lib/format'
 import { resolveRange, shiftRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
+import { groupLedgerSheetEntries } from '../lib/ledgerSheetGroups'
 import { fetchLayoutSetting, fetchHouseholdPersonalization, saveHouseholdPersonalization } from '../lib/api'
 import { clonePersonalization, personalizationChanged, packDashboardPanels } from '../lib/calendarPersonalization'
 import { widgetFrame, reorderItem } from '../lib/calendarDirectEditing'
@@ -1126,14 +1127,15 @@ const normalizedSelectedDateEntries = computed(() =>
     visibleMemo: stripImportedMemo(entry.memo),
   })),
 )
+const groupedSelectedDateEntries = computed(() => groupLedgerSheetEntries(normalizedSelectedDateEntries.value))
 const selectedDayEntryPageCount = computed(() =>
-  Math.max(Math.ceil(normalizedSelectedDateEntries.value.length / SELECTED_DAY_ENTRY_PAGE_SIZE), 1),
+  Math.max(Math.ceil(groupedSelectedDateEntries.value.length / SELECTED_DAY_ENTRY_PAGE_SIZE), 1),
 )
-const pagedNormalizedSelectedDateEntries = computed(() => {
+const pagedSelectedDateRows = computed(() => {
   const start = selectedDayEntryPage.value * SELECTED_DAY_ENTRY_PAGE_SIZE
-  return normalizedSelectedDateEntries.value.slice(start, start + SELECTED_DAY_ENTRY_PAGE_SIZE)
+  return groupedSelectedDateEntries.value.slice(start, start + SELECTED_DAY_ENTRY_PAGE_SIZE)
 })
-const selectableDayEntries = computed(() => pagedNormalizedSelectedDateEntries.value.filter(
+const selectableDayEntries = computed(() => pagedSelectedDateRows.value.flatMap(row => row.parts).filter(
   (entry) => !entry.hasAdjustmentHistory && !entry.adjustmentType,
 ))
 const selectedDayEntrySelection = useTableSelection(selectableDayEntries)
@@ -1160,7 +1162,9 @@ const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value
 const hasSelectedForeignEntries = computed(() =>
   normalizedSelectedDateEntries.value.some((entry) => Boolean(entry.foreignCurrencyCode && entry.foreignAmount != null)),
 )
-const selectedDateCountLabel = computed(() => `${normalizedSelectedDateEntries.value.length}건`)
+const selectedDateCountLabel = computed(() => groupedSelectedDateEntries.value.length === normalizedSelectedDateEntries.value.length
+  ? `${groupedSelectedDateEntries.value.length}건`
+  : `${groupedSelectedDateEntries.value.length}건 · 세부 거래 ${normalizedSelectedDateEntries.value.length}건`)
 const formattedAmountInput = computed(() => {
   if (!props.amountInput) {
     return ''
@@ -1448,7 +1452,7 @@ watch(selectedDayEntryFilter, () => {
 })
 
 watch(
-  () => normalizedSelectedDateEntries.value.length,
+  () => groupedSelectedDateEntries.value.length,
   () => {
     if (selectedDayEntryPage.value >= selectedDayEntryPageCount.value) {
       selectedDayEntryPage.value = Math.max(selectedDayEntryPageCount.value - 1, 0)
@@ -5198,8 +5202,8 @@ defineExpose({
                   :can-move-to-previous-day="!entryDateMin || selectedDate > entryDateMin"
                   :can-move-to-next-day="!entryDateMax || selectedDate < entryDateMax"
                   :count-label="selectedDateCountLabel"
-                  :entries="pagedNormalizedSelectedDateEntries"
-                  :total-entry-count="normalizedSelectedDateEntries.length"
+                  :entries="pagedSelectedDateRows"
+                  :total-entry-count="groupedSelectedDateEntries.length"
                   :has-memo-column="hasSelectedMemoColumn"
                   :has-foreign-entries="hasSelectedForeignEntries"
                   :amount-mode="selectedDayAmountMode"
@@ -5247,8 +5251,8 @@ defineExpose({
               :can-move-to-previous-day="!entryDateMin || selectedDate > entryDateMin"
               :can-move-to-next-day="!entryDateMax || selectedDate < entryDateMax"
               :count-label="selectedDateCountLabel"
-              :entries="pagedNormalizedSelectedDateEntries"
-              :total-entry-count="normalizedSelectedDateEntries.length"
+              :entries="pagedSelectedDateRows"
+              :total-entry-count="groupedSelectedDateEntries.length"
               :has-memo-column="hasSelectedMemoColumn"
               :has-foreign-entries="hasSelectedForeignEntries"
               :amount-mode="selectedDayAmountMode"

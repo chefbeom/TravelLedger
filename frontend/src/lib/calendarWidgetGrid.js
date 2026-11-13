@@ -3,6 +3,10 @@ import { widgetFrame } from './calendarDirectEditing.js'
 export const WIDGET_GRID_COLUMNS = 9
 export const WIDGET_GRID_MAX_ROWS = 12
 export const WIDGET_GRID_GAP = 8
+// Legacy pixel dimensions have no device-independent grid coordinates. Resolve
+// them against one reference canvas instead of the current device width.
+const LEGACY_REFERENCE_WIDTH = 1400
+const LEGACY_REFERENCE_ROW_HEIGHT = 112
 
 const dimension = (value, min, max) => Number.isFinite(Number(value)) && Number(value) > 0 ? Math.max(min, Math.min(max, Math.round(Number(value)))) : 0
 
@@ -32,13 +36,13 @@ export function resizedWidgetGrid(origin, dx, dy, availableWidth, rowHeight, cha
 }
 // Legacy pixels remain stored, but their rendered frame must obey the very same
 // cells as explicitly configured cards. Reading never migrates account data.
-export function resolvedWidgetGrid(config, availableWidth, rowHeight) {
+export function resolvedWidgetGrid(config) {
   const saved = widgetGridSize(config), legacy = widgetFrame(config)
   const width = legacy.cardWidth || (config.kind === 'MONTHLY_CUMULATIVE_CHART'
     ? 480 + Math.max(0, (Number(config.layoutW) || 2) - 2) * 120
     : { SMALL: 240, MEDIUM: 260, LARGE: 360 }[config.displaySize] || 260)
   const inferred = resizedWidgetGrid({ width, height: legacy.cardHeight || 160 }, 0, 0,
-    Number(availableWidth) > 0 ? availableWidth : 1200, Number(rowHeight) > 0 ? rowHeight : 112,
+    LEGACY_REFERENCE_WIDTH, LEGACY_REFERENCE_ROW_HEIGHT,
     config.kind === 'MONTHLY_CUMULATIVE_CHART')
   return { cardColumns: saved.cardColumns || inferred.cardColumns, cardRows: saved.cardRows || inferred.cardRows }
 }

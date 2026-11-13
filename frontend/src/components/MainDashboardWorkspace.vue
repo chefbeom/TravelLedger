@@ -19,6 +19,7 @@ import {
   saveLayoutSetting,
 } from '../lib/api'
 import { DASHBOARD_GRID_COLUMNS } from '../features/palette/types'
+import { normalizeCompactLayouts } from '../lib/mainPaletteResponsive'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
 import { formatDateTime } from '../lib/uiFormat'
@@ -197,6 +198,7 @@ const monthCompareRows = ref([])
 const categories = ref([])
 const paymentMethods = ref([])
 const palettes = ref([])
+const compactLayouts = ref({})
 const isEditMode = ref(false)
 const toolsOpen = ref(false)
 const selectedTemplateId = ref('household-month-expense')
@@ -225,6 +227,10 @@ let summaryLoadSequence = 0
 let paletteRemoteHydrationSequence = 0
 let paletteRemoteSaveTimer = 0
 let pendingPaletteRemotePayload = null
+let pendingPaletteRemoteSequence = 0
+let paletteRemoteWriteChain = Promise.resolve()
+let paletteMutationSequence = 0
+let activeGridColumns = 0
 let paletteChangedDuringRemoteHydration = false
 let photoFrameClockTimer = 0
 const photoFrameClock = ref(Date.now())
@@ -268,7 +274,7 @@ const availablePaletteTemplates = computed(() => (
 const layoutKey = computed(() =>
   visiblePalettes.value
     .map((palette) => `${palette.id}:${palette.position?.x ?? 0}:${palette.position?.y ?? 0}:${palette.size}:${palette.visible}`)
-    .join('|'),
+    .join('|') + JSON.stringify(compactLayouts.value),
 )
 const guideRowCount = computed(() => Math.max(
   1,
@@ -1073,16 +1079,18 @@ function applyPalettePayload(payload) {
   }
 
   palettes.value = normalizeMainPalettes(payload.palettes)
+  compactLayouts.value = normalizeCompactLayouts(payload.compactLayouts)
   return true
 }
 
 function palettePayload() {
-  return { palettes: clone(palettes.value) }
+  return { palettes: clone(palettes.value), compactLayouts: clone(compactLayouts.value) }
 }
 
 function hydratePalettes() {
   paletteRemoteHydrationSequence += 1
   paletteChangedDuringRemoteHydration = false
+  compactLayouts.value = {}
   if (typeof window === 'undefined') {
     palettes.value = normalizeMainPalettes(clone(defaultPalettes))
     return
@@ -1099,6 +1107,7 @@ function hydratePalettes() {
     }
     const parsed = JSON.parse(raw ?? legacyRaw)
     const restoredPalettes = Array.isArray(parsed?.palettes) ? parsed.palettes : defaultPalettes
+    compactLayouts.value = normalizeCompactLayouts(parsed?.compactLayouts)
     palettes.value = legacyRaw && isLegacyMainDashboardDefaultLayout(restoredPalettes)
       ? normalizeMainPalettes(clone(RECOMMENDED_MAIN_DASHBOARD_PRESET.palettes))
       : normalizeMainPalettes(restoredPalettes)
@@ -1113,16 +1122,21 @@ function hydratePalettes() {
 
 function persistPalettesLocal() {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(storageKey.value, JSON.stringify({ palettes: palettes.value }))
+  window.localStorage.setItem(storageKey.value, JSON.stringify(palettePayload()))
 }
 
 function schedulePaletteRemotePersist(payload = palettePayload()) {
   if (typeof window === 'undefined') return
+  // Preserve edits to different responsive profiles made before the debounce fires.
+  if (pendingPaletteRemotePayload && pendingPaletteRemotePayload._layoutSection !== payload._layoutSection) {
+    savePaletteRemoteNow()
+  }
   if (paletteRemoteSaveTimer) {
     window.clearTimeout(paletteRemoteSaveTimer)
   }
 
   pendingPaletteRemotePayload = clone(payload)
+  pendingPaletteRemoteSequence = paletteMutationSequence
   paletteRemoteSaveTimer = window.setTimeout(() => {
     savePaletteRemoteNow()
   }, REMOTE_LAYOUT_SAVE_DELAY_MS)
@@ -1139,15 +1153,22 @@ function savePaletteRemoteNow(payload = pendingPaletteRemotePayload) {
   }
 
   const nextPayload = clone(payload)
+  const mutationAtSend = payload === pendingPaletteRemotePayload ? pendingPaletteRemoteSequence : paletteMutationSequence
   pendingPaletteRemotePayload = null
-  return saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, nextPayload, MAIN_DASHBOARD_LAYOUT_VERSION).catch(() => {
-    // Local cache keeps the user's layout if the backend is temporarily unavailable.
+  // Do not let a slow earlier request overwrite a later edit from this tab.
+  const write = paletteRemoteWriteChain.then(() => saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, nextPayload, MAIN_DASHBOARD_LAYOUT_VERSION))
+  paletteRemoteWriteChain = write.catch(() => {})
+  return write.then(response => {
+    if (mutationAtSend === paletteMutationSequence && applyPalettePayload(response?.payload)) persistPalettesLocal()
+  }).catch(() => {
+    errorMessage.value = '대시보드 배치를 서버에 저장하지 못했습니다. 이 브라우저의 임시 설정을 확인한 뒤 다시 저장해 주세요.'
   })
 }
 
-function persistPalettes() {
+function persistPalettes(section = 'desktop') {
   paletteChangedDuringRemoteHydration = true
-  const payload = palettePayload()
+  paletteMutationSequence += 1
+  const payload = { ...palettePayload(), _layoutSection: String(section) }
   persistPalettesLocal()
   schedulePaletteRemotePersist(payload)
 }
@@ -1165,21 +1186,21 @@ async function hydrateRemotePalettes(sequence, fallbackPayload) {
       if (remoteVersion < MAIN_DASHBOARD_LAYOUT_VERSION && isLegacyMainDashboardDefaultLayout(remotePalettes)) {
         palettes.value = normalizeMainPalettes(clone(RECOMMENDED_MAIN_DASHBOARD_PRESET.palettes))
         persistPalettesLocal()
-        await saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, palettePayload(), MAIN_DASHBOARD_LAYOUT_VERSION)
+        await savePaletteRemoteNow({ ...palettePayload(), _layoutSection: 'desktop' })
         return
       }
 
       if (applyPalettePayload(response.payload)) {
         persistPalettesLocal()
         if (remoteVersion < MAIN_DASHBOARD_LAYOUT_VERSION) {
-          await saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, palettePayload(), MAIN_DASHBOARD_LAYOUT_VERSION)
+          await savePaletteRemoteNow({ ...palettePayload(), _layoutSection: 'desktop' })
         }
         return
       }
     }
 
     if (fallbackPayload) {
-      await saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, fallbackPayload, MAIN_DASHBOARD_LAYOUT_VERSION)
+      await savePaletteRemoteNow({ ...fallbackPayload, _layoutSection: 'desktop' })
     }
   } catch {
     // Remote layout sync is progressive; the cached layout is still usable.
@@ -1347,7 +1368,11 @@ function compareMax(rows) {
 function updateCellHeight() {
   const width = gridElement.value?.clientWidth || gridElement.value?.parentElement?.clientWidth || 0
   if (!width || !grid) return
+  // GridStack observes its own width asynchronously. Bring the breakpoint up to
+  // date before choosing which stored profile to load in our parent observer.
+  grid.checkDynamicColumn()
   const columns = Math.max(1, Number(grid.getColumn?.() || DASHBOARD_GRID_COLUMNS))
+  applyResponsiveGridLayout(columns)
   const rawCellWidth = (
     width
     - (MAIN_DASHBOARD_GRID_MARGIN * 2)
@@ -1359,6 +1384,30 @@ function updateCellHeight() {
   const nextHeight = Math.round(Math.max(96, Math.min(224, rawCellWidth * 0.96)))
   cellHeight.value = nextHeight
   grid.cellHeight(nextHeight)
+}
+
+function applyResponsiveGridLayout(columns) {
+  if (!grid || columns === activeGridColumns) return
+  const previous = activeGridColumns
+  activeGridColumns = columns
+  if (columns === DASHBOARD_GRID_COLUMNS && previous && previous !== DASHBOARD_GRID_COLUMNS) {
+    grid.load(visiblePalettes.value.map(palette => ({ id: palette.id, ...gridAttrs(palette) })), false)
+  } else if (columns !== DASHBOARD_GRID_COLUMNS && compactLayouts.value[String(columns)]?.length) {
+    grid.load(clone(compactLayouts.value[String(columns)]), false)
+  }
+}
+
+function saveCompactGridSnapshot() {
+  const columns = Number(grid?.getColumn?.())
+  if (!grid || ![1, 3].includes(columns)) return false
+  const snapshot = (grid.engine?.nodes ?? []).map(node => ({
+    id: node.id || node.el?.getAttribute('data-palette-id'), x: node.x, y: node.y, w: node.w, h: node.h,
+  }))
+  const normalized = normalizeCompactLayouts({ [columns]: snapshot })[String(columns)]
+  if (!normalized?.length) return true
+  compactLayouts.value = { ...compactLayouts.value, [columns]: normalized }
+  persistPalettes(columns)
+  return true
 }
 
 function readGridSnapshot() {
@@ -1381,6 +1430,7 @@ function handleDragStart(event, element) {
 
 function handleDragStop(event, element) {
   element?.classList.remove('is-main-palette-dragging')
+  if (saveCompactGridSnapshot()) return
   const movedId = element?.getAttribute('gs-id') || element?.getAttribute('data-palette-id')
   const node = element?.gridstackNode
   const before = dragStartLayout.get(String(movedId))
@@ -1411,6 +1461,7 @@ function handleResizeStart(event, element) {
 
 function handleResizeStop(event, element) {
   element?.classList.remove('is-main-palette-resizing')
+  if (saveCompactGridSnapshot()) return
   applyLayoutPatches(readGridSnapshot())
 }
 
@@ -1422,6 +1473,7 @@ function destroyGrid() {
   grid.off('resizestop')
   grid.destroy(false)
   grid = null
+  activeGridColumns = 0
 }
 
 function initGrid() {
@@ -2092,6 +2144,7 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else>
+        <small>팔레트 위치와 크기는 PC·태블릿·휴대폰 화면별로 저장됩니다.</small>
         <label class="main-dashboard__field">
           <span>팔레트 추가</span>
           <select v-model="selectedTemplateId">

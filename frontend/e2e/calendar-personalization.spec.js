@@ -44,8 +44,14 @@ test('save commits widget, input visibility, defaults and layout in one request 
   await open(page)
   await tab(page, '집계 위젯').click()
   await dialog(page).getByLabel('위젯 이름', { exact: true }).fill('나의 합계')
-  await dialog(page).getByRole('combobox', { name: '카드 너비 (칸)', exact: true }).selectOption('3')
-  await dialog(page).getByRole('combobox', { name: '카드 높이 (칸)', exact: true }).selectOption('2')
+  const mobile = page.viewportSize().width < 760
+  if (mobile) {
+    await expect(dialog(page).getByRole('combobox', { name: '카드 너비 (칸)', exact: true })).toBeDisabled()
+    await dialog(page).getByRole('combobox', { name: '모바일 카드 높이 (칸)', exact: true }).selectOption('3')
+  } else {
+    await dialog(page).getByRole('combobox', { name: '카드 너비 (칸)', exact: true }).selectOption('3')
+    await dialog(page).getByRole('combobox', { name: '카드 높이 (칸)', exact: true }).selectOption('2')
+  }
   await tab(page, '거래 입력').click()
   await dialog(page).getByRole('switch', { name: '거래 이미지 자동입력 표시', exact: false }).uncheck()
   await tab(page, '달력 표시').click()
@@ -55,7 +61,12 @@ test('save commits widget, input visibility, defaults and layout in one request 
   await dialog(page).getByRole('button', { name: '변경사항 저장', exact: true }).click()
   await expect(dialog(page)).toHaveCount(0)
   expect(state.writes).toHaveLength(1)
-  expect(state.writes[0].widgets[0]).toMatchObject({ title: '나의 합계', cardColumns: 3, cardRows: 2 })
+  expect(state.writes[0].widgets[0].title).toBe('나의 합계')
+  if (mobile) {
+    expect(state.writes[0].layout.find(item => item.id === 'aggregate').mobileWidgetRows[0]).toBe(3)
+    expect(state.writes[0].widgets[0].cardColumns || 0).toBe(0)
+    expect(state.writes[0].widgets[0].cardRows || 0).toBe(0)
+  } else expect(state.writes[0].widgets[0]).toMatchObject({ cardColumns: 3, cardRows: 2 })
   expect(state.writes[0].preferences).toMatchObject({ receiptOcrPanelEnabled: false, highlightMode: 'income' })
   expect(state.writes[0].layout.find(item => item.id === 'calendar').w).toBe(5)
   await page.reload()
@@ -160,7 +171,8 @@ test('common preview follows text styles, visibility and the existing graph opti
   await expect(page.locator('.household-aggregate-card[data-aggregate-index="0"]')).toHaveCount(0)
   await dialog(page).getByRole('combobox', { name: '위젯 유형', exact: true }).selectOption('MONTHLY_CUMULATIVE_CHART')
   await expect(preview.getByRole('img', { name: '선택한 누적 그래프 미리보기' })).toBeVisible()
-  await dialog(page).getByRole('combobox', { name: '카드 너비 (칸)', exact: true }).selectOption('3')
+  if (page.viewportSize().width < 760) await expect(dialog(page).getByRole('combobox', { name: '카드 너비 (칸)', exact: true })).toBeDisabled()
+  else await dialog(page).getByRole('combobox', { name: '카드 너비 (칸)', exact: true }).selectOption('3')
   await dialog(page).getByRole('checkbox', { name: '지난 기간 비교', exact: true }).check()
   await expect(preview.locator('.personalization-preview-chart__previous')).toHaveCount(2)
   page.once('dialog', prompt => prompt.accept())

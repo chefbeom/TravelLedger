@@ -7,7 +7,7 @@ import { resolveRange, shiftRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
 import { groupLedgerSheetEntries } from '../lib/ledgerSheetGroups'
 import { fetchLayoutSetting, fetchHouseholdPersonalization, saveHouseholdPersonalization } from '../lib/api'
-import { clonePersonalization, personalizationChanged, packDashboardPanels } from '../lib/calendarPersonalization'
+import { clonePersonalization, personalizationChanged, packDashboardPanels, orderedMobilePanels, reorderMobilePanels, normalizeMobileWidgetOrder, normalizeMobileWidgetRows, reorderMobileWidgets, remapMobileWidgets } from '../lib/calendarPersonalization'
 import { widgetFrame, reorderItem } from '../lib/calendarDirectEditing'
 import { widgetGridSize, widgetGridStyle, resizedWidgetGrid, resolvedWidgetGrid, packWidgetGrid } from '../lib/calendarWidgetGrid'
 import { aggregateRequiredPanelRows, aggregateWidgetCellHeight } from '../lib/calendarAggregateLayout'
@@ -1265,10 +1265,18 @@ const hasReceiptAnalysis = computed(() => Boolean(
 ))
 
 const personalizationCards = computed(() => normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map((config, index) => buildAggregateCard(config, index)))
-const aggregateCards = computed(() => personalizationCards.value.filter(card => card.config.kind !== 'NONE' && !card.config.hidden))
+const mobileWidgetSettings = computed(() => calendarPanelLayout.value.find(panel => panel.id === 'aggregate') || {})
+const mobileWidgetOrder = computed(() => normalizeMobileWidgetOrder(mobileWidgetSettings.value.mobileWidgetOrder) || Array.from({ length: aggregateWidgetMaxCount }, (_, index) => index))
+const mobileWidgetRows = computed(() => normalizeMobileWidgetRows(mobileWidgetSettings.value.mobileWidgetRows) || Array(aggregateWidgetMaxCount).fill(0))
+const aggregateCards = computed(() => {
+  const cards = personalizationCards.value.filter(card => card.config.kind !== 'NONE' && !card.config.hidden)
+  return isMobileLayoutMode.value ? cards.sort((a, b) => mobileWidgetOrder.value.indexOf(a.index) - mobileWidgetOrder.value.indexOf(b.index)) : cards
+})
 const aggregateGridFrames = computed(() => new Map(aggregateCards.value.map(card => {
   const preview = directGesture.value?.type === 'widget-resize' && directGesture.value.index === card.index ? directGesture.value.size : null
   const frame = resolvedWidgetGrid({ ...card.config, ...preview }, aggregateGridWidth.value, layoutCellHeight.value)
+  if (isMobileLayoutMode.value && mobileWidgetRows.value[card.index]) frame.cardRows = mobileWidgetRows.value[card.index]
+  if (isMobileLayoutMode.value && preview) frame.cardRows = preview.cardRows
   // Keep the saved size unchanged, but give an individual card enough room for
   // its configured text and details when the viewport is too narrow.
   return [card.index, { ...frame, cardRows: Math.max(frame.cardRows, aggregateContentMinRows.value[card.index] || 1) }]
@@ -1297,6 +1305,7 @@ const aggregateDisplayCardCount = computed(() => {
 const aggregateBadgeLabel = computed(() => (
   `${aggregateDisplayCardCount.value}/${aggregateWidgetMaxCount}개`
 ))
+const mobilePanelOrder = computed(() => new Map(orderedMobilePanels(calendarPanelLayout.value).map((panel, index) => [panel.id, index])))
 
 
 const calendarLayoutPanels = computed(() => {
@@ -1316,16 +1325,18 @@ const calendarLayoutPanels = computed(() => {
   const query = panels.find(panel => panel.id === CALENDAR_QUERY_ITEM_ID)
   const expanded = aggregate && aggregateVisiblePanelRows.value > aggregate.h
   const projected = panels.map(panel => {
-    if (panel.id === CALENDAR_QUERY_ITEM_ID) return { ...panel, h: Math.max(panel.h, calendarQueryLayoutRows.value) }
-    if (panel.id === 'aggregate') return { ...panel, h: Math.max(panel.h, aggregateVisiblePanelRows.value) }
+    const height = isMobileLayoutMode.value && Number.isInteger(panel.mobileHeight) ? panel.mobileHeight : panel.h
+    if (panel.id === CALENDAR_QUERY_ITEM_ID) return { ...panel, h: Math.max(height, calendarQueryLayoutRows.value) }
+    if (panel.id === 'aggregate') return { ...panel, h: Math.max(height, aggregateVisiblePanelRows.value) }
     if (panel.id === 'quick-entry') return {
       ...panel,
-      h: Math.max(panel.h, quickEntryRequiredRows.value),
+      h: Math.max(height, quickEntryRequiredRows.value),
       minH: Math.max(panel.minH, quickEntryRequiredRows.value),
       maxH: Math.max(panel.maxH, quickEntryRequiredRows.value),
     }
-    return panel
+    return { ...panel, h: height }
   })
+  if (isMobileLayoutMode.value) return projected
   return packDashboardPanels(projected, expanded && (!query || aggregate.y < query.y) ? 'aggregate' : CALENDAR_QUERY_ITEM_ID,
     { maxPanelRows: Math.max(aggregateVisiblePanelRows.value, quickEntryRequiredRows.value) })
 })
@@ -1686,11 +1697,16 @@ function handleWorkspaceKeydown(event) {
     if (isMobileLayoutMode.value) {
       if (resize && horizontal) return // Mobile palettes always fill the viewport; preserve the desktop width.
       if (move) {
-        const ordered = [...calendarLayoutPanels.value].sort((a, b) => a.y - b.y || a.x - b.x)
+        const ordered = mobileVisiblePanels()
         const from = ordered.findIndex(item => item.id === id)
         applyMobilePaletteOrder(reorderItem(ordered, from, clamp(from + direction, 0, ordered.length - 1)))
         return
       }
+      const displayed = calendarLayoutPanels.value.find(item => item.id === id)
+      if (id === 'aggregate' && direction < 0 && displayed.h <= aggregateVisiblePanelRows.value) return
+      if (id === 'quick-entry' && direction < 0 && displayed.h <= quickEntryRequiredRows.value) return
+      updateMobilePaletteHeight(id, displayed.h + direction)
+      return
     }
     const field = resize ? (horizontal ? 'w' : 'h') : (horizontal ? 'x' : 'y')
     const displayed = resize && field === 'h' ? calendarLayoutPanels.value.find(item => item.id === id) : null
@@ -1894,6 +1910,50 @@ function updatePersonalizationWidget({ index, field, value }) {
   else updateAggregateWidget(index, field, value)
 }
 
+function updateInlinePersonalizationWidget(change) {
+  if (isMobileLayoutMode.value && change.field === 'cardRows') updateMobileWidgetRows(change.index, change.value)
+  else if (!(isMobileLayoutMode.value && change.field === 'cardColumns')) updatePersonalizationWidget(change)
+}
+
+function setMobileWidgetSettings(patch) {
+  calendarPanelLayout.value = normalizeCalendarPanelLayout(calendarPanelLayout.value.map(panel => {
+    if (panel.id !== 'aggregate') return panel
+    const next = { ...panel }
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) delete next[key]
+      else next[key] = value
+    }
+    return next
+  }))
+}
+
+function updateMobileWidgetRows(index, value) {
+  if (personalizationSaving.value || personalizationLoading.value || index < 0 || index >= aggregateWidgetMaxCount) return
+  const rows = [...mobileWidgetRows.value]
+  const requested = clamp(Math.round(Number(value) || 0), 0, 12)
+  const desktopRows = resolvedWidgetGrid(aggregateWidgetDraftConfigs.value[index]).cardRows
+  rows[index] = requested === desktopRows ? 0 : requested
+  const baseline = personalizationSnapshot.value?.baseline?.layout?.find(panel => panel.id === 'aggregate')
+  const empty = rows.every(row => row === 0)
+  setMobileWidgetSettings({ mobileWidgetRows: empty ? (baseline?.mobileWidgetRows ? null : undefined) : rows })
+  refreshCalendarMeasurements()
+}
+
+function applyMobileWidgetOrder(indices) {
+  const next = reorderMobileWidgets(mobileWidgetOrder.value, indices)
+  if (next.every((value, index) => value === mobileWidgetOrder.value[index])) return
+  const baseline = personalizationSnapshot.value?.baseline?.layout?.find(panel => panel.id === 'aggregate')
+  const defaultOrder = next.every((value, index) => value === index)
+  setMobileWidgetSettings({ mobileWidgetOrder: defaultOrder ? (baseline?.mobileWidgetOrder ? null : undefined) : next })
+}
+
+function remapMobileWidgetSettings(before, after) {
+  const settings = mobileWidgetSettings.value
+  if (!settings.mobileWidgetOrder && !settings.mobileWidgetRows) return
+  const remapped = remapMobileWidgets(before.map(widget => widget.id), after.map(widget => widget.id), settings.mobileWidgetOrder, settings.mobileWidgetRows)
+  if (remapped) setMobileWidgetSettings({ mobileWidgetOrder: remapped.order, mobileWidgetRows: remapped.rows })
+}
+
 function selectPersonalizationWidget(index, event) {
   personalizationSelectedIndex.value = index
   openInlineEditor('widget', index, event)
@@ -1918,6 +1978,13 @@ function deletePersonalizationWidget() {
 function movePersonalizationWidget(direction) {
   if (personalizationSaving.value || personalizationLoading.value) return
   const previous = personalizationSelectedIndex.value
+  if (isMobileLayoutMode.value) {
+    const indices = aggregateCards.value.map(card => card.index)
+    const from = indices.indexOf(previous)
+    const to = clamp(from + direction, 0, indices.length - 1)
+    if (from >= 0) applyMobileWidgetOrder(reorderItem(indices, from, to))
+    return
+  }
   moveAggregateWidget(previous, direction)
   personalizationSelectedIndex.value = clamp(previous + direction, 0, aggregateWidgetMaxCount - 1)
 }
@@ -1929,6 +1996,20 @@ function updatePersonalizationPanel({ id, field, value }) {
   const packed = new Map(packDashboardPanels(next.filter(item => visible.has(item.id)), id).map(item => [item.id, item]))
   calendarPanelLayout.value = next.map(item => packed.get(item.id) || item)
   refreshCalendarMeasurements()
+}
+
+function updateMobilePaletteHeight(id, value) {
+  if (personalizationSaving.value || personalizationLoading.value) return
+  const definition = calendarPanelDefinitions.find(panel => panel.id === id)
+  if (!definition || !Number.isFinite(Number(value))) return
+  const mobileHeight = clamp(Math.round(Number(value)), definition.minH, definition.maxH)
+  calendarPanelLayout.value = normalizeCalendarPanelLayout(calendarPanelLayout.value.map(panel => panel.id === id ? { ...panel, mobileHeight } : panel))
+  refreshCalendarMeasurements()
+}
+
+function updateInlinePersonalizationPanel(change) {
+  if (isMobileLayoutMode.value && change.field === 'h') updateMobilePaletteHeight(change.id, change.value)
+  else updatePersonalizationPanel(change)
 }
 
 function openInlineEditor(type, id, event) {
@@ -2001,7 +2082,10 @@ function resizeWidget(event, card) {
   const initial = resolvedWidgetGrid(card.config, aggregateGridWidth.value, layoutCellHeight.value)
   const rowHeight = aggregateCellHeight.value
   // A mobile full-width frame cannot infer a legacy desktop column count.
-  if (isMobileLayoutMode.value) initial.cardColumns = widgetGridSize(card.config).cardColumns
+  if (isMobileLayoutMode.value) {
+    initial.cardColumns = widgetGridSize(card.config).cardColumns
+    initial.cardRows = mobileWidgetRows.value[card.index] || initial.cardRows
+  }
   const sizeFor = (dx, dy) => {
     const snapped = resizedWidgetGrid(rect, dx, dy, available, rowHeight, Boolean(card.chart))
     const minimumRows = aggregateContentMinRows.value[card.index] || 1
@@ -2019,7 +2103,10 @@ function resizeWidget(event, card) {
     },
     finish(dx, dy) {
       const size = sizeFor(dx, dy)
-      if (size.cardColumns !== initial.cardColumns || size.cardRows !== initial.cardRows) updateAggregateWidgetLayout(card.index, size)
+      if (size.cardColumns !== initial.cardColumns || size.cardRows !== initial.cardRows) {
+        if (isMobileLayoutMode.value) updateMobileWidgetRows(card.index, size.cardRows)
+        else updateAggregateWidgetLayout(card.index, size)
+      }
     },
   })
 }
@@ -2033,10 +2120,11 @@ function resizeWidgetByKey(event, card) {
   const size = widgetGridSize(card.config), inferred = resizedWidgetGrid(rect, 0, 0, element.parentElement.clientWidth, aggregateCellHeight.value, Boolean(card.chart))
   const field = horizontal ? 'cardColumns' : 'cardRows', direction = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1
   const visible = aggregateGridFrames.value.get(card.index)
-  const current = size[field] || inferred[field]
+  const current = (!horizontal && isMobileLayoutMode.value ? mobileWidgetRows.value[card.index] : 0) || size[field] || inferred[field]
   if (!horizontal && direction < 0 && visible.cardRows <= (aggregateContentMinRows.value[card.index] || 1)) return
   const base = horizontal ? current : Math.max(current, visible.cardRows)
-  updateAggregateWidgetLayout(card.index, widgetGridSize({ ...card.config, [field]: Math.max(horizontal && card.chart ? 2 : 1, base + direction) }))
+  if (isMobileLayoutMode.value) updateMobileWidgetRows(card.index, base + direction)
+  else updateAggregateWidgetLayout(card.index, widgetGridSize({ ...card.config, [field]: Math.max(horizontal && card.chart ? 2 : 1, base + direction) }))
 }
 
 function moveWidgetDirect(event, card) {
@@ -2054,8 +2142,17 @@ function moveWidgetDirect(event, card) {
       directGesture.value = { type: 'widget-move', index: card.index, targetIndex: Number(target), x: point.x, y: point.y, label: card.config.title || card.title }
     },
     finish() {
-      aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(reorderItem(aggregateWidgetDraftConfigs.value, card.index, Number(target)).map((item, index) => ({ ...item, layoutOrder: index + 1 })))
-      personalizationSelectedIndex.value = Number(target)
+      if (isMobileLayoutMode.value) {
+        const indices = aggregateCards.value.map(item => item.index)
+        applyMobileWidgetOrder(reorderItem(indices, indices.indexOf(card.index), indices.indexOf(Number(target))))
+        personalizationSelectedIndex.value = card.index
+      } else {
+        const previous = aggregateWidgetDraftConfigs.value
+        const next = normalizeAggregateConfigs(reorderItem(previous, card.index, Number(target)).map((item, index) => ({ ...item, layoutOrder: index + 1 })))
+        remapMobileWidgetSettings(previous, next)
+        aggregateWidgetDraftConfigs.value = next
+        personalizationSelectedIndex.value = Number(target)
+      }
     },
   })
 }
@@ -2070,14 +2167,14 @@ function resizeMobilePalette(event, panel) {
       element.style.setProperty('height', `${height * layoutCellHeight.value}px`, 'important')
       directGesture.value = { type: 'palette-resize', label: `${paletteNames[panel.id]} · ${height}칸` }
     },
-    finish() { element.style.removeProperty('height'); updatePersonalizationPanel({ id: panel.id, field: 'h', value: height }) },
+    finish() { element.style.removeProperty('height'); updateMobilePaletteHeight(panel.id, height) },
     cancel() { if (original) element.style.setProperty('height', original); else element.style.removeProperty('height') },
   })
 }
 
 function moveMobilePalette(event, panel) {
   if (!isMobileLayoutMode.value) return
-  const ordered = [...calendarLayoutPanels.value].sort((a, b) => a.y - b.y || a.x - b.x)
+  const ordered = mobileVisiblePanels()
   let target = ordered.findIndex(item => item.id === panel.id)
   inlineEditor.value = null
   trackDirectPointer(event, {
@@ -2103,15 +2200,12 @@ function moveMobilePalette(event, panel) {
   })
 }
 
+function mobileVisiblePanels() {
+  return [...calendarLayoutPanels.value].sort((a, b) => mobilePanelOrder.value.get(a.id) - mobilePanelOrder.value.get(b.id))
+}
+
 function applyMobilePaletteOrder(ordered) {
-  let row = 0
-  const moved = new Map(ordered.map(item => {
-    const stored = calendarPanelLayout.value.find(panel => panel.id === item.id)
-    const result = { ...stored, y: row }
-    row += stored.h
-    return [item.id, result]
-  }))
-  calendarPanelLayout.value = normalizeCalendarPanelLayout(calendarPanelLayout.value.map(item => moved.get(item.id) || item))
+  calendarPanelLayout.value = normalizeCalendarPanelLayout(reorderMobilePanels(calendarPanelLayout.value, ordered.map(item => item.id)))
 }
 
 function scrollDuringDirectMove(element, point) {
@@ -2141,7 +2235,7 @@ function editPersonalizationLayout() {
 function resetPersonalization(scope) {
   const label = { layout: '위젯 배치만', preferences: '달력·입력 기본값만', widgets: '집계 위젯 구성만' }[scope]
   if (!label || !window.confirm(`${label} 기본값으로 복원할까요? 거래 데이터는 변경되지 않으며 저장 전까지 취소할 수 있습니다.`)) return
-  if (scope === 'layout') calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+  if (scope === 'layout') calendarPanelLayout.value = createDefaultCalendarPanelLayout().map(panel => ({ ...panel, mobileOrder: null, mobileHeight: null, ...(panel.id === 'aggregate' ? { mobileWidgetOrder: null, mobileWidgetRows: null } : {}) }))
   if (scope === 'preferences') applyCalendarViewPreferences(defaultCalendarViewPreferences())
   if (scope === 'widgets') aggregateWidgetDraftConfigs.value = createDefaultAggregateConfigs()
   refreshCalendarMeasurements()
@@ -2387,13 +2481,18 @@ function normalizeCalendarPanelLayout(layouts) {
     const width = clamp(Number(raw.w) || definition.defaultLayout.w, definition.minW, definition.maxW)
     const height = clamp(Number(raw.h) || definition.defaultLayout.h, definition.minH, definition.maxH)
 
-    return {
+    const result = {
       id: definition.id,
       x: clamp(Number(raw.x) || 0, 0, CALENDAR_LAYOUT_GRID_COLUMNS - width),
       y: Math.max(0, Number(raw.y) || 0),
       w: width,
       h: height,
     }
+    if (Object.hasOwn(raw, 'mobileOrder')) result.mobileOrder = Number.isInteger(raw.mobileOrder) && raw.mobileOrder >= 0 && raw.mobileOrder <= 200 ? raw.mobileOrder : null
+    if (Object.hasOwn(raw, 'mobileHeight')) result.mobileHeight = Number.isInteger(raw.mobileHeight) && raw.mobileHeight >= definition.minH && raw.mobileHeight <= definition.maxH ? raw.mobileHeight : null
+    if (definition.id === 'aggregate' && Object.hasOwn(raw, 'mobileWidgetOrder')) result.mobileWidgetOrder = normalizeMobileWidgetOrder(raw.mobileWidgetOrder)
+    if (definition.id === 'aggregate' && Object.hasOwn(raw, 'mobileWidgetRows')) result.mobileWidgetRows = normalizeMobileWidgetRows(raw.mobileWidgetRows)
+    return result
   })
 
   // Validate each panel without shifting a user's saved rows or forcing the aggregate to the top.
@@ -2524,31 +2623,34 @@ function readLayoutGridSnapshot() {
   })).filter(item => item.id)
 }
 
-function applyCalendarPanelLayout(snapshot) {
-  const snapshotById = new Map((snapshot ?? []).map((item) => [String(item.id), item]))
-  const projectedPanels = new Map(calendarLayoutPanels.value.map(panel => [panel.id, panel]))
-  const mergedLayout = calendarPanelLayout.value.map((current) => {
-    const next = snapshotById.get(String(current.id))
-    if (!next) return current
-    // GridStack sees the responsive presentation height. Do not turn that
-    // temporary height into an account preference while moving another panel.
-    const projected = projectedPanels.get(current.id)
-    if (['aggregate', 'quick-entry'].includes(current.id) && projected?.h > current.h && next.h === projected.h) {
-      return { ...next, h: current.h }
+function applyCalendarPanelLayout(snapshot, changedId) {
+  const snapshotById = new Map((snapshot ?? []).map(item => [String(item.id), item]))
+  const projected = new Map(calendarLayoutPanels.value.map(panel => [panel.id, panel]))
+  const changed = snapshotById.get(String(changedId)), original = projected.get(changedId)
+  if (!changed || !original || ['x', 'y', 'w', 'h'].every(key => Number(changed[key]) === Number(original[key]))) return
+  // GridStack works on the responsive projection. A coordinate that did not
+  // change during the gesture must not replace the user's saved coordinate.
+  const merged = calendarPanelLayout.value.map(current => {
+    const next = snapshotById.get(current.id), displayed = projected.get(current.id)
+    if (!next || !displayed) return current
+    const update = { ...current }
+    for (const key of ['x', 'y', 'w', 'h']) {
+      if (Number.isFinite(Number(next[key])) && Number(next[key]) !== Number(displayed[key])) update[key] = next[key]
     }
-    return next
+    return update
   })
-  calendarPanelLayout.value = normalizeCalendarPanelLayout(mergedLayout)
+  calendarPanelLayout.value = normalizeCalendarPanelLayout(merged)
   refreshCalendarMeasurements()
 }
 
-function handleLayoutGridStop() {
-  if (!personalizationSaving.value) applyCalendarPanelLayout(readLayoutGridSnapshot())
+function handleLayoutGridStop(_event, element) {
+  const changedId = element?.getAttribute('gs-id') || element?.getAttribute('data-calendar-panel-id')
+  if (!personalizationSaving.value && changedId) applyCalendarPanelLayout(readLayoutGridSnapshot(), changedId)
 }
 
-function handleLayoutGridResizeStop() {
+function handleLayoutGridResizeStop(event, element) {
   isLayoutGridResizing = false
-  handleLayoutGridStop()
+  handleLayoutGridStop(event, element)
 }
 
 function readIsMobileLayoutMode() {
@@ -2578,7 +2680,7 @@ function syncMobileLayoutMode() {
 function calendarPanelLayoutItemStyle(panel) {
   if (isMobileLayoutMode.value) {
     return {
-      '--mobile-calendar-panel-order': String(Number(panel.y) * 9 + Number(panel.x)),
+      '--mobile-calendar-panel-order': String(mobilePanelOrder.value.get(panel.id) ?? 0),
       '--calendar-panel-rows': String(panel.h),
     }
   }
@@ -3297,7 +3399,7 @@ function moveAggregateWidget(index, direction) {
   const currentConfig = nextConfigs[index]
   nextConfigs[index] = nextConfigs[nextIndex]
   nextConfigs[nextIndex] = currentConfig
-  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(
+  const reordered = normalizeAggregateConfigs(
     nextConfigs.map((config, configIndex) => ({
       ...config,
       layoutX: Math.min(configIndex + 1, getAggregateMaxColumnForWidth(config.layoutW)),
@@ -3305,6 +3407,8 @@ function moveAggregateWidget(index, direction) {
       layoutOrder: configIndex + 1,
     })),
   )
+  remapMobileWidgetSettings(configs, reordered)
+  aggregateWidgetDraftConfigs.value = reordered
 }
 function syncAggregateWidgetDraft() {
   aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(props.aggregateWidgetConfigs)
@@ -4372,21 +4476,21 @@ defineExpose({
       :open="personalizationOpen" :section="personalizationSection" :busy="personalizationSaving"
       :loading="personalizationLoading" :dirty="personalizationDirty" :error="personalizationError"
       :notice="personalizationNotice"
-      :conflict="personalizationConflict" :can-save="Boolean(personalizationRevision)"
-      :preferences="personalizationPreferences" :widgets="aggregateWidgetDraftConfigs" :cards="personalizationCards"
+      :conflict="personalizationConflict" :can-save="Boolean(personalizationRevision)" :mobile="isMobileLayoutMode"
+      :preferences="personalizationPreferences" :widgets="isMobileLayoutMode ? aggregateWidgetDraftConfigs.map((widget, index) => ({ ...widget, cardRows: mobileWidgetRows[index] })) : aggregateWidgetDraftConfigs" :cards="personalizationCards" :mobile-widget-order="aggregateCards.map(card => card.index)"
       :selected-index="personalizationSelectedIndex" :panels="calendarPanelDefinitions.filter(item => item.id !== 'sheet' || transactionSheetViewMode === 'inline').map(item => ({ ...item, ...calendarPanelLayout.find(panel => panel.id === item.id) }))" :payment-methods="paymentMethods"
       @section="personalizationSection = $event" @close="cancelPersonalization" @save="savePersonalization"
-      @reload="reloadPersonalization" @preference="updatePersonalizationPreference" @widget="updatePersonalizationWidget"
+      @reload="reloadPersonalization" @preference="updatePersonalizationPreference" @widget="updateInlinePersonalizationWidget"
       @select-widget="personalizationSelectedIndex = $event" @add-widget="addPersonalizationWidget(false)"
       @duplicate-widget="addPersonalizationWidget(true)" @delete-widget="deletePersonalizationWidget"
       @move-widget="movePersonalizationWidget" @panel="updatePersonalizationPanel" @edit-layout="editPersonalizationLayout" @reset="resetPersonalization"
     />
-    <CalendarInlineEditor :editor="inlineEditor" :widget="aggregateWidgetDraftConfigs[inlineEditor?.index] || {}"
-      :panel="{ ...calendarPanelDefinitions.find(item => item.id === inlineEditor?.panelId), ...calendarPanelLayout.find(item => item.id === inlineEditor?.panelId) }"
+    <CalendarInlineEditor :editor="inlineEditor" :widget="{ ...(aggregateWidgetDraftConfigs[inlineEditor?.index] || {}), ...(isMobileLayoutMode ? { cardRows: mobileWidgetRows[inlineEditor?.index] || 0 } : {}) }"
+      :panel="{ ...calendarPanelDefinitions.find(item => item.id === inlineEditor?.panelId), ...calendarPanelLayout.find(item => item.id === inlineEditor?.panelId), ...(isMobileLayoutMode ? { h: calendarLayoutPanels.find(item => item.id === inlineEditor?.panelId)?.h } : {}) }"
       :preferences="personalizationPreferences" :payment-methods="paymentMethods" :busy="personalizationSaving || personalizationLoading"
       :can-duplicate="aggregateWidgetDraftConfigs.some(item => item.kind === 'NONE')"
-      :mobile="isMobileLayoutMode"
-      @close="inlineEditor = null" @widget="updatePersonalizationWidget" @preference="updatePersonalizationPreference" @panel="updatePersonalizationPanel" @hide="hidePalette"
+      :mobile="isMobileLayoutMode" :mobile-widget-order="aggregateCards.map(card => card.index)"
+      @close="inlineEditor = null" @widget="updateInlinePersonalizationWidget" @preference="updatePersonalizationPreference" @panel="updateInlinePersonalizationPanel" @hide="hidePalette"
       @duplicate="addPersonalizationWidget(true); inlineEditor = null" @delete="deletePersonalizationWidget(); inlineEditor = null"
       @move="movePersonalizationWidget($event); inlineEditor = null" />
     <Teleport to="body">
@@ -4903,7 +5007,7 @@ defineExpose({
             :data-aggregate-selected="isAggregateEditMode && ((inlineEditor?.type === 'widget' && inlineEditor.index === card.index) || directGesture?.index === card.index || (personalizationOpen && personalizationSection === 'widgets' && personalizationSelectedIndex === card.index))"
             :data-aggregate-display-size="card.config.displaySize"
             :data-widget-columns="card.config.cardColumns"
-            :data-widget-rows="card.config.cardRows"
+            :data-widget-rows="isMobileLayoutMode && mobileWidgetRows[card.index] ? mobileWidgetRows[card.index] : card.config.cardRows"
             :data-widget-grid-columns="isMobileLayoutMode ? 9 : aggregateGridFrames.get(card.index).cardColumns"
             :data-widget-grid-rows="aggregateGridFrames.get(card.index).cardRows"
             :data-widget-grid-x="aggregateGridCells.get(card.index).x"

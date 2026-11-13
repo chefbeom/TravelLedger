@@ -2083,9 +2083,9 @@ watch(
 
 /* ai-mobile-mode-touch-upgrade */
 @media (max-width: 760px) {
-  :global(:root[data-layout-mode='mobile']) .ai-analysis-panel .button,
-  :global(:root[data-layout-mode='mobile']) .ai-history-panel .button,
-  :global(:root[data-layout-mode='mobile']) .ai-result-modal .button {
+  :global(:root[data-layout-mode='mobile'] .ai-analysis-panel .button),
+  :global(:root[data-layout-mode='mobile'] .ai-history-panel .button),
+  :global(:root[data-layout-mode='mobile'] .ai-result-modal .button ){
     min-height: 48px;
     padding: 0 14px;
     border-radius: 16px;
@@ -2093,106 +2093,106 @@ watch(
     white-space: normal;
   }
 
-  :global(:root[data-layout-mode='mobile']) .ai-analysis-actions,
-  :global(:root[data-layout-mode='mobile']) .ai-result-toolbar,
-  :global(:root[data-layout-mode='mobile']) .ai-history-item__actions,
-  :global(:root[data-layout-mode='mobile']) .ai-result-modal__actions {
+  :global(:root[data-layout-mode='mobile'] .ai-analysis-actions),
+  :global(:root[data-layout-mode='mobile'] .ai-result-toolbar),
+  :global(:root[data-layout-mode='mobile'] .ai-history-item__actions),
+  :global(:root[data-layout-mode='mobile'] .ai-result-modal__actions ){
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;
     width: 100%;
   }
 
-  :global(:root[data-layout-mode='mobile']) .ai-analysis-actions .button,
-  :global(:root[data-layout-mode='mobile']) .ai-result-toolbar .button,
-  :global(:root[data-layout-mode='mobile']) .ai-history-item__actions .button,
-  :global(:root[data-layout-mode='mobile']) .ai-result-modal__actions .button {
+  :global(:root[data-layout-mode='mobile'] .ai-analysis-actions .button),
+  :global(:root[data-layout-mode='mobile'] .ai-result-toolbar .button),
+  :global(:root[data-layout-mode='mobile'] .ai-history-item__actions .button),
+  :global(:root[data-layout-mode='mobile'] .ai-result-modal__actions .button ){
     width: 100%;
   }
 
-  :global(:root[data-layout-mode='mobile']) .scope-toggle--wrap {
+  :global(:root[data-layout-mode='mobile'] .scope-toggle--wrap ){
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
-  :global(:root[data-layout-mode='mobile']) .ai-progress-card {
+  :global(:root[data-layout-mode='mobile'] .ai-progress-card ){
     padding: 0.95rem;
     border-radius: 18px;
   }
 
-  :global(:root[data-layout-mode='mobile']) .ai-progress-card__header {
+  :global(:root[data-layout-mode='mobile'] .ai-progress-card__header ){
     flex-direction: column;
   }
 
-  :global(:root[data-layout-mode='mobile']) .ai-progress-steps,
-  :global(:root[data-layout-mode='mobile']) .ai-history-summary-grid {
+  :global(:root[data-layout-mode='mobile'] .ai-progress-steps),
+  :global(:root[data-layout-mode='mobile'] .ai-history-summary-grid ){
     grid-template-columns: minmax(0, 1fr);
   }
 
-  :global(:root[data-layout-mode='mobile']) .ai-history-item__titleline {
+  :global(:root[data-layout-mode='mobile'] .ai-history-item__titleline ){
     align-items: flex-start;
     flex-direction: column;
   }
 }
 
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal {
+:global(:root:not([data-theme='toss']) .ledger-ai-modal ){
   background: rgba(15, 23, 42, 0.42);
 }
 
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog {
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__dialog ){
   border-color: #b9c8d5;
   background: #ffffff;
   color: #14271e;
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
 }
 
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__header h2,
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog strong,
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog .field__label,
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog .ledger-ai-switch {
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__header h2),
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__dialog strong),
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__dialog .field__label),
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__dialog .ledger-ai-switch ){
   color: #123326;
   -webkit-text-fill-color: #123326;
 }
 
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__eyebrow {
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__eyebrow ){
   color: #087a4e;
   -webkit-text-fill-color: #087a4e;
 }
 
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__nav,
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__empty,
-:global(:root:not([data-theme='toss'])) .ledger-ai-focus-summary,
-:global(:root:not([data-theme='toss'])) .ledger-ai-result-preview,
-:global(:root:not([data-theme='toss'])) .ledger-ai-focus-editor,
-:global(:root:not([data-theme='toss'])) .ledger-ai-focus-presets article {
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__nav),
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__empty),
+:global(:root:not([data-theme='toss']) .ledger-ai-focus-summary),
+:global(:root:not([data-theme='toss']) .ledger-ai-result-preview),
+:global(:root:not([data-theme='toss']) .ledger-ai-focus-editor),
+:global(:root:not([data-theme='toss']) .ledger-ai-focus-presets article ){
   border-color: #cad7e1;
   background: #f5f8fb;
   color: #18362a;
 }
 
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__nav-button,
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog input,
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog select,
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog textarea {
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__nav-button),
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__dialog input),
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__dialog select),
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__dialog textarea ){
   border-color: #b9c8d5;
   background: #ffffff;
   color: #163127;
   -webkit-text-fill-color: #163127;
 }
 
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__nav-button.is-active {
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__nav-button.is-active ){
   border-color: #087a4e;
   background: #087a4e;
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
 }
 
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__empty,
-:global(:root:not([data-theme='toss'])) .ledger-ai-focus-summary span,
-:global(:root:not([data-theme='toss'])) .ledger-ai-result-preview small,
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog p,
-:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog small {
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__empty),
+:global(:root:not([data-theme='toss']) .ledger-ai-focus-summary span),
+:global(:root:not([data-theme='toss']) .ledger-ai-result-preview small),
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__dialog p),
+:global(:root:not([data-theme='toss']) .ledger-ai-modal__dialog small ){
   color: #496257;
   -webkit-text-fill-color: #496257;
 }</style>

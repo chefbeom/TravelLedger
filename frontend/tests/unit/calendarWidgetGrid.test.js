@@ -33,6 +33,7 @@ test('legacy and explicit sizes resolve to the same cells without changing their
   assert.deepEqual(resolvedWidgetGrid({ ...legacy, kind: 'MONTHLY_CUMULATIVE_CHART', cardWidth: 200 }, 1432, 128), { cardColumns: 2, cardRows: 2 })
   assert.deepEqual(legacy, original)
   assert.deepEqual(resolvedWidgetGrid({ kind: 'TOTAL' }, 0, 0), { cardColumns: 2, cardRows: 2 })
+  assert.deepEqual(resolvedWidgetGrid(legacy, 500, 108), resolvedWidgetGrid(legacy, 1700, 148))
 })
 
 test('guides cover whole wrapped rows, including different heights and full-width mobile cards', () => {

@@ -112,7 +112,7 @@ public class AccountPreferenceController {
             @PathVariable String scope,
             @RequestBody UserLayoutSettingRequest request
     ) {
-        if ("household-calendar".equals(scope) || "household-calendar-view".equals(scope)) {
+        if ("household-calendar".equals(scope) || "household-calendar-view".equals(scope) || "main-dashboard".equals(scope)) {
             return householdPersonalizationService.saveCompatibleLayout(currentUser.userId(), scope, request);
         }
         return userLayoutSettingService.saveLayoutSetting(currentUser.userId(), scope, request);

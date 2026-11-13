@@ -108,6 +108,31 @@ public class HouseholdPersonalizationService {
             }
             request = new UserLayoutSettingRequest(request.version(), merged);
         }
+        if ("main-dashboard".equals(scope) && request != null && request.payload() instanceof ObjectNode incoming) {
+            JsonNode current = layouts.getLayoutSetting(ownerId, scope).payload();
+            ObjectNode merged = incoming.deepCopy();
+            JsonNode sectionNode = merged.remove("_layoutSection");
+            String section = sectionNode == null ? "" : sectionNode.asText();
+            if (!section.isEmpty() && !Set.of("desktop", "1", "3").contains(section)) {
+                throw new BadRequestException("대시보드 배치 구분을 확인해 주세요.");
+            }
+            if (Set.of("1", "3").contains(section)) {
+                JsonNode submitted = incoming.path("compactLayouts").path(section);
+                if (!submitted.isArray()) throw new BadRequestException("모바일 대시보드 배치를 확인해 주세요.");
+                if (current instanceof ObjectNode existing) {
+                    // A stale mobile tab must never replace the current desktop or other mobile profile.
+                    merged = existing.deepCopy();
+                    ObjectNode compact = merged.path("compactLayouts") instanceof ObjectNode object
+                            ? object.deepCopy() : mapper.createObjectNode();
+                    compact.set(section, submitted.deepCopy());
+                    merged.set("compactLayouts", compact);
+                }
+            } else if (current != null && current.has("compactLayouts") && ("desktop".equals(section) || !incoming.has("compactLayouts"))) {
+                // Old clients have no compact profiles; desktop edits must keep the latest profiles too.
+                merged.set("compactLayouts", current.get("compactLayouts").deepCopy());
+            }
+            request = new UserLayoutSettingRequest(request.version(), merged);
+        }
         return layouts.saveLayoutSetting(ownerId, scope, request);
     }
 
@@ -116,14 +141,28 @@ public class HouseholdPersonalizationService {
     }
 
     private JsonNode preserveCalendarQuery(Long ownerId, JsonNode incoming) {
-        for (var panel : incoming) if ("calendar-query".equals(panel.path("id").asText())) return incoming;
+        var merged = (com.fasterxml.jackson.databind.node.ArrayNode) incoming.deepCopy();
         JsonNode current = layouts.getLayoutSetting(ownerId, "household-calendar").payload();
-        if (current != null && current.isArray()) for (var panel : current) if ("calendar-query".equals(panel.path("id").asText())) {
-            var merged = (com.fasterxml.jackson.databind.node.ArrayNode) incoming.deepCopy();
-            merged.add(panel.deepCopy());
-            return merged;
+        if (current != null && current.isArray()) {
+            for (var existing : current) {
+                String id = existing.path("id").asText();
+                ObjectNode matching = null;
+                for (var candidate : merged) if (id.equals(candidate.path("id").asText()) && candidate instanceof ObjectNode object) {
+                    matching = object;
+                    break;
+                }
+                if (matching == null && "calendar-query".equals(id)) {
+                    merged.add(existing.deepCopy());
+                } else if (matching != null) {
+                    // Older clients do not know these fields. Missing means
+                    // preserve; an explicit null intentionally clears them.
+                    for (String key : Set.of("mobileOrder", "mobileHeight", "mobileWidgetOrder", "mobileWidgetRows")) {
+                        if (!matching.has(key) && existing.has(key)) matching.set(key, existing.get(key).deepCopy());
+                    }
+                }
+            }
         }
-        return incoming;
+        return merged;
     }
 
     private void validateLayout(JsonNode layout) {
@@ -139,6 +178,27 @@ public class HouseholdPersonalizationService {
                 throw new BadRequestException("위젯 배치 범위를 확인해 주세요.");
             if ("calendar-query".equals(id) && (x != 0 || w != 9))
                 throw new BadRequestException("날짜 조회 영역은 전체 9열을 사용해야 합니다.");
+            for (String key : Set.of("mobileOrder", "mobileHeight")) {
+                JsonNode value = panel.get(key);
+                if (value == null || value.isNull()) continue;
+                int minimum = "mobileHeight".equals(key) ? 1 : 0;
+                int maximum = "mobileHeight".equals(key) ? 12 : 200;
+                if (!value.isIntegralNumber() || !value.canConvertToInt() || value.asInt() < minimum || value.asInt() > maximum)
+                    throw new BadRequestException("모바일 배치 범위를 확인해 주세요.");
+            }
+            for (String key : Set.of("mobileWidgetOrder", "mobileWidgetRows")) {
+                JsonNode values = panel.get(key);
+                if (values == null || values.isNull()) continue;
+                if (!"aggregate".equals(id) || !values.isArray() || values.size() != 6)
+                    throw new BadRequestException("모바일 위젯 배치를 확인해 주세요.");
+                Set<Integer> seen = new HashSet<>();
+                for (JsonNode value : values) {
+                    int max = "mobileWidgetOrder".equals(key) ? 5 : 12;
+                    if (!value.isIntegralNumber() || !value.canConvertToInt() || value.asInt() < 0 || value.asInt() > max
+                            || ("mobileWidgetOrder".equals(key) && !seen.add(value.asInt())))
+                        throw new BadRequestException("모바일 위젯 배치를 확인해 주세요.");
+                }
+            }
         }
         if (!ids.containsAll(Set.of("aggregate", "calendar", "quick-entry", "sheet"))) throw new BadRequestException("기본 위젯 배치 정보가 누락되었습니다.");
     }

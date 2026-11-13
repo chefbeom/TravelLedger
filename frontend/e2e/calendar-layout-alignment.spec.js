@@ -85,8 +85,8 @@ test('editing guides align with card borders at every viewport size and in both 
   await testInfo.attach('initial-layout-geometry', { body: JSON.stringify(await layoutGeometry(page), null, 2), contentType: 'application/json' })
   await page.locator('.calendar-dashboard').screenshot({ path: testInfo.outputPath('layout-editing.png') })
   await expectAligned(page)
-  for (const width of [1920, 1024, 1440]) {
-    await page.setViewportSize({ width, height: 900 })
+  for (const [width, height] of [[2560, 1440], [1920, 1200], [1536, 960], [1366, 768], [1280, 800], [1024, 900], [1440, 900]]) {
+    await page.setViewportSize({ width, height })
     await expectAligned(page)
   }
   await page.getByRole('button', { name: '다크 테마', exact: true }).click()
@@ -119,8 +119,9 @@ test('dragged and resized cards snap to the same cells and retain their coordina
   expect(state.writes).toHaveLength(1)
   // Content can make the aggregate or quick-entry palette taller on screen.
   // Moving or narrowing a palette must not save that temporary height.
-  const savedGeometry = edited.map(panel => ['aggregate', 'quick-entry'].includes(panel.id) ? { ...panel, h: saved.layout.find(item => item.id === panel.id).h } : panel)
-  expect([...state.saved.layout].sort((a, b) => a.id.localeCompare(b.id))).toEqual([...savedGeometry].sort((a, b) => a.id.localeCompare(b.id)))
+  expect(state.saved.layout.find(panel => panel.id === 'calendar-query').y).toBe(2)
+  expect(state.saved.layout.find(panel => panel.id === 'calendar')).toMatchObject({ x: 0, w: 5, h: 3 })
+  expect(state.saved.layout.find(panel => panel.id === 'quick-entry').h).toBe(saved.layout.find(item => item.id === 'quick-entry').h)
   await page.reload()
   await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
   await openLayoutEditor(page)

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { ensureCalendarQueryPalette } from '../src/lib/calendarQueryLayout.js'
+import { orderedMobilePanels } from '../src/lib/calendarPersonalization.js'
 import { calendarSettings, mockPersonalization } from './fixtures/calendarPersonalization.js'
 
 const widget = page => page.locator('.calendar-widget[data-aggregate-index="0"]')
@@ -20,6 +21,9 @@ async function saveSettings(page) {
 }
 
 test('separate computers restore the complete account settings and old device caches cannot replace later saves', async ({ page, browser }) => {
+  // This scenario edits the desktop grid; mobile-specific editing is covered
+  // by calendar-cross-device.spec.js using independent browser contexts.
+  await page.setViewportSize({ width: 1440, height: 900 })
   const state = await mockPersonalization(page, { layoutUpdatedAt: '2026-10-20T12:00:00Z' })
   await openSettings(page)
   await tab(page, '집계 위젯')
@@ -152,6 +156,11 @@ test('failed server reads leave the local fallback usable but cannot save it ove
   await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
   const calendar = ensureCalendarQueryPalette(localLayout).find(panel => panel.id === 'calendar')
   const aggregate = ensureCalendarQueryPalette(localLayout).find(panel => panel.id === 'aggregate')
+  const mobile = await page.locator('html').getAttribute('data-layout-mode') === 'mobile'
+  if (mobile) {
+    const expectedOrder = orderedMobilePanels(ensureCalendarQueryPalette(localLayout)).findIndex(panel => panel.id === 'calendar')
+    await expect.poll(() => page.locator('[data-calendar-panel-id="calendar"]').evaluate(element => Number(element.style.getPropertyValue('--mobile-calendar-panel-order')))).toBe(expectedOrder)
+  } else {
   await expect.poll(() => page.locator('.calendar-dashboard-grid').evaluate((grid, savedAggregateRows) => {
     const queryRows = Number(grid.querySelector('.calendar-query-item').style.getPropertyValue('--calendar-panel-rows'))
     const aggregateRows = Number(grid.querySelector('[data-calendar-panel-id="aggregate"]').style.getPropertyValue('--calendar-panel-rows'))
@@ -159,6 +168,7 @@ test('failed server reads leave the local fallback usable but cannot save it ove
     // Wrapped controls and cards may need additional presentation rows; the cached layout remains unchanged.
     return calendarOrder - (Math.max(0, queryRows - 1) + Math.max(0, aggregateRows - savedAggregateRows)) * 9
   }, aggregate.h)).toBe(calendar.y * 9 + calendar.x)
+  }
   await openSettings(page)
   await expect(editor(page).getByRole('alert')).toContainText('검증용 설정 조회 실패')
   await expect(editor(page).getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled()

@@ -3,14 +3,16 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { PERSONALIZATION_SECTIONS } from '../lib/calendarPersonalization'
 const props = defineProps({
   open: Boolean, section: { type: String, default: 'dashboard' }, busy: Boolean, loading: Boolean,
-  dirty: Boolean, error: String, notice: String, conflict: Boolean, canSave: Boolean,
+  dirty: Boolean, error: String, notice: String, conflict: Boolean, canSave: Boolean, mobile: Boolean,
   preferences: { type: Object, default: () => ({}) }, widgets: { type: Array, default: () => [] },
   cards: { type: Array, default: () => [] }, selectedIndex: { type: Number, default: 0 },
+  mobileWidgetOrder: { type: Array, default: () => [] },
   panels: { type: Array, default: () => [] }, paymentMethods: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['section', 'close', 'save', 'reload', 'preference', 'widget', 'select-widget', 'add-widget', 'duplicate-widget', 'delete-widget', 'move-widget', 'panel', 'edit-layout', 'reset'])
 const dialog = ref(null), panelId = ref('calendar')
 const widget = computed(() => props.widgets[props.selectedIndex] || {})
+const mobileWidgetPosition = computed(() => props.mobileWidgetOrder.indexOf(props.selectedIndex))
 const cardColumnOptions = computed(() => Array.from({ length: widget.value.kind === 'MONTHLY_CUMULATIVE_CHART' ? 8 : 9 }, (_, index) => index + (widget.value.kind === 'MONTHLY_CUMULATIVE_CHART' ? 2 : 1)))
 const card = computed(() => props.cards[props.selectedIndex])
 const panel = computed(() => props.panels.find(item => item.id === panelId.value) || {})
@@ -61,6 +63,7 @@ function switchTab(event, index) {
             <fieldset class="personalization-fields" :disabled="busy || loading">
             <template v-if="section === 'dashboard'">
               <h3>화면 구성</h3><p class="personalization-description">표시 여부와 크기를 관리합니다. 위치와 크기를 직접 조절하려면 배치 편집을 사용하세요.</p>
+              <p v-if="mobile" class="personalization-description">아래 너비와 고급 좌표는 PC 배치 설정입니다. 모바일 순서와 높이는 화면에서 직접 편집하면 별도로 저장됩니다.</p>
               <div class="personalization-switch-list">
                 <label><span><strong>집계 영역</strong><small>위젯 설정을 지우지 않고 표시만 변경</small></span><input role="switch" type="checkbox" :checked="preferences.aggregatePanelEnabled" @change="preference('aggregatePanelEnabled', $event.target.checked)"></label>
                 <label><span><strong>빠른 거래 입력</strong><small>입력 폼 표시·숨김</small></span><input role="switch" type="checkbox" :checked="preferences.quickEntryPanelEnabled !== false" @change="preference('quickEntryPanelEnabled', $event.target.checked)"></label>
@@ -105,12 +108,12 @@ function switchTab(event, index) {
                 <template v-if="widget.kind === 'MONTHLY_GOAL'"><label class="personalization-field"><span>월 지출 목표</span><input type="number" min="0" :value="widget.monthlyExpenseTarget || ''" @input="field('monthlyExpenseTarget', $event.target.value)"></label><label class="personalization-field"><span>1회 지출 기준</span><input type="number" min="0" :value="widget.singleExpenseLimit || ''" @input="field('singleExpenseLimit', $event.target.value)"></label></template>
                 <template v-if="widget.kind === 'MONTHLY_CUMULATIVE_CHART'"><label class="personalization-field"><span>Y축 최대 금액</span><input type="number" min="0" placeholder="자동" :value="widget.chartMaxAmount || ''" @input="field('chartMaxAmount', $event.target.value)"></label><label v-for="option in [{ key: 'showIncomeCumulative', label: '수입 누적' }, { key: 'showExpenseCumulative', label: '지출 누적' }, { key: 'comparePreviousPeriod', label: '지난 기간 비교' }]" :key="option.key" class="personalization-check"><input type="checkbox" :checked="widget[option.key]" @change="field(option.key, $event.target.checked)">{{ option.label }}</label></template>
                 <template v-if="widget.kind !== 'NONE'">
-                  <label class="personalization-field"><span>카드 너비 (칸)</span><select :value="widget.cardColumns || 0" @change="field('cardColumns', Number($event.target.value))"><option :value="0">기존 너비를 칸에 맞춤</option><option v-for="columns in cardColumnOptions" :key="columns" :value="columns">{{ columns }} / 9열</option></select></label>
-                  <label class="personalization-field"><span>카드 높이 (칸)</span><select :value="widget.cardRows || 0" @change="field('cardRows', Number($event.target.value))"><option :value="0">기존 높이를 칸에 맞춤</option><option v-for="rows in 12" :key="rows" :value="rows">{{ rows }}행</option></select></label>
+                  <label class="personalization-field"><span>카드 너비 (칸)</span><select aria-label="카드 너비 (칸)" :value="widget.cardColumns || 0" :disabled="mobile" @change="field('cardColumns', Number($event.target.value))"><option :value="0">기존 너비를 칸에 맞춤</option><option v-for="columns in cardColumnOptions" :key="columns" :value="columns">{{ columns }} / 9열</option></select><small v-if="mobile">모바일에서는 화면 너비에 맞춥니다.</small></label>
+                  <label class="personalization-field"><span>{{ mobile ? '모바일 카드 높이 (칸)' : '카드 높이 (칸)' }}</span><select :value="widget.cardRows || 0" @change="field('cardRows', Number($event.target.value))"><option :value="0">{{ mobile ? '기본 높이 사용' : '기존 높이를 칸에 맞춤' }}</option><option v-for="rows in 12" :key="rows" :value="rows">{{ rows }}행</option></select></label>
                   <label class="personalization-field"><span>글자 크기</span><select :value="widget.textSize" @change="field('textSize', $event.target.value)"><option value="SMALL">작게</option><option value="MEDIUM">기본</option><option value="LARGE">크게</option></select></label><label class="personalization-field"><span>글자 색상</span><select :value="widget.textColor" @change="field('textColor', $event.target.value)"><option value="DEFAULT">기본</option><option value="MINT">민트</option><option value="SKY">하늘</option><option value="GOLD">오렌지</option><option value="PINK">핑크</option></select></label><label class="personalization-check"><input role="switch" type="checkbox" :checked="!widget.hidden" @change="field('hidden', !$event.target.checked)">대시보드에 표시</label>
                 </template>
               </div>
-              <div class="personalization-widget-actions"><button class="button button--secondary" :disabled="selectedIndex === 0" @click="emit('move-widget', -1)">앞으로 이동</button><button class="button button--secondary" :disabled="selectedIndex === widgets.length - 1" @click="emit('move-widget', 1)">뒤로 이동</button><button class="button button--secondary" :disabled="widget.kind === 'NONE' || !widgets.some(item => item.kind === 'NONE')" @click="emit('duplicate-widget')">위젯 복제</button><button class="button button--danger" :disabled="widget.kind === 'NONE'" @click="emit('delete-widget')">위젯 삭제</button></div>
+              <div class="personalization-widget-actions"><button class="button button--secondary" :disabled="mobile ? mobileWidgetPosition <= 0 : selectedIndex === 0" @click="emit('move-widget', -1)">앞으로 이동</button><button class="button button--secondary" :disabled="mobile ? mobileWidgetPosition < 0 || mobileWidgetPosition >= mobileWidgetOrder.length - 1 : selectedIndex === widgets.length - 1" @click="emit('move-widget', 1)">뒤로 이동</button><button class="button button--secondary" :disabled="widget.kind === 'NONE' || !widgets.some(item => item.kind === 'NONE')" @click="emit('duplicate-widget')">위젯 복제</button><button class="button button--danger" :disabled="widget.kind === 'NONE'" @click="emit('delete-widget')">위젯 삭제</button></div>
             </template>
             <template v-else-if="section === 'input'">
               <h3>거래 입력</h3><div class="personalization-switch-list">

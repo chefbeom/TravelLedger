@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { clonePersonalization, personalizationChanged, packDashboardPanels } from '../../src/lib/calendarPersonalization.js'
+import { clonePersonalization, personalizationChanged, packDashboardPanels, orderedMobilePanels, reorderMobilePanels, reorderMobileWidgets, remapMobileWidgets } from '../../src/lib/calendarPersonalization.js'
 
 const panels = [
   { id: 'aggregate', x: 0, y: 0, w: 9, h: 2 },
@@ -17,6 +17,22 @@ test('draft edits do not mutate the committed settings and detect a reverted cha
   assert.equal(personalizationChanged(saved, draft), true)
   draft.widgets[0].title = '집계'
   assert.equal(personalizationChanged(saved, draft), false)
+})
+test('mobile order is independent of desktop geometry and keeps hidden panel slots', () => {
+  const original = structuredClone(panels)
+  const moved = reorderMobilePanels(panels, ['calendar', 'aggregate', 'quick-entry'])
+  assert.deepEqual(orderedMobilePanels(moved).map(panel => panel.id), ['calendar', 'aggregate', 'quick-entry', 'sheet'])
+  assert.deepEqual(moved.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })), original)
+  assert.deepEqual(panels, original)
+  assert.deepEqual(reorderMobilePanels(panels, ['aggregate', 'calendar', 'quick-entry']), original)
+  assert.deepEqual(reorderMobilePanels(panels, ['aggregate', 'aggregate']), original)
+})
+test('mobile widget order keeps hidden slots and follows widgets across a desktop reorder', () => {
+  assert.deepEqual(reorderMobileWidgets(null, [2, 0, 3]), [2, 1, 0, 3, 4, 5])
+  const before = ['a', 'b', 'c', 'd', 'e', 'f'], after = ['b', 'a', 'c', 'd', 'e', 'f']
+  assert.deepEqual(remapMobileWidgets(before, after, [2, 1, 0, 3, 4, 5], [2, 4, 0, 0, 0, 0]), {
+    order: [2, 0, 1, 3, 4, 5], rows: [4, 2, 0, 0, 0, 0],
+  })
 })
 test('explicit resize packs collisions without changing the source or hiding panels', () => {
   const draft = panels.map(panel => panel.id === 'calendar' ? { ...panel, w: 9 } : panel)

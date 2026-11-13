@@ -8,6 +8,66 @@ export const PERSONALIZATION_SECTIONS = [
 export const clonePersonalization = value => JSON.parse(JSON.stringify(value))
 export const personalizationChanged = (left, right) => JSON.stringify(left) !== JSON.stringify(right)
 
+// Desktop coordinates remain the source for the initial mobile ordering.
+// An explicit mobile reorder records ranks separately and never rewrites x/y.
+export function orderedMobilePanels(panels) {
+  const desktop = [...panels].sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0) || (Number(a.x) || 0) - (Number(b.x) || 0))
+  const fallback = new Map(desktop.map((panel, index) => [panel.id, index]))
+  return desktop.sort((a, b) => {
+    const rank = panel => Number.isInteger(panel.mobileOrder) && panel.mobileOrder >= 0 ? panel.mobileOrder : fallback.get(panel.id)
+    return rank(a) - rank(b) || fallback.get(a.id) - fallback.get(b.id)
+  })
+}
+
+export function reorderMobilePanels(panels, visibleIds) {
+  const ordered = orderedMobilePanels(panels)
+  const visibleSet = new Set(visibleIds)
+  const existingVisible = ordered.filter(panel => visibleSet.has(panel.id)).map(panel => panel.id)
+  if (visibleSet.size !== visibleIds.length || existingVisible.length !== visibleIds.length) return panels.map(panel => ({ ...panel }))
+  if (existingVisible.every((id, index) => id === visibleIds[index])) return panels.map(panel => ({ ...panel }))
+  let index = 0
+  const ids = ordered.map(panel => visibleSet.has(panel.id) ? visibleIds[index++] : panel.id)
+  const positions = new Map(ids.map((id, order) => [id, order]))
+  return panels.map(panel => ({ ...panel, mobileOrder: positions.get(panel.id) }))
+}
+
+export const MOBILE_WIDGET_COUNT = 6
+export function normalizeMobileWidgetOrder(value) {
+  if (!Array.isArray(value) || value.length !== MOBILE_WIDGET_COUNT || new Set(value).size !== MOBILE_WIDGET_COUNT
+      || value.some(index => !Number.isInteger(index) || index < 0 || index >= MOBILE_WIDGET_COUNT)) return null
+  return [...value]
+}
+
+export function normalizeMobileWidgetRows(value) {
+  if (!Array.isArray(value) || value.length !== MOBILE_WIDGET_COUNT
+      || value.some(rows => !Number.isInteger(rows) || rows < 0 || rows > 12)) return null
+  return [...value]
+}
+
+export function reorderMobileWidgets(order, visibleIndices) {
+  const current = normalizeMobileWidgetOrder(order) || Array.from({ length: MOBILE_WIDGET_COUNT }, (_, index) => index)
+  const visible = new Set(visibleIndices)
+  const oldVisible = current.filter(index => visible.has(index))
+  if (visible.size !== visibleIndices.length || oldVisible.length !== visibleIndices.length || oldVisible.every((value, index) => value === visibleIndices[index])) return current
+  let next = 0
+  return current.map(index => visible.has(index) ? visibleIndices[next++] : index)
+}
+
+// Widgets are stored as an ordered array. When desktop order changes, carry
+// mobile overrides with the same widget rather than with its old array index.
+export function remapMobileWidgets(beforeIds, afterIds, order, rows) {
+  if (beforeIds.length !== MOBILE_WIDGET_COUNT || afterIds.length !== MOBILE_WIDGET_COUNT
+      || new Set(beforeIds).size !== MOBILE_WIDGET_COUNT || new Set(afterIds).size !== MOBILE_WIDGET_COUNT) return null
+  const newIndex = new Map(afterIds.map((id, index) => [id, index]))
+  if (beforeIds.some(id => !newIndex.has(id))) return null
+  const remap = index => newIndex.get(beforeIds[index])
+  const savedOrder = normalizeMobileWidgetOrder(order)
+  const savedRows = normalizeMobileWidgetRows(rows)
+  const nextRows = savedRows ? Array(MOBILE_WIDGET_COUNT).fill(0) : null
+  if (nextRows) savedRows.forEach((height, index) => { nextRows[remap(index)] = height })
+  return { order: savedOrder ? savedOrder.map(remap) : null, rows: nextRows }
+}
+
 // Pure collision resolver: explicit edits persist its result; responsive display
 // projections use a copy and never rewrite the stored layout on read.
 export function packDashboardPanels(panels, changedId, { maxPanelRows = 12 } = {}) {

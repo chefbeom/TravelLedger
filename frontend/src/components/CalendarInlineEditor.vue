@@ -1,16 +1,17 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-const props = defineProps({ editor: Object, widget: Object, panel: Object, preferences: Object, paymentMethods: Array, busy: Boolean, canDuplicate: Boolean, mobile: Boolean })
+const props = defineProps({ editor: Object, widget: Object, panel: Object, preferences: Object, paymentMethods: Array, busy: Boolean, canDuplicate: Boolean, mobile: Boolean, mobileWidgetOrder: { type: Array, default: () => [] } })
 const emit = defineEmits(['close', 'widget', 'preference', 'panel', 'duplicate', 'delete', 'move', 'hide'])
 const root = ref(null), position = ref({})
 const dimensionDraft = ref({ cardColumns: '', cardRows: '', w: '', h: '' })
 const cardColumnOptions = computed(() => Array.from({ length: props.widget?.kind === 'MONTHLY_CUMULATIVE_CHART' ? 8 : 9 }, (_, index) => index + (props.widget?.kind === 'MONTHLY_CUMULATIVE_CHART' ? 2 : 1)))
 const isWidget = computed(() => props.editor?.type === 'widget')
+const mobileWidgetPosition = computed(() => props.mobileWidgetOrder.indexOf(props.editor?.index))
 const title = computed(() => isWidget.value ? '위젯 직접 편집' : `${props.editor?.title || '팔레트'} 직접 편집`)
 const field = (key, value) => emit('widget', { index: props.editor.index, field: key, value })
 const preference = (key, value) => emit('preference', { key, value })
-const dimensionValue = key => key === 'w' && props.mobile ? 9 : ['w', 'h'].includes(key) ? props.panel?.[key] : props.widget?.[key]
+const dimensionValue = key => (key === 'w' || key === 'cardColumns') && props.mobile ? 9 : ['w', 'h'].includes(key) ? props.panel?.[key] : props.widget?.[key]
 function dimension(key, value) {
   if (!props.editor || props.busy) return
   if (['w', 'h'].includes(key)) emit('panel', { id: props.panel.id, field: key, value: Number(value) })
@@ -56,15 +57,15 @@ onBeforeUnmount(() => { window.removeEventListener('resize', place); window.remo
             <label><span>글자 크기</span><select :value="widget.textSize" @change="field('textSize', $event.target.value)"><option value="SMALL">작게</option><option value="MEDIUM">기본</option><option value="LARGE">크게</option></select></label>
             <label><span>글자 색상</span><select :value="widget.textColor" @change="field('textColor', $event.target.value)"><option value="DEFAULT">기본</option><option value="MINT">민트</option><option value="SKY">하늘</option><option value="GOLD">오렌지</option><option value="PINK">핑크</option></select></label>
           </div>
-          <div class="calendar-inline-editor__columns"><label><span>카드 너비 (칸)</span><select v-model="dimensionDraft.cardColumns" data-dimension="cardColumns" @change="dimension('cardColumns', $event.target.value)"><option value="">기존 너비를 칸에 맞춤</option><option v-for="columns in cardColumnOptions" :key="columns" :value="columns">{{ columns }} / 9열</option></select></label><label><span>카드 높이 (칸)</span><select v-model="dimensionDraft.cardRows" data-dimension="cardRows" @change="dimension('cardRows', $event.target.value)"><option value="">기존 높이를 칸에 맞춤</option><option v-for="rows in 12" :key="rows" :value="rows">{{ rows }}행</option></select></label></div>
-          <small>9열 격자와 팔레트의 행 높이를 기준으로 저장합니다. 글자 크기와 다른 위젯은 바뀌지 않습니다. 모바일에서는 너비를 화면에 맞추고 드래그로는 높이만 조절합니다.</small>
+          <div class="calendar-inline-editor__columns"><label><span>카드 너비 (칸)</span><select v-model="dimensionDraft.cardColumns" data-dimension="cardColumns" :disabled="mobile" @change="dimension('cardColumns', $event.target.value)"><option value="">기존 너비를 칸에 맞춤</option><option v-for="columns in cardColumnOptions" :key="columns" :value="columns">{{ columns }} / 9열</option></select></label><label><span>카드 높이 (칸)</span><select v-model="dimensionDraft.cardRows" data-dimension="cardRows" @change="dimension('cardRows', $event.target.value)"><option value="">{{ mobile ? 'PC 높이 사용' : '기존 높이를 칸에 맞춤' }}</option><option v-for="rows in 12" :key="rows" :value="rows">{{ rows }}행</option></select></label></div>
+          <small>{{ mobile ? '모바일은 화면 너비에 맞추며 높이와 순서는 PC와 별도로 저장합니다.' : '9열 격자와 팔레트의 행 높이를 기준으로 저장합니다. 글자 크기와 다른 위젯은 바뀌지 않습니다.' }}</small>
           <label class="calendar-inline-editor__check"><input type="checkbox" :checked="widget.showPeriod !== false" @change="field('showPeriod', $event.target.checked)">기간 표시</label>
           <label class="calendar-inline-editor__check"><input type="checkbox" :checked="widget.showDetails !== false" @change="field('showDetails', $event.target.checked)">수입·지출 및 상세 정보 표시</label>
           <template v-if="widget.kind === 'MONTHLY_CUMULATIVE_CHART'">
             <label v-for="option in [{ key: 'showIncomeCumulative', label: '수입 누적선' }, { key: 'showExpenseCumulative', label: '지출 누적선' }, { key: 'comparePreviousPeriod', label: '지난 기간 비교선' }]" :key="option.key" class="calendar-inline-editor__check"><input type="checkbox" :checked="widget[option.key]" @change="field(option.key, $event.target.checked)">{{ option.label }}</label>
             <label><span>그래프 Y축 최대 금액</span><input type="number" min="0" :value="widget.chartMaxAmount || ''" placeholder="자동" @change="field('chartMaxAmount', $event.target.value)"></label>
           </template>
-          <div class="calendar-inline-editor__actions"><button type="button" class="button button--secondary" :disabled="editor.index === 0" @click="emit('move', -1)">앞으로</button><button type="button" class="button button--secondary" :disabled="editor.index === 5" @click="emit('move', 1)">뒤로</button><button type="button" class="button button--secondary" :disabled="!canDuplicate" @click="emit('duplicate')">복제</button><button type="button" class="button button--secondary" @click="field('hidden', true); emit('close')">숨기기</button><button type="button" class="button button--danger" @click="emit('delete')">삭제</button></div>
+          <div class="calendar-inline-editor__actions"><button type="button" class="button button--secondary" :disabled="mobile ? mobileWidgetPosition <= 0 : editor.index === 0" @click="emit('move', -1)">앞으로</button><button type="button" class="button button--secondary" :disabled="mobile ? mobileWidgetPosition < 0 || mobileWidgetPosition >= mobileWidgetOrder.length - 1 : editor.index === 5" @click="emit('move', 1)">뒤로</button><button type="button" class="button button--secondary" :disabled="!canDuplicate" @click="emit('duplicate')">복제</button><button type="button" class="button button--secondary" @click="field('hidden', true); emit('close')">숨기기</button><button type="button" class="button button--danger" @click="emit('delete')">삭제</button></div>
         </template>
         <template v-else>
           <div class="calendar-inline-editor__columns"><label><span>{{ mobile ? '너비 (화면에 맞춤)' : '너비 (9열 기준)' }}</span><input v-model="dimensionDraft.w" data-dimension="w" type="number" :disabled="mobile" :min="panel.minW" :max="panel.maxW" @input="dimension('w', $event.target.value)" @blur="dimensionDraft.w = dimensionValue('w') || ''"></label><label><span>높이 (칸)</span><input v-model="dimensionDraft.h" data-dimension="h" type="number" :min="panel.minH" :max="panel.maxH" @input="dimension('h', $event.target.value)" @blur="dimensionDraft.h = dimensionValue('h') || ''"></label></div>

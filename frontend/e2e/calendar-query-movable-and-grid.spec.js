@@ -31,7 +31,8 @@ async function cardGeometry(page) {
   })
 }
 
-test('the query strip can occupy the top empty row, saves its own position and restores on another computer', async ({ page, browser }) => {
+test('the query strip can occupy the top empty row, saves its own position and restores on another computer', async ({ page, browser }, info) => {
+  test.skip(info.project.name !== 'chromium-desktop', 'Desktop coordinates are intentionally independent of mobile order.')
   const saved = calendarSettings()
   saved.layout = saved.layout.map(panel => ({ ...panel, y: panel.y + 2 }))
   const state = await mockPersonalization(page, { saved })
@@ -72,7 +73,9 @@ test('query drag uses a real mouse/touch handle, while date controls remain clic
   const saved = calendarSettings()
   // Reproduce the user's free rows above the query strip, rather than asking
   // GridStack to swap a one-row item halfway into an occupied two-row item.
-  saved.layout[1].y = saved.layout[2].y = 4
+  // Legacy-height cards may occupy four visible rows even though their saved
+  // panel height is two, so reserve a genuinely empty row above the query.
+  saved.layout[1].y = saved.layout[2].y = 8
   const state = await mockPersonalization(page, { saved })
   await edit(page)
   const handle = query(page).getByRole('button', { name: '날짜·조회 팔레트 이동', exact: true })
@@ -101,7 +104,8 @@ test('query drag uses a real mouse/touch handle, while date controls remain clic
   await query(page).getByRole('combobox', { name: '월', exact: true }).selectOption('8')
   await expect(query(page).getByRole('combobox', { name: '월', exact: true })).toHaveValue('8')
   await save(page)
-  expect(state.saved.layout.find(panel => panel.id === 'calendar-query').y).toBeLessThan(4)
+  if (mobile) expect(state.saved.layout.find(panel => panel.id === 'calendar-query').mobileOrder).toBeLessThan(state.saved.layout.find(panel => panel.id === 'aggregate').mobileOrder)
+  else expect(state.saved.layout.find(panel => panel.id === 'calendar-query').y).toBeLessThan(8)
   await query(page).screenshot({ path: testInfo.outputPath('moved-query-toolbar.png') })
   expect(state.errors).toEqual([])
 })

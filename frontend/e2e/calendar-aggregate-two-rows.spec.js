@@ -106,7 +106,11 @@ test('mobile and long configured text remain readable without nested aggregate s
 test('moving another palette does not save the aggregate presentation height', async ({ page }, info) => {
   test.skip(info.project.name !== 'chromium-desktop')
   await page.setViewportSize({ width: 1024, height: 900 })
-  const state = await mockPersonalization(page, { saved: twoRowSettings() })
+  const saved = twoRowSettings()
+  // Leave an actual empty row after the responsive aggregate has grown to fit its content.
+  saved.layout.find(panel => panel.id === 'calendar').y = 8
+  saved.layout.find(panel => panel.id === 'quick-entry').y = 8
+  const state = await mockPersonalization(page, { saved })
   await expect.poll(async () => (await measure(page)).panelHeight).toBeGreaterThan(250)
   await page.getByRole('button', { name: '대시보드 편집', exact: true }).click()
   const handle = page.getByRole('button', { name: '날짜·조회 팔레트 이동', exact: true })
@@ -116,7 +120,7 @@ test('moving another palette does not save the aggregate presentation height', a
   const x = rect.x + rect.width / 2, y = rect.y + rect.height / 2
   await page.mouse.move(x, y)
   await page.mouse.down()
-  await page.mouse.move(x, y + pitch, { steps: 16 })
+  await page.mouse.move(x, y - pitch, { steps: 16 })
   await page.mouse.up()
   await page.locator('.calendar-draft-toolbar').getByRole('button', { name: '변경사항 저장', exact: true }).click()
   await expect(page.locator('.calendar-draft-toolbar')).toHaveCount(0)

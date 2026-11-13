@@ -136,7 +136,7 @@ function changePartInstallment(row, event) {
   .payment-options__part-head { flex-wrap: wrap; }
   .payment-options .payment-options__part-head .button { max-width: 100%; }
 }
-:global(:root[data-layout-mode='mobile']) :global(.household-entry-panel) .payment-options__part .button,
-:global(:root[data-layout-mode='mobile']) :global(.household-entry-panel) .payment-options__footer .button { width: auto; min-width: 2.75rem; }
-:global(:root[data-layout-mode='mobile']) :global(.household-entry-panel) .payment-options .payment-options__part-head .button { flex: 0 0 auto; width: auto; max-width: 40%; }
+:global(:root[data-layout-mode='mobile'] .household-entry-panel .payment-options__part .button),
+:global(:root[data-layout-mode='mobile'] .household-entry-panel .payment-options__footer .button) { width: auto; min-width: 2.75rem; }
+:global(:root[data-layout-mode='mobile'] .household-entry-panel .payment-options .payment-options__part-head .button) { flex: 0 0 auto; width: auto; max-width: 40%; }
 </style>

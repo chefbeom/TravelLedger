@@ -389,10 +389,10 @@ function updatePage(offset) {
 .adjustment-title-line { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
 .adjustment-status { display: inline-block; padding: .1rem .35rem; border: 1px solid currentColor; border-radius: .25rem; font-size: .75rem; white-space: nowrap; }
 .adjustment-detail { display: block; margin-top: .3rem; line-height: 1.4; }
-:global(:root[data-layout-mode='mobile']) .adjustment-title-content { max-width: 75%; text-align: right; }
-:global(:root[data-layout-mode='mobile']) .adjustment-title-line { justify-content: flex-end; }
+:global(:root[data-layout-mode='mobile'] .household-sheet-panel .adjustment-title-content) { max-width: 75%; text-align: right; }
+:global(:root[data-layout-mode='mobile'] .household-sheet-panel .adjustment-title-line) { justify-content: flex-end; }
 .sheet-table__actions-inner.household-sheet-actions--adjustment { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-:global(:root[data-layout-mode='mobile']) .sheet-table__actions-inner.household-sheet-actions--adjustment { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+:global(:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__actions-inner.household-sheet-actions--adjustment) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 .ledger-manage-overlay { position: fixed; inset: 0; z-index: 2700; display: grid; place-items: center; padding: 1rem; background: rgb(0 0 0 / 65%); }
 .ledger-manage-dialog { width: min(100%, 36rem); max-height: calc(100dvh - 2rem); overflow-y: auto; background: var(--panel-bg); color: var(--text); text-align: left; }
 .ledger-manage-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }

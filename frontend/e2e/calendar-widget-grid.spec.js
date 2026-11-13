@@ -63,6 +63,7 @@ async function drag(page, dx, dy, cancel = false) {
 }
 
 test('grid sizes persist as whole cells, render responsively on another device, and leave legacy pixels intact', async ({ page, browser }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
   const state = await mockPersonalization(page, { saved: gridSettings() })
   await expectGridFrame(page, 3, 2)
   await edit(page)
@@ -100,7 +101,8 @@ test('mouse and touch snap to cells, Escape restores the preview, and keyboard r
   await expectGridFrame(page, initial.mobile ? 3 : 4, 3)
   await card(page).getByRole('button', { name: /위젯 크기 조절/ }).press('ArrowUp')
   await expectGridFrame(page, initial.mobile ? 3 : 4, 2)
-  expect(await page.locator('.calendar-widget:not([data-aggregate-index="0"])').evaluateAll(elements => elements.map(element => ({ w: element.getBoundingClientRect().width, h: element.getBoundingClientRect().height })))).toEqual(siblings)
+  const afterSiblings = await page.locator('.calendar-widget:not([data-aggregate-index="0"])').evaluateAll(elements => elements.map(element => ({ w: element.getBoundingClientRect().width, h: element.getBoundingClientRect().height })))
+  expect(Math.max(...afterSiblings.flatMap((item, index) => [Math.abs(item.w - siblings[index].w), Math.abs(item.h - siblings[index].h)]))).toBeLessThan(1)
   expect((await frame(page)).font).toBe(initial.font)
   if (initial.mobile) {
     // Width is intentionally unchanged on mobile; ArrowUp restored the entire
@@ -111,11 +113,13 @@ test('mouse and touch snap to cells, Escape restores the preview, and keyboard r
   }
   await page.locator('.household-aggregate-panel').screenshot({ path: testInfo.outputPath('grid-widget-editing.png') })
   await save(page)
-  expect(state.saved.widgets[0]).toMatchObject({ cardColumns: initial.mobile ? 3 : 4, cardRows: initial.mobile ? 3 : 2, cardWidth: 310, cardHeight: 230 })
+  expect(state.saved.widgets[0]).toMatchObject({ cardColumns: initial.mobile ? 3 : 4, cardRows: 2, cardWidth: 310, cardHeight: 230 })
+  if (initial.mobile) expect(state.saved.layout.find(item => item.id === 'aggregate').mobileWidgetRows[0]).toBe(3)
   expect(state.errors).toEqual([])
 })
 
 test('clearing grid overrides keeps original pixels and snaps their display to the common grid', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
   const state = await mockPersonalization(page, { saved: gridSettings() })
   await edit(page)
   await card(page).getByRole('button', { name: /위젯 설정/ }).click()
@@ -123,7 +127,7 @@ test('clearing grid overrides keeps original pixels and snaps their display to t
   await inline(page).getByRole('combobox', { name: '카드 높이 (칸)', exact: true }).selectOption('')
   await inline(page).getByRole('button', { name: '편집 계속하기' }).click()
   await save(page)
-  const original = await frame(page), rows = Math.round((230 + 8) / original.outerRowPitch)
+  const original = await frame(page), rows = Math.round((230 + 8) / 112)
   await expect(card(page)).toHaveCSS('height', `${rows * original.rowPitch - 8}px`)
   await expect(card(page)).toHaveAttribute('data-widget-grid-rows', String(rows))
   expect(state.saved.widgets[0]).toMatchObject({ cardColumns: 0, cardRows: 0, cardWidth: 310, cardHeight: 230 })

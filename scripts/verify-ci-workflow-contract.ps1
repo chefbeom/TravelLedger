@@ -53,7 +53,8 @@ $requiredJobs = @(
     'backend-test',
     'backend-security-tests',
     'frontend-build',
-    'frontend-e2e-smoke-checklist'
+    'frontend-e2e-smoke-checklist',
+    'frontend-palette-e2e'
 )
 
 foreach ($job in $requiredJobs) {

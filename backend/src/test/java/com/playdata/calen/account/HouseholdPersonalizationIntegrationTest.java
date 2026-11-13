@@ -109,6 +109,58 @@ class HouseholdPersonalizationIntegrationTest {
         assertThat(read(owner)).isEqualTo(committed);
     }
 
+    @Test void desktopAndCompactMainDashboardEditsMergeWithoutErasingOtherProfiles() throws Exception {
+        String path = "/api/account/preferences/layout-settings/main-dashboard";
+        ObjectNode first = (ObjectNode) mapper.readTree("""
+                {"version":7,"payload":{"palettes":[{"id":"a","size":"2x2"}],
+                  "compactLayouts":{"1":[{"id":"a","x":0,"y":0,"w":1,"h":2}]}}}
+                """);
+        mvc.perform(put(path).with(user(AppUserPrincipal.from(owner))).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsBytes(first))).andExpect(status().isOk());
+
+        ObjectNode staleMobile = first.deepCopy();
+        ((ObjectNode) staleMobile.path("payload")).put("_layoutSection", "1");
+        ((ObjectNode) staleMobile.at("/payload/compactLayouts/1/0")).put("y", 3);
+        ObjectNode desktop = first.deepCopy();
+        ((ObjectNode) desktop.path("payload")).put("_layoutSection", "desktop");
+        ((ObjectNode) desktop.at("/payload/palettes/0")).put("size", "3x2");
+        mvc.perform(put(path).with(user(AppUserPrincipal.from(owner))).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsBytes(desktop))).andExpect(status().isOk());
+        JsonNode merged = mapper.readTree(mvc.perform(put(path).with(user(AppUserPrincipal.from(owner))).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(staleMobile)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("payload");
+        assertThat(merged.at("/palettes/0/size").asText()).isEqualTo("3x2");
+        assertThat(merged.at("/compactLayouts/1/0/y").asInt()).isEqualTo(3);
+        assertThat(merged.has("_layoutSection")).isFalse();
+
+        ObjectNode tablet = first.deepCopy();
+        ((ObjectNode) tablet.path("payload")).put("_layoutSection", "3");
+        ((ObjectNode) tablet.at("/payload/compactLayouts")).set("3", mapper.readTree("[{\"id\":\"a\",\"x\":0,\"y\":1,\"w\":3,\"h\":2}]"));
+        merged = mapper.readTree(mvc.perform(put(path).with(user(AppUserPrincipal.from(owner))).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(tablet)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("payload");
+        assertThat(merged.at("/compactLayouts/1/0/y").asInt()).isEqualTo(3);
+        assertThat(merged.at("/compactLayouts/3/0/y").asInt()).isEqualTo(1);
+        assertThat(merged.at("/palettes/0/size").asText()).isEqualTo("3x2");
+
+        // A desktop window opened before either compact edit must keep both newer profiles.
+        ((ObjectNode) desktop.at("/payload/palettes/0")).put("size", "4x2");
+        merged = mapper.readTree(mvc.perform(put(path).with(user(AppUserPrincipal.from(owner))).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(desktop)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("payload");
+        assertThat(merged.at("/palettes/0/size").asText()).isEqualTo("4x2");
+        assertThat(merged.at("/compactLayouts/1/0/y").asInt()).isEqualTo(3);
+        assertThat(merged.at("/compactLayouts/3/0/y").asInt()).isEqualTo(1);
+
+        ObjectNode legacy = first.deepCopy();
+        ((ObjectNode) legacy.path("payload")).remove("compactLayouts");
+        merged = mapper.readTree(mvc.perform(put(path).with(user(AppUserPrincipal.from(owner))).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(legacy)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("payload");
+        assertThat(merged.at("/compactLayouts/1/0/y").asInt()).isEqualTo(3);
+        assertThat(merged.at("/compactLayouts/3/0/y").asInt()).isEqualTo(1);
+    }
+
     @Test void legacyViewWritesPreserveNewDefaultsAndInvalidateTheModernRevision() throws Exception {
         ObjectNode draft = draft(owner);
         ((ObjectNode) draft.path("preferences")).put("quickEntryPanelEnabled", false).put("defaultWeekMode", "current");
@@ -299,6 +351,45 @@ class HouseholdPersonalizationIntegrationTest {
         // The older unified editor also sends four panels; it must not delete the fifth.
         JsonNode compatible = write(owner, draft(owner), 200);
         assertThat(compatible.at("/layout/4")).isEqualTo(query);
+    }
+
+    @Test void mobileLayoutRoundTripsWithoutChangingDesktopAndSurvivesOlderClients() throws Exception {
+        ObjectNode request = draft(owner);
+        ObjectNode aggregate = (ObjectNode) request.at("/layout/0");
+        aggregate.put("mobileOrder", 1).put("mobileHeight", 4);
+        aggregate.set("mobileWidgetOrder", mapper.readTree("[1,0,2,3,4,5]"));
+        aggregate.set("mobileWidgetRows", mapper.readTree("[2,0,0,3,0,0]"));
+        JsonNode saved = write(owner, request, 200);
+        assertThat(saved.at("/layout/0/y").asInt()).isEqualTo(12);
+        assertThat(saved.at("/layout/0/mobileHeight").asInt()).isEqualTo(4);
+        assertThat(saved.at("/layout/0/mobileWidgetOrder/0").asInt()).isEqualTo(1);
+
+        var olderLayout = (com.fasterxml.jackson.databind.node.ArrayNode) saved.path("layout").deepCopy();
+        ((ObjectNode) olderLayout.get(0)).remove(List.of("mobileOrder", "mobileHeight", "mobileWidgetOrder", "mobileWidgetRows"));
+        var legacy = mapper.createObjectNode().put("version", 3);
+        legacy.set("payload", olderLayout);
+        mvc.perform(put("/api/account/preferences/layout-settings/household-calendar")
+                        .with(user(AppUserPrincipal.from(owner))).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(legacy))).andExpect(status().isOk());
+        assertThat(read(owner).at("/layout/0/mobileWidgetRows/3").asInt()).isEqualTo(3);
+        JsonNode compatible = write(owner, draft(owner), 200);
+        assertThat(compatible.at("/layout/0/mobileOrder").asInt()).isEqualTo(1);
+        assertThat(compatible.at("/layout/0/mobileWidgetOrder/0").asInt()).isEqualTo(1);
+        ObjectNode reset = (ObjectNode) read(owner);
+        ((ObjectNode) reset.at("/layout/0")).putNull("mobileOrder").putNull("mobileHeight")
+                .putNull("mobileWidgetOrder").putNull("mobileWidgetRows");
+        assertThat(write(owner, reset, 200).at("/layout/0/mobileOrder").isNull()).isTrue();
+    }
+
+    @Test void invalidMobileOverridesDoNotChangeAccountSettings() throws Exception {
+        JsonNode before = read(owner);
+        ObjectNode invalid = draft(owner);
+        ((ObjectNode) invalid.at("/layout/0")).set("mobileWidgetOrder", mapper.readTree("[0,0,1,2,3,4]"));
+        write(owner, invalid, 400);
+        invalid = draft(owner);
+        ((ObjectNode) invalid.at("/layout/1")).put("mobileHeight", 13);
+        write(owner, invalid, 400);
+        assertThat(read(owner)).isEqualTo(before);
     }
 
     @Test void malformedQueryPalettesCannotChangeSavedSettings() throws Exception {

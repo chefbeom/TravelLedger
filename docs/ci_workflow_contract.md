@@ -15,7 +15,7 @@ This contract keeps the GitHub Actions workflow reviewable as security, migratio
 | Admin/share/upload/privacy | `admin-audit-contract`, `public-share-authorization-contract`, `media-processing-contract`, `file-upload-security-contract`, `privacy-control-contract` |
 | AI/ledger product safety | `ai-provider-safety-contract`, `ledger-ai-coach-contract`, `ledger-classification-contract`, `ledger-anomaly-contract` |
 | Travel/household/data | `travel-story-export-contract`, `household-budget-goals-contract`, `drive-file-versioning-contract`, `data-portability-contract` |
-| UX/mobile/frontend | `pwa-mobile-baseline`, `accessibility-mobile-checklist`, `frontend-build`, `frontend-e2e-smoke-checklist` |
+| UX/mobile/frontend | `pwa-mobile-baseline`, `accessibility-mobile-checklist`, `frontend-build`, `frontend-e2e-smoke-checklist`, `frontend-palette-e2e` |
 | Observability/maintainability | `observability-alerts`, `service-decomposition-plan`, `backend-test` |
 | Final gate | `release-gate` |
 

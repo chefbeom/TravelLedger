@@ -73,6 +73,7 @@ test('view and edit share palette geometry, and modal transaction sheets never b
 })
 
 test('selected widget edits update the real card and persist size, font, color and detail visibility', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
   const state = await mockPersonalization(page)
   await edit(page)
   await widget(page, 0).getByRole('button', { name: /위젯 설정/ }).click()
@@ -155,13 +156,20 @@ test('widget ordering and keyboard resizing operate on the selected card without
   await expect.poll(async () => Math.round((await widget(page, 0).boundingBox()).height)).toBe(rowHeight * rows - 8)
   await widget(page, 0).getByRole('button', { name: /위젯 이동/ }).focus()
   await page.keyboard.press('ArrowRight')
-  await expect(widget(page, 1).locator('.household-aggregate-card__eyebrow')).toHaveText('순서 검증 첫 위젯')
-  await widget(page, 1).getByRole('button', { name: /위젯 이동/ }).focus()
+  const mobile = await page.locator('html').getAttribute('data-layout-mode') === 'mobile'
+  if (mobile) await expect(page.locator('.calendar-widget').nth(1)).toHaveAttribute('data-aggregate-index', '0')
+  else await expect(widget(page, 1).locator('.household-aggregate-card__eyebrow')).toHaveText('순서 검증 첫 위젯')
+  await widget(page, mobile ? 0 : 1).getByRole('button', { name: /위젯 이동/ }).focus()
   await page.keyboard.press('ArrowDown')
-  await expect(widget(page, 2).locator('.household-aggregate-card__eyebrow')).toHaveText('순서 검증 첫 위젯')
+  if (mobile) await expect(page.locator('.calendar-widget').nth(2)).toHaveAttribute('data-aggregate-index', '0')
+  else await expect(widget(page, 2).locator('.household-aggregate-card__eyebrow')).toHaveText('순서 검증 첫 위젯')
   await page.locator('.calendar-draft-toolbar').getByRole('button', { name: '변경사항 저장', exact: true }).click()
   await expect(canvas(page)).not.toHaveClass(/calendar-dashboard--editing/)
-  expect(state.saved.widgets[2]).toMatchObject({ title: '순서 검증 첫 위젯', cardRows: rows })
+  if (mobile) {
+    expect(state.saved.widgets[0].title).toBe('순서 검증 첫 위젯')
+    expect(state.saved.layout.find(item => item.id === 'aggregate').mobileWidgetRows[0]).toBe(rows)
+    expect(state.saved.layout.find(item => item.id === 'aggregate').mobileWidgetOrder.slice(0, 3)).toEqual([1, 2, 0])
+  } else expect(state.saved.widgets[2]).toMatchObject({ title: '순서 검증 첫 위젯', cardRows: rows })
   expect(state.errors).toEqual([])
 })
 
@@ -199,7 +207,8 @@ test('chart corner resize previews the real chart and survives saving', async ({
   const after = await chart.boundingBox()
   await page.locator('.calendar-draft-toolbar').getByRole('button', { name: '변경사항 저장', exact: true }).click()
   await expect(canvas(page)).not.toHaveClass(/calendar-dashboard--editing/)
-  expect(state.saved.widgets[3].cardRows).toBe(rows)
+  if (touch) expect(state.saved.layout.find(item => item.id === 'aggregate').mobileWidgetRows[3]).toBe(rows)
+  else expect(state.saved.widgets[3].cardRows).toBe(rows)
   expect(state.saved.widgets[3].cardColumns).toBe(touch ? 0 : Math.round((after.width + 8) / (((await chart.locator('..').boundingBox()).width + 8) / 9)))
   expect(Math.abs((await chart.boundingBox()).height - after.height)).toBeLessThan(1)
   expect(state.errors).toEqual([])

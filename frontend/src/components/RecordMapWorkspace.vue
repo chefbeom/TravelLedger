@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { recordMapApi as api } from '../lib/recordMapApi'
+import { fetchCalendarPlaceSource, fetchCalendarMapView, fetchCalendarSharedPlace } from '../lib/api'
 import { buildRecordMapData } from '../lib/recordMap'
 import { locationSuggestions, normalizeLocationResults, relatedLocationQueries } from '../lib/recordMapLocationSearch'
 import { extractPhotoMetadata } from '../lib/photoMetadata'
@@ -12,8 +13,8 @@ import TravelMapPanel from './TravelMapPanel.vue'
 import RecordMapDialog from './RecordMapDialog.vue'
 import RecordMapSidebar from './RecordMapSidebar.vue'
 
-const props = defineProps({ token: { type: String, default: '' }, publicView: Boolean })
-const emit = defineEmits(['open-travel'])
+const props = defineProps({ token: { type: String, default: '' }, publicView: Boolean, placeFocusRequest: Object, calendarGrantId: [String, Number] })
+const emit = defineEmits(['open-travel', 'place-focus-consumed'])
 const readOnly = computed(() => props.publicView || Boolean(props.token))
 const snapshot = ref({ places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 })
 const listSnapshot = ref({ places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 })
@@ -72,9 +73,11 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    if (readOnly.value && !props.token) throw new Error('공유 주소가 올바르지 않습니다.')
+    if (readOnly.value && !props.token && !props.calendarGrantId) throw new Error('공유 주소가 올바르지 않습니다.')
     const params = { ...filters, size: 30, collectionId: readOnly.value ? null : filters.collectionId }
-    const [result, list] = await Promise.all([api.map({ ...params, page: undefined }, props.token), api.overview(params, props.token)])
+    const [result, list] = props.calendarGrantId
+      ? await Promise.all([fetchCalendarMapView(props.calendarGrantId, 'map', { ...params, page: undefined }), fetchCalendarMapView(props.calendarGrantId, 'overview', params)])
+      : await Promise.all([api.map({ ...params, page: undefined }, props.token), api.overview(params, props.token)])
     if (sequence !== requestSequence) return
     snapshot.value = result
     listSnapshot.value = list
@@ -102,7 +105,8 @@ async function loadList() {
   const sequence = ++listSequence, filterSequence = requestSequence
   listLoading.value = true
   try {
-    const result = await api.overview({ ...filters, size: 30, collectionId: readOnly.value ? null : filters.collectionId }, props.token)
+    const params = { ...filters, size: 30, collectionId: readOnly.value ? null : filters.collectionId }
+    const result = props.calendarGrantId ? await fetchCalendarMapView(props.calendarGrantId, 'overview', params) : await api.overview(params, props.token)
     if (sequence === listSequence && filterSequence === requestSequence) listSnapshot.value = result
   } catch (e) {
     if (sequence !== listSequence || filterSequence !== requestSequence) return
@@ -187,7 +191,7 @@ onMounted(() => {
   frameObserver = new ResizeObserver(refreshFrame)
   if (frameRef.value) { frameObserver.observe(frameRef.value); frameObserver.observe(frameRef.value.parentElement) }
 })
-watch(() => props.token, () => {
+watch(() => [props.token, props.calendarGrantId], () => {
   clearTimeout(searchTimer); locationAbort?.abort(); locationSequence++; locationLoading.value = false; searchText.value = ''
   snapshot.value = { places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 }
   listSnapshot.value = { ...snapshot.value }; clearLocationResults(); locationHistory.value = []; lastLocationQuery.value = ''; searchMode.value = 'saved'
@@ -399,6 +403,23 @@ async function loadDetail(page) {
     detailPage.value = page; detailHasMore.value = !readOnly.value && rows.length === 20
   } catch (e) { error.value = e.message } finally { if (sequence === detailSequence) detailLoading.value = false }
 }
+let appliedPlaceFocusToken = ''
+watch(() => [props.placeFocusRequest?.token, loading.value], async ([token, isLoading]) => {
+  if (!token || isLoading || token === appliedPlaceFocusToken || (readOnly.value && !props.calendarGrantId)) return
+  appliedPlaceFocusToken = token
+  try {
+    const source = props.calendarGrantId
+      ? await fetchCalendarSharedPlace(props.calendarGrantId, props.placeFocusRequest.placeId, { kind: props.placeFocusRequest.sourceKind, recordId: props.placeFocusRequest.recordId, date: props.placeFocusRequest.date })
+      : await fetchCalendarPlaceSource(props.placeFocusRequest.placeId, props.placeFocusRequest.visitId)
+    listSnapshot.value = { ...listSnapshot.value, places: [...listSnapshot.value.places.filter(item => item.id !== source.place.id), source.place] }
+    if (readOnly.value && source.visit) snapshot.value = { ...snapshot.value, visits: [source.visit, ...snapshot.value.visits.filter(item => item.id !== source.visit.id)] }
+    await openDetail(source.place)
+    if (source.visit && selectedPlaceId.value === source.place.id) {
+      detailVisits.value = [source.visit, ...detailVisits.value.filter(item => item.id !== source.visit.id)]
+    }
+  } catch (e) { error.value = e.message || '연결된 장소 기록을 불러오지 못했습니다.' }
+  finally { emit('place-focus-consumed') }
+}, { immediate: true })
 function openPhoto(photo, visit = null) {
   if (visit) selectedPlaceId.value = visit.placeId
   selectedPhoto.value = { ...photo, visit }; modal.value = 'photo'

@@ -19,6 +19,9 @@ import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
 import com.playdata.calen.travel.repository.TravelShareGroupMemberRepository;
 import com.playdata.calen.travel.repository.TravelShareGroupRepository;
 import com.playdata.calen.travel.service.TravelService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,7 @@ public class RecordSharingService {
     private final TravelService travel;
     private final ObjectMapper mapper;
     private final CreateRecordShareUseCase creation;
+    private final EntityManager entities;
 
     public List<RecordShareDtos.Group> getGroups(Long userId) {
         users.getRequiredUser(userId);
@@ -89,6 +93,7 @@ public class RecordSharingService {
 
     @Transactional
     public RecordShareDtos.Response acceptLedger(Long userId, Long id, LedgerEntryRequest request) {
+        users.getRequiredUserForWrite(userId);
         RecordShare share = requireRecipient(userId, id, true);
         if (share.getKind() != RecordShareKind.LEDGER) throw new BadRequestException("가계부 공유 요청이 아닙니다.");
         if (share.getStatus() == RecordShareStatus.ACCEPTED) return toResponse(share);
@@ -106,6 +111,7 @@ public class RecordSharingService {
 
     @Transactional
     public RecordShareDtos.Response acceptTravel(Long userId, Long id) {
+        users.getRequiredUserForWrite(userId);
         RecordShare share = requireRecipient(userId, id, true);
         if (share.getKind() != RecordShareKind.TRAVEL) throw new BadRequestException("여행 공유 요청이 아닙니다.");
         if (share.getStatus() == RecordShareStatus.ACCEPTED) return toResponse(share);
@@ -117,6 +123,7 @@ public class RecordSharingService {
 
     @Transactional
     public RecordShareDtos.Response reject(Long userId, Long id) {
+        users.getRequiredUserForWrite(userId);
         RecordShare share = requireRecipient(userId, id, true);
         requirePending(share);
         share.setStatus(RecordShareStatus.REJECTED);
@@ -126,8 +133,8 @@ public class RecordSharingService {
 
     @Transactional
     public RecordShareDtos.Response cancel(Long userId, Long id) {
-        users.getRequiredUser(userId);
-        RecordShare share = shares.findLockedById(id).orElseThrow(this::notFound);
+        users.getRequiredUserForWrite(userId);
+        RecordShare share = lockShare(id);
         if (!share.getSender().getId().equals(userId)) throw notFound();
         if (share.getStatus() == RecordShareStatus.ACCEPTED && share.getKind() == RecordShareKind.LEDGER)
             throw new BadRequestException("이미 가져온 가계부 거래는 받는 사람의 독립 기록입니다.");
@@ -153,9 +160,16 @@ public class RecordSharingService {
         return share;
     }
 
+    /** Reuse the same current-recipient and group checks for calendar projections. */
+    public CalendarTravelAccess calendarTravelAccess(Long userId, Long id) {
+        RecordShare share = requireAcceptedTravel(userId, id);
+        return new CalendarTravelAccess(share.getSender().getId(), share.getSourceId());
+    }
+    public record CalendarTravelAccess(Long ownerId, Long planId) { }
+
     private RecordShare requireRecipient(Long userId, Long id, boolean lock) {
         users.getRequiredUser(userId);
-        RecordShare share = (lock ? shares.findLockedById(id) : shares.findById(id)).orElseThrow(this::notFound);
+        RecordShare share = lock ? lockShare(id) : shares.findById(id).orElseThrow(this::notFound);
         if (!share.getRecipient().getId().equals(userId)) throw notFound();
         requireGroup(share.getGroupId(), userId);
         requireGroup(share.getGroupId(), share.getSender().getId());
@@ -171,6 +185,12 @@ public class RecordSharingService {
 
     private void requirePending(RecordShare share) {
         if (share.getStatus() != RecordShareStatus.PENDING) throw new BadRequestException("이미 처리된 공유 요청입니다.");
+    }
+    private RecordShare lockShare(Long id) {
+        RecordShare share = shares.findLockedById(id).orElseThrow(this::notFound);
+        try { entities.refresh(share, LockModeType.PESSIMISTIC_WRITE); }
+        catch (EntityNotFoundException missing) { throw notFound(); }
+        return share;
     }
     private void accept(RecordShare share) {
         share.setStatus(RecordShareStatus.ACCEPTED);

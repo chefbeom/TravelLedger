@@ -72,7 +72,7 @@ public class CategoryService {
 
     @Transactional
     public List<CategoryGroupResponse> reorderGroups(Long userId, DisplayOrderRequest request) {
-        appUserService.getRequiredUser(userId);
+        appUserService.getRequiredUserForWrite(userId);
         List<CategoryGroup> groups = categoryGroupRepository.findAllByOwnerIdOrderByDisplayOrderAscIdAsc(userId);
         List<Long> orderedIds = request == null ? null : request.orderedIds();
         validateExactOrder(orderedIds, groups.stream().map(CategoryGroup::getId).toList(), "대분류");
@@ -87,6 +87,7 @@ public class CategoryService {
 
     @Transactional
     public List<CategoryDetailResponse> reorderDetails(Long userId, Long groupId, DisplayOrderRequest request) {
+        appUserService.getRequiredUserForWrite(userId);
         categoryGroupRepository.findByIdAndOwnerId(groupId, userId)
                 .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
         List<CategoryDetail> details = categoryDetailRepository.findAllByGroupIdOrderByDisplayOrderAscIdAsc(groupId);
@@ -106,7 +107,7 @@ public class CategoryService {
 
     @Transactional
     public CategoryGroupResponse createGroup(Long userId, CategoryGroupRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         String name = normalizeName(request.name());
         if (categoryGroupRepository.findFirstByOwnerIdAndEntryTypeAndNameIgnoreCaseOrderByIdAsc(owner.getId(), request.entryType(), name).isPresent()) {
             throw new BadRequestException("이미 있는 분류입니다.");
@@ -122,6 +123,7 @@ public class CategoryService {
 
     @Transactional
     public CategoryDetailResponse createDetail(Long userId, CategoryDetailRequest request) {
+        appUserService.getRequiredUserForWrite(userId);
         CategoryGroup group = categoryGroupRepository.findByIdAndOwnerId(request.groupId(), userId)
                 .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
 
@@ -139,6 +141,7 @@ public class CategoryService {
 
     @Transactional
     public void deactivateGroup(Long userId, Long id) {
+        appUserService.getRequiredUserForWrite(userId);
         CategoryGroup group = categoryGroupRepository.findByIdAndOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
         group.setActive(false);
@@ -147,6 +150,7 @@ public class CategoryService {
 
     @Transactional
     public CategoryGroupResponse activateGroup(Long userId, Long id) {
+        appUserService.getRequiredUserForWrite(userId);
         CategoryGroup group = categoryGroupRepository.findByIdAndOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
         group.setActive(true);
@@ -156,6 +160,7 @@ public class CategoryService {
 
     @Transactional
     public void deactivateDetail(Long userId, Long id) {
+        appUserService.getRequiredUserForWrite(userId);
         CategoryDetail detail = categoryDetailRepository.findByIdAndGroupOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("소분류를 찾을 수 없습니다."));
         detail.setActive(false);
@@ -163,6 +168,7 @@ public class CategoryService {
 
     @Transactional
     public CategoryDetailResponse activateDetail(Long userId, Long id) {
+        appUserService.getRequiredUserForWrite(userId);
         CategoryDetail detail = categoryDetailRepository.findByIdAndGroupOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("소분류를 찾을 수 없습니다."));
         detail.getGroup().setActive(true);
@@ -196,6 +202,7 @@ public class CategoryService {
 
     @Transactional
     public void deleteGroup(Long userId, Long id, LedgerClassificationDeleteRequest request) {
+        appUserService.getRequiredUserForWrite(userId);
         LedgerClassificationDeleteRequest deleteRequest = normalizeDeleteRequest(request);
         CategoryGroup group = categoryGroupRepository.findByIdAndOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
@@ -213,6 +220,7 @@ public class CategoryService {
 
     @Transactional
     public void deleteDetail(Long userId, Long id, LedgerClassificationDeleteRequest request) {
+        appUserService.getRequiredUserForWrite(userId);
         LedgerClassificationDeleteRequest deleteRequest = normalizeDeleteRequest(request);
         CategoryDetail detail = categoryDetailRepository.findByIdAndGroupOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("소분류를 찾을 수 없습니다."));

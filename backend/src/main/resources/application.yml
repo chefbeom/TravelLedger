@@ -115,9 +115,14 @@ app:
       queue-capacity: ${APP_HTTP_ASYNC_QUEUE_CAPACITY:64}
       timeout-millis: ${APP_HTTP_ASYNC_TIMEOUT_MILLIS:600000}
   drive:
+    direct-share-audit-anonymization:
+      enabled: ${APP_DRIVE_DIRECT_SHARE_AUDIT_ANONYMIZATION_ENABLED:true}
     download:
       max-zip-files: ${DRIVE_MAX_ZIP_FILES:2000}
       max-zip-bytes: ${DRIVE_MAX_ZIP_BYTES:2147483648}
+  account:
+    unknown-login-audit-anonymization:
+      enabled: ${APP_UNKNOWN_LOGIN_AUDIT_ANONYMIZATION_ENABLED:true}
   schema:
     legacy-updaters:
       enabled: ${APP_SCHEMA_LEGACY_UPDATERS_ENABLED:true}
@@ -125,6 +130,7 @@ app:
     remember-me-key: ${JWT_KEY:}
     session-seal-key: ${SESSION_SEAL_KEY:${JWT_KEY:}}
     ops-control-seal-key: ${OPS_CONTROL_SEAL_KEY:${JWT_KEY:}}
+    withdrawal-task-seal-key: ${WITHDRAWAL_TASK_SEAL_KEY:}
     public-media-key: ${PUBLIC_MEDIA_KEY:${JWT_KEY:}}
     remember-me-token-validity-seconds: 2592000
     remember-me-secure-cookie: ${REMEMBER_ME_SECURE_COOKIE:true}
@@ -134,16 +140,22 @@ app:
       enabled: ${APP_AUTH_EMAIL_VERIFICATION_ENABLED:true}
       base-url: ${APP_AUTH_EMAIL_VERIFICATION_BASE_URL:}
       token-validity: ${APP_AUTH_EMAIL_VERIFICATION_TOKEN_VALIDITY:30m}
+      pending-cleanup-enabled: ${APP_AUTH_EMAIL_PENDING_CLEANUP_ENABLED:true}
       from: ${APP_AUTH_EMAIL_VERIFICATION_FROM:${MAIL_FROM:}}
     kakao:
       enabled: ${APP_AUTH_KAKAO_ENABLED:false}
       client-id: ${KAKAO_CLIENT_ID:}
       client-secret: ${KAKAO_CLIENT_SECRET:}
+      admin-key: ${KAKAO_ADMIN_KEY:}
+      expected-app-id: ${KAKAO_EXPECTED_APP_ID:}
+      admin-app-id: ${KAKAO_ADMIN_APP_ID:}
       redirect-uri: ${KAKAO_REDIRECT_URI:}
       frontend-base-url: ${KAKAO_FRONTEND_BASE_URL:}
       authorization-uri: ${KAKAO_AUTHORIZATION_URI:https://kauth.kakao.com/oauth/authorize}
       token-uri: ${KAKAO_TOKEN_URI:https://kauth.kakao.com/oauth/token}
       user-info-uri: ${KAKAO_USER_INFO_URI:https://kapi.kakao.com/v2/user/me}
+      token-info-uri: ${KAKAO_TOKEN_INFO_URI:https://kapi.kakao.com/v1/user/access_token_info}
+      unlink-uri: ${KAKAO_UNLINK_URI:https://kapi.kakao.com/v1/user/unlink}
       connect-timeout: ${APP_AUTH_KAKAO_CONNECT_TIMEOUT:5s}
       read-timeout: ${APP_AUTH_KAKAO_READ_TIMEOUT:10s}
   jwt:
@@ -174,6 +186,7 @@ app:
       zone: ${APP_LEDGER_RECURRING_ZONE:Asia/Seoul}
     ocr:
       enabled: ${LEDGER_OCR_ENABLED:false}
+      image-storage-id: ${LEDGER_OCR_IMAGE_STORAGE_ID:}
       base-url: ${LEDGER_OCR_BASE_URL:}
       workflow-url: ${LEDGER_OCR_WORKFLOW_URL:}
       api-key: ${LEDGER_OCR_API_KEY:}
@@ -241,6 +254,7 @@ app:
     allow-insecure-default-credentials: ${APP_SEED_ALLOW_INSECURE_DEFAULT_CREDENTIALS:false}
   support:
     attachment-storage-path: ${SUPPORT_ATTACHMENT_STORAGE_PATH:${user.dir}/uploads/support-inquiries}
+    attachment-storage-id: ${SUPPORT_ATTACHMENT_STORAGE_ID:}
   data-ops:
     execution-mode: ${DATA_OPS_BACKUP_EXECUTION_MODE:local}
     agent-url: ${DATA_OPS_BACKUP_AGENT_URL:}

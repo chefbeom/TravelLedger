@@ -24,6 +24,16 @@ public final class RecordMapReadMapper {
                 v.title(), v.memo(), v.date(), v.time(), v.travelPlanId(), v.travelPlanName(), v.photos().stream().map(p -> photo(p, token)).toList())).toList();
     }
 
+    public static Overview calendarResponse(OverviewResult result, Long grantId) {
+        Overview base = response(result, null);
+        List<VisitView> safeVisits = result.visits().stream().map(v -> new VisitView((v.origin() == Origin.TRAVEL ? "travel:" : "visit:") + v.id(), v.placeId(),
+                v.title(), v.memo(), v.date(), v.time(), v.travelPlanId(), v.travelPlanName(), v.photos().stream().map(photo -> {
+                    boolean travel = photo.origin() == Origin.TRAVEL;
+                    return new PhotoView((travel ? "travel-photo:" : "photo:") + photo.id(), photo.name(), "/api/integrated-calendar/shared-map/" + grantId + "/photos/" + (travel ? "travel/" : "visit/") + photo.id());
+                }).toList())).toList();
+        return new Overview(base.collections(), base.places(), safeVisits, base.totalPlaces(), base.page(), base.totalPages(), base.visitsLimited(), base.readOnly(), base.visitsIncluded(), base.title(), base.placesLimited());
+    }
+
     public static Page<TravelCandidate> candidates(CandidatePage result) {
         return new PageImpl<>(result.content().stream().map(c -> new TravelCandidate(c.id(), c.planId(), c.planName(), c.title(),
                 c.date(), c.country(), c.region(), c.latitude(), c.longitude())).toList(),

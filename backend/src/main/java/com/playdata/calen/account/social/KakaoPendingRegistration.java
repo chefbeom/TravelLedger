@@ -7,6 +7,10 @@ public record KakaoPendingRegistration(
         String providerUserId,
         String email,
         String displayName,
-        Instant expiresAt
+        Instant expiresAt,
+        Long providerAppId
 ) implements Serializable {
+    public KakaoPendingRegistration(String providerUserId, String email, String displayName, Instant expiresAt) {
+        this(providerUserId, email, displayName, expiresAt, null);
+    }
 }

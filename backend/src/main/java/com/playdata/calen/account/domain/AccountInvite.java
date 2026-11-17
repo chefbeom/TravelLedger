@@ -28,8 +28,8 @@ public class AccountInvite {
     @Column(nullable = false, unique = true, length = 64)
     private String tokenHash;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "created_by_user_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by_user_id")
     private AppUser createdBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -43,4 +43,6 @@ public class AccountInvite {
     private LocalDateTime expiresAt;
 
     private LocalDateTime usedAt;
+
+    private LocalDateTime revokedAt;
 }

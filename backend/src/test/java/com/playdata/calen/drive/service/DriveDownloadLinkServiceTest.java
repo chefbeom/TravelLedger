@@ -9,14 +9,19 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.account.withdrawal.PublicShareAccessGuard;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.drive.domain.DriveDownloadLink;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.domain.DriveItemType;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -31,6 +36,9 @@ class DriveDownloadLinkServiceTest {
     private DriveDownloadLinkRepository driveDownloadLinkRepository;
 
     @Mock
+    private AppUserService appUsers;
+
+    @Mock
     private DriveService driveService;
 
     @Mock
@@ -38,6 +46,12 @@ class DriveDownloadLinkServiceTest {
 
     @Mock
     private DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService;
+
+    @Mock
+    private PublicShareAccessGuard publicShareAccessGuard;
+
+    @Mock
+    private EntityManager entities;
 
     @Test
     void downloadByTokenRecordsLinkAccessTimeWhenAvailable() {
@@ -49,6 +63,7 @@ class DriveDownloadLinkServiceTest {
 
         service.downloadByToken("public-token");
 
+        verify(entities).refresh(link, LockModeType.PESSIMISTIC_WRITE);
         assertThat(link.getDownloadCount()).isEqualTo(1);
         assertThat(link.getLastAccessedAt()).isNotNull();
         assertThat(link.getItem().getLastAccessedAt()).isNotNull();
@@ -182,8 +197,6 @@ class DriveDownloadLinkServiceTest {
 
     @Test
     void downloadByTokenRejectsMissingLinkWithoutLoadingFile() {
-        when(driveDownloadLinkRepository.findByToken("missing-token")).thenReturn(Optional.empty());
-
         DriveDownloadLinkService service = newService();
 
         assertThatThrownBy(() -> service.downloadByToken("missing-token"))
@@ -275,11 +288,15 @@ class DriveDownloadLinkServiceTest {
     }
 
     private DriveDownloadLinkService newService() {
+        lenient().when(driveDownloadLinkRepository.findOwnerIdByToken("public-token")).thenReturn(Optional.of(1L));
         return new DriveDownloadLinkService(
                 driveDownloadLinkRepository,
+                appUsers,
                 driveService,
                 driveStorageService,
-                driveDownloadLinkAccessLogService
+                driveDownloadLinkAccessLogService,
+                publicShareAccessGuard,
+                entities
         );
     }
 

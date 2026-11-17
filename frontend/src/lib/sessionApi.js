@@ -146,6 +146,10 @@ export function fetchKakaoRegistrationSession() {
   return request('/auth/oauth/kakao/registration', { cache: 'no-store' })
 }
 
+export function verifyProfileEmail(payload) {
+  return request('/auth/email-verification/verify-profile', { method: 'POST', body: JSON.stringify(payload) })
+}
+
 export function cancelKakaoRegistration() {
   return request('/auth/oauth/kakao/cancel', { method: 'POST' })
 }

@@ -2,6 +2,7 @@ package com.playdata.calen.ledger.service;
 
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.domain.CategoryDetail;
@@ -43,6 +44,7 @@ public class RecurringLedgerService {
     private org.springframework.transaction.PlatformTransactionManager batchTransactionManager;
 
     private final AppUserService appUserService;
+    private final AppUserRepository appUserRepository;
     private final RecurringLedgerRuleRepository ruleRepository;
     private final RecurringLedgerOccurrenceRepository occurrenceRepository;
     private final CategoryGroupRepository categoryGroupRepository;
@@ -60,7 +62,7 @@ public class RecurringLedgerService {
 
     @Transactional
     public RecurringLedgerRuleResponse createRule(Long userId, RecurringLedgerRuleRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = lockActiveOwner(userId);
         RecurringLedgerRule rule = new RecurringLedgerRule();
         rule.setOwner(owner);
         applyRequest(userId, rule, request, true);
@@ -69,6 +71,7 @@ public class RecurringLedgerService {
 
     @Transactional
     public RecurringLedgerRuleResponse updateRule(Long userId, Long ruleId, RecurringLedgerRuleRequest request) {
+        lockActiveOwner(userId);
         RecurringLedgerRule rule = ruleRepository.findByIdAndOwnerId(ruleId, userId)
                 .orElseThrow(() -> new NotFoundException("정기 입출금 규칙을 찾을 수 없습니다."));
         applyRequest(userId, rule, request, false);
@@ -77,6 +80,7 @@ public class RecurringLedgerService {
 
     @Transactional
     public void deactivateRule(Long userId, Long ruleId) {
+        lockActiveOwner(userId);
         RecurringLedgerRule rule = ruleRepository.findByIdAndOwnerId(ruleId, userId)
                 .orElseThrow(() -> new NotFoundException("정기 입출금 규칙을 찾을 수 없습니다."));
         rule.setActive(false);
@@ -84,6 +88,7 @@ public class RecurringLedgerService {
 
     @Transactional
     public void deleteRule(Long userId, Long ruleId) {
+        lockActiveOwner(userId);
         RecurringLedgerRule rule = ruleRepository.findByIdAndOwnerId(ruleId, userId)
                 .orElseThrow(() -> new NotFoundException("정기 입출금 규칙을 찾을 수 없습니다."));
         if (rule.isActive()) {
@@ -106,6 +111,7 @@ public class RecurringLedgerService {
 
     @Transactional
     public RecurringLedgerOccurrenceResponse approveOccurrence(Long userId, Long occurrenceId) {
+        lockActiveOwner(userId);
         RecurringLedgerOccurrence occurrence = getPendingOccurrence(userId, occurrenceId);
         LedgerEntryResponse createdEntry = ledgerEntryService.create(
                 userId,
@@ -119,6 +125,7 @@ public class RecurringLedgerService {
 
     @Transactional
     public RecurringLedgerOccurrenceResponse skipOccurrence(Long userId, Long occurrenceId) {
+        lockActiveOwner(userId);
         RecurringLedgerOccurrence occurrence = getPendingOccurrence(userId, occurrenceId);
         occurrence.setStatus(RecurringLedgerOccurrenceStatus.SKIPPED);
         occurrence.setProcessedAt(now());
@@ -155,9 +162,12 @@ public class RecurringLedgerService {
     }
 
     private int processRule(Long ruleId, LocalDate targetDate) {
-            // The database lock serializes this rule across all application instances.
+            // Withdrawal/deactivation locks the user first. Lock in the same order so a
+            // pending occurrence cannot be created after that transaction commits.
+            Long ownerId = ruleRepository.findOwnerIdById(ruleId).orElse(null);
+            if (ownerId == null || appUserRepository.findActiveForPreferenceUpdate(ownerId).isEmpty()) return 0;
             RecurringLedgerRule rule = ruleRepository.findByIdForUpdate(ruleId).orElse(null);
-            if (rule == null || !rule.isActive()) return 0;
+            if (rule == null || !rule.isActive() || !ownerId.equals(rule.getOwner().getId())) return 0;
             if (!RecurringLedgerSchedule.isDue(
                     scheduleTypeOf(rule),
                     rule.getDayOfMonth(),
@@ -191,6 +201,11 @@ public class RecurringLedgerService {
             occurrence.setProcessedAt(now());
             occurrenceRepository.save(occurrence);
             return 1;
+    }
+
+    private AppUser lockActiveOwner(Long userId) {
+        return appUserRepository.findActiveForPreferenceUpdate(userId)
+                .orElseThrow(() -> new NotFoundException("사용자 계정을 찾을 수 없습니다."));
     }
 
     private RecurringLedgerOccurrence getPendingOccurrence(Long userId, Long occurrenceId) {

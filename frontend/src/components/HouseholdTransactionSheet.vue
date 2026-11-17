@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { splitDisplayedAmount, splitExpectedCount } from '../lib/ledgerSheetGroups'
 
 const props = defineProps({
+  focusEntryId: { type: [String, Number], default: null },
   selectedDateLabel: { type: String, required: true },
   countLabel: { type: String, required: true },
   entries: { type: Array, default: () => [] },
@@ -41,9 +42,21 @@ const emit = defineEmits([
 ])
 
 const managedEntry = ref(null)
+const managedSplit = ref(null)
+const sheetRoot = ref(null)
+let focusedEntryKey = ''
+watch(() => [props.focusEntryId, props.entries], async ([id, rows]) => {
+  if (!id || !rows.some(row => row.parts.some(part => String(part.id) === String(id)))) return
+  const key = String(id)
+  if (focusedEntryKey === key) return
+  await nextTick()
+  const target = sheetRoot.value?.querySelector('[data-calendar-focused-entry="true"]')
+  if (target) { focusedEntryKey = key; target.scrollIntoView({ block: 'nearest' }); target.focus({ preventScroll: true }) }
+}, { immediate: true })
 const managerCloseButton = ref(null)
 let managerTrigger = null
 const activeSplitKey = ref('')
+const splitIntent = ref('view')
 const splitCloseButton = ref(null)
 let splitTrigger = null
 const activeSplit = computed(() => props.entries.find(row => row.key === activeSplitKey.value && row.isSplit) || null)
@@ -51,8 +64,9 @@ const splitParts = computed(() => [...(activeSplit.value?.parts || [])].sort((a,
 
 watch(activeSplit, row => { if (!row) activeSplitKey.value = '' })
 
-async function openSplit(row, event) {
+async function openSplit(row, event, intent = 'view') {
   splitTrigger = event.currentTarget
+  splitIntent.value = intent
   activeSplitKey.value = row.key
   await nextTick()
   splitCloseButton.value?.focus()
@@ -101,12 +115,29 @@ function splitHasAdjustments(row) { return row.parts.some(entry => statusLabel(e
 
 async function openManager(entry, event) {
   managerTrigger = event.currentTarget
+  managedSplit.value = null
   managedEntry.value = entry
   await nextTick()
   managerCloseButton.value?.focus()
 }
+async function openSplitManager(row, event) {
+  managerTrigger = event.currentTarget
+  managedSplit.value = row
+  managedEntry.value = row.parts[0]
+  await nextTick()
+  managerCloseButton.value?.focus()
+}
+async function chooseSplitAction(intent) {
+  const row = managedSplit.value
+  closeManager(false)
+  splitIntent.value = intent
+  activeSplitKey.value = row.key
+  await nextTick()
+  splitCloseButton.value?.focus()
+}
 function closeManager(restoreFocus = true) {
   managedEntry.value = null
+  managedSplit.value = null
   if (restoreFocus && managerTrigger?.isConnected) nextTick(() => managerTrigger?.focus())
 }
 function managerAction(action, payload) {
@@ -145,7 +176,7 @@ function updatePage(offset) {
 </script>
 
 <template>
-  <section :class="['panel', 'household-sheet-panel', { 'household-sheet-panel--modal': modal }]">
+  <section ref="sheetRoot" :class="['panel', 'household-sheet-panel', { 'household-sheet-panel--modal': modal }]">
     <div class="panel__header household-sheet-panel__header">
       <div>
         <nav class="household-sheet-date-nav" aria-label="거래 날짜 이동" data-no-drag="true">
@@ -214,7 +245,7 @@ function updatePage(offset) {
         </thead>
         <tbody>
           <template v-for="row in entries" :key="row.key">
-          <tr v-if="row.isSplit" class="split-sheet-row">
+          <tr v-if="row.isSplit" class="split-sheet-row" :data-calendar-focused-entry="row.parts.some(part => String(part.id) === String(focusEntryId))" tabindex="-1">
             <td class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox"
               :aria-label="`${splitTitle(row)} 분할 거래 선택`" :disabled="!selectableParts(row).length"
               :checked="selectableParts(row).length > 0 && selectedPartCount(row) === selectableParts(row).length"
@@ -227,9 +258,15 @@ function updatePage(offset) {
             <td>{{ splitCount(row) }}</td>
             <td :class="['sheet-table__amount', splitTypes(row) === '혼합' ? '' : splitTypes(row) === '수입' ? 'is-income' : 'is-expense']"><span class="sheet-table__amount-stack"><span class="sheet-table__amount-main">{{ money(splitDisplayedAmount(row.parts)) }}</span><small class="sheet-table__amount-sub">표시된 수단 금액 합계</small></span></td>
             <td v-if="hasMemoColumn" class="sheet-table__memo split-sheet-row__memo"><span class="split-sheet-row__clip">{{ splitMemo(row) }}</span></td>
-            <td class="sheet-table__actions"><button type="button" class="button button--ghost" @click="openSplit(row, $event)">상세보기</button></td>
+            <td class="sheet-table__actions">
+              <div class="sheet-table__actions-inner split-sheet-actions">
+                <button type="button" class="button button--ghost" @click="openSplitManager(row, $event)">수정</button>
+                <button v-if="row.parts.some(part => !part.financiallyExcluded && !part.adjustmentType)" type="button" class="button button--ghost" @click="openSplit(row, $event, 'share')">공유</button>
+                <button type="button" class="button button--ghost split-sheet-actions__view" @click="openSplit(row, $event)"><span>분할 결제</span> <span>보기</span></button>
+              </div>
+            </td>
           </tr>
-          <tr v-else v-for="entry in row.parts" :key="entry.id">
+          <tr v-else v-for="entry in row.parts" :key="entry.id" :data-calendar-focused-entry="String(entry.id) === String(focusEntryId)" tabindex="-1">
             <td class="sheet-table__select">
               <input
                 class="sheet-table__checkbox"
@@ -303,6 +340,9 @@ function updatePage(offset) {
             <button ref="splitCloseButton" type="button" class="button button--ghost" data-modal-close @click="closeSplit()">닫기</button>
           </header>
           <p class="split-detail-total">표시된 수단 금액 합계 <strong>{{ money(splitDisplayedAmount(activeSplit.parts)) }}</strong></p>
+          <p v-if="splitIntent === 'edit'" class="split-detail-note" role="status">수정하거나 처리할 결제수단의 수정·처리 버튼을 선택하세요. 각 수단은 별도로 변경됩니다.</p>
+          <p v-else-if="splitIntent === 'share'" class="split-detail-note" role="status">공유할 결제수단의 공유 버튼을 선택하세요. 각 수단은 별도로 공유됩니다.</p>
+          <p v-else-if="['refund', 'cancel', 'delete'].includes(splitIntent)" class="split-detail-note" role="status">처리할 결제수단을 선택하세요. 선택한 수단에만 적용됩니다.</p>
           <p class="split-detail-note">각 결제수단은 별도 거래입니다. 합계는 표시된 원거래 금액이며 환불·취소를 차감한 금액이 아닙니다.</p>
           <p v-if="splitExpectedCount(activeSplit.parts) > activeSplit.parts.length" class="split-detail-note">현재 날짜와 필터에 해당하는 수단만 표시합니다. 다른 수단은 날짜 변경, 필터 또는 삭제로 보이지 않을 수 있습니다.</p>
           <dl class="split-detail-fields split-detail-common">
@@ -324,8 +364,11 @@ function updatePage(offset) {
                 <div v-if="commonPartValue(activeSplit, item => item.visibleMemo) === null"><dt>메모</dt><dd>{{ part.visibleMemo || '-' }}</dd></div>
               </dl>
               <div class="split-detail-actions">
-                <button type="button" class="button button--ghost" @click="openManager(part, $event)">{{ part.hasAdjustmentHistory || part.adjustmentType ? '관리' : '수정·처리' }}</button>
-                <button v-if="!part.financiallyExcluded && !part.adjustmentType" type="button" class="button button--ghost" @click="shareSplitPart(part)">공유</button>
+                <button v-if="splitIntent === 'refund' && canRefund(part)" type="button" class="button button--ghost" @click="managerAction('adjust-entry', { entry: part, mode: 'REFUND' })">이 수단 환불</button>
+                <button v-else-if="splitIntent === 'cancel' && canCancel(part)" type="button" class="button button--ghost" @click="managerAction('adjust-entry', { entry: part, mode: 'PAYMENT_CANCELLATION' })">이 수단 결제 취소</button>
+                <button v-else-if="splitIntent === 'delete' && !part.hasAdjustmentHistory && !part.adjustmentType" type="button" class="button button--danger" @click="managerAction('delete-entry', part)">이 수단 삭제</button>
+                <template v-else-if="!['refund', 'cancel', 'delete'].includes(splitIntent)"><button type="button" class="button button--ghost" @click="openManager(part, $event)">{{ part.hasAdjustmentHistory || part.adjustmentType ? '관리' : '수정·처리' }}</button>
+                <button v-if="!part.financiallyExcluded && !part.adjustmentType" type="button" class="button button--ghost" @click="shareSplitPart(part)">공유</button></template>
               </div>
             </article>
           </div>
@@ -340,22 +383,31 @@ function updatePage(offset) {
           <div class="ledger-manage-summary">
             <strong>{{ managedEntry.title }}</strong>
             <span>{{ managedEntry.entryDate }} {{ formatTime(managedEntry.entryTime) }} · {{ managedEntry.entryType === 'INCOME' ? '수입' : '지출' }}</span>
-            <span>{{ managedEntry.categoryGroupName }}<template v-if="managedEntry.categoryDetailName"> / {{ managedEntry.categoryDetailName }}</template> · {{ formatPaymentMethod(managedEntry) }}</span>
-            <strong>{{ formatAmountMain(managedEntry) }} <small v-if="formatAmountSub(managedEntry)">{{ formatAmountSub(managedEntry) }}</small></strong>
-            <span v-if="statusLabel(managedEntry)">{{ statusLabel(managedEntry) }}</span>
-            <span v-if="managedEntry.splitPaymentGroupId">분할 {{ managedEntry.splitPaymentIndex }}/{{ managedEntry.splitPaymentCount }} · 이 결제수단만 처리됩니다.</span>
-            <span v-if="managedEntry.installmentMonths">{{ managedEntry.installmentMonths }}개월 {{ managedEntry.installmentInterestType === 'FREE' ? '무이자 ' : managedEntry.installmentInterestType === 'INTEREST' ? '유이자 ' : '' }}할부</span>
+            <span>{{ managedEntry.categoryGroupName }}<template v-if="managedEntry.categoryDetailName"> / {{ managedEntry.categoryDetailName }}</template> · {{ managedSplit ? splitCount(managedSplit) : formatPaymentMethod(managedEntry) }}</span>
+            <strong v-if="managedSplit">{{ money(splitDisplayedAmount(managedSplit.parts)) }}</strong>
+            <strong v-else>{{ formatAmountMain(managedEntry) }} <small v-if="formatAmountSub(managedEntry)">{{ formatAmountSub(managedEntry) }}</small></strong>
+            <span v-if="!managedSplit && statusLabel(managedEntry)">{{ statusLabel(managedEntry) }}</span>
+            <span v-if="managedSplit">분할 결제 · {{ splitCount(managedSplit) }} · 표시 금액 {{ money(splitDisplayedAmount(managedSplit.parts)) }}</span>
+            <span v-else-if="managedEntry.splitPaymentGroupId">분할 {{ managedEntry.splitPaymentIndex }}/{{ managedEntry.splitPaymentCount }} · 이 결제수단만 처리됩니다.</span>
+            <span v-if="!managedSplit && managedEntry.installmentMonths">{{ managedEntry.installmentMonths }}개월 {{ managedEntry.installmentInterestType === 'FREE' ? '무이자 ' : managedEntry.installmentInterestType === 'INTEREST' ? '유이자 ' : '' }}할부</span>
             <span v-if="managedEntry.visibleMemo">메모: {{ managedEntry.visibleMemo }}</span>
           </div>
           <div class="ledger-manage-actions">
+            <template v-if="managedSplit">
+              <button type="button" class="button button--secondary" @click="managerAction('edit-entry', { splitGroupId: managedEntry.splitPaymentGroupId })"><strong>거래 내용 수정</strong><small>분할 결제 전체 수정</small></button>
+              <button type="button" class="button button--secondary" @click="chooseSplitAction('refund')"><strong>환불</strong><small>처리할 결제수단 선택</small></button>
+              <button type="button" class="button button--secondary" @click="chooseSplitAction('cancel')"><strong>결제 취소</strong><small>처리할 결제수단 선택</small></button>
+              <button type="button" class="button button--danger" @click="chooseSplitAction('delete')"><strong>삭제</strong><small>삭제할 결제수단 선택</small></button>
+            </template><template v-else>
             <button v-if="!managedEntry.hasAdjustmentHistory && !managedEntry.adjustmentType" type="button" class="button button--secondary" @click="managerAction('edit-entry', managedEntry)"><strong>거래 내용 수정</strong><small>금액, 날짜, 분류 등 변경</small></button>
             <button v-if="canRefund(managedEntry)" type="button" class="button button--secondary" @click="managerAction('adjust-entry', { entry: managedEntry, mode: 'REFUND' })"><strong>환불</strong><small>받은 금액과 차감·추가 금액 기록</small></button>
             <button v-if="canCancel(managedEntry)" type="button" class="button button--secondary" @click="managerAction('adjust-entry', { entry: managedEntry, mode: 'PAYMENT_CANCELLATION' })"><strong>결제 취소</strong><small>청구되지 않은 결제를 취소 기록</small></button>
             <button v-if="managedEntry.hasAdjustmentHistory && !managedEntry.adjustmentType" type="button" class="button button--secondary" @click="managerAction('show-adjustments', managedEntry)"><strong>처리 내역</strong><small>환불·결제 취소 내역과 되돌리기</small></button>
             <button v-if="managedEntry.adjustmentType && !managedEntry.adjustmentVoidedAt" type="button" class="button button--secondary" @click="managerAction('revert-adjustment', managedEntry)"><strong>되돌리기</strong><small>이 처리만 되돌리고 기록 보존</small></button>
             <button v-if="!managedEntry.hasAdjustmentHistory && !managedEntry.adjustmentType" type="button" class="button button--danger" @click="managerAction('delete-entry', managedEntry)"><strong>삭제</strong></button>
+            </template>
           </div>
-          <p v-if="managedEntry.hasAdjustmentHistory && !managedEntry.adjustmentType" class="ledger-manage-note">처리 이력이 있는 거래는 기록 보존을 위해 일반 수정·삭제할 수 없습니다.</p>
+          <p v-if="!managedSplit && managedEntry.hasAdjustmentHistory && !managedEntry.adjustmentType" class="ledger-manage-note">처리 이력이 있는 거래는 기록 보존을 위해 일반 수정·삭제할 수 없습니다.</p>
           <p v-if="managedEntry.travelRecordId && !managedEntry.adjustmentType && !managedEntry.financiallyExcluded" class="ledger-manage-note">여행 연결 거래의 결제 취소는 지원하지 않습니다.</p>
         </section>
       </div>
@@ -409,6 +461,10 @@ function updatePage(offset) {
 .ledger-manage-note { font-size: .85rem; }
 .split-sheet-row__memo { max-width: 12rem; overflow-wrap: anywhere; }
 .split-sheet-row__clip { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.sheet-table__actions-inner.split-sheet-actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) !important; }
+:global(:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__actions-inner.split-sheet-actions) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) !important; }
+.split-sheet-actions .split-sheet-actions__view { white-space: normal !important; padding-inline: 2px !important; font-size: .75rem; line-height: 1.2; }
+.split-sheet-actions__view span { display: block; white-space: nowrap; }
 .split-detail-overlay { position: fixed; inset: 0; z-index: 2650; display: grid; place-items: center; padding: 1rem; background: rgb(0 0 0 / 65%); }
 .split-detail-dialog { box-sizing: border-box; width: min(100%, 44rem); max-height: calc(100dvh - 2rem); overflow-y: auto; background: var(--panel-bg); color: var(--text); text-align: left; }
 .split-detail-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }

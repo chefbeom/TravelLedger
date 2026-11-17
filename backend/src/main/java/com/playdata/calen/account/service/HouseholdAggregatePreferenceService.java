@@ -48,7 +48,8 @@ public class HouseholdAggregatePreferenceService {
             Long userId,
             HouseholdAggregatePreferencesRequest request
     ) {
-        AppUser user = getRequiredActiveUser(userId);
+        AppUser user = appUserRepository.findActiveForPreferenceUpdate(userId)
+                .orElseThrow(() -> new NotFoundException("사용자 계정을 찾을 수 없습니다."));
         List<StoredWidget> normalizedWidgets = normalizeWidgets(mapRequestWidgets(request, readWidgets(user.getHouseholdAggregateSettingsJson())), userId);
         user.setHouseholdAggregateSettingsJson(writeWidgets(normalizedWidgets));
         return toResponse(normalizedWidgets);

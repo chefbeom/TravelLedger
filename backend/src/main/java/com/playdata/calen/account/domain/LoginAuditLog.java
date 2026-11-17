@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Index;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
@@ -17,7 +18,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "login_audit_logs")
+@Table(name = "login_audit_logs", indexes = @Index(name = "idx_login_unknown_privacy",
+        columnList = "unknown_failure_privacy_processed,app_user_id,status,id"))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -42,6 +44,10 @@ public class LoginAuditLog {
 
     @Column(nullable = false)
     private boolean success;
+
+    /** False also covers late writes by old application nodes during deployment. */
+    @Column(name = "unknown_failure_privacy_processed", nullable = false, columnDefinition = "boolean default false not null")
+    private boolean unknownFailurePrivacyProcessed;
 
     @Column(length = 255)
     private String detail;

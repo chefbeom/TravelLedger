@@ -23,12 +23,17 @@ class ManageOwnedTravelMediaServiceTest {
         when(storage.supportsPresigned()).thenReturn(true);var files=List.of(new Candidate("a","image/png",1,null));
         when(storage.prepare(7L,1L,10L,files)).thenReturn(List.of());
         assertThat(service.prepare(7L,10L,TravelRecordType.MEMORY,files)).isEqualTo(new Prepared("PRESIGNED",List.of()));
-        var order=inOrder(media,storage);order.verify(media).ownedRecord(7L,10L,TravelRecordType.MEMORY);order.verify(storage).supportsPresigned();
+        var order=inOrder(media,storage);order.verify(media).requireUser(7L);order.verify(media).ownedRecord(7L,10L,TravelRecordType.MEMORY);order.verify(storage).supportsPresigned();
         order.verify(storage).prepare(7L,1L,10L,files);verifyNoInteractions(cache,summaries,clusters);
     }
     @Test void missingRecordBlocksPreparationBeforeAnyExternalConfigurationLookup() {
         when(media.ownedRecord(7L,10L,TravelRecordType.MEMORY)).thenThrow(new NotFoundException("owner"));
         assertThatThrownBy(()->service.prepare(7L,10L,TravelRecordType.MEMORY,null)).hasMessage("owner");verifyNoInteractions(storage);
+    }
+    @Test void inactiveOwnerRetainsTheRecordNotFoundResponseWithoutIssuingAnUpload() {
+        doThrow(new NotFoundException("user")).when(media).requireUser(7L);
+        assertThatThrownBy(()->service.prepare(7L,10L,TravelRecordType.MEMORY,null)).hasMessage("Travel memory not found.");
+        verify(media,never()).ownedRecord(any(),any(),any());verifyNoInteractions(storage);
     }
     @Test void completionKeepsLegacySupportFirstOrderAndStopsBeforeUserLookupWhenUnavailable() {
         assertThatThrownBy(()->service.complete(7L,10L,TravelRecordType.MEMORY,null,null,null)).hasMessage("MinIO presigned upload is not available.");
@@ -79,7 +84,7 @@ class ManageOwnedTravelMediaServiceTest {
     @Test void deleteRetainsLinkFileRowCacheSummaryClusterOrder() {
         when(media.ownedMedia(7L,20L)).thenReturn(new Owned(20L,new Download("test/a","image/png","a"),true));
         service.delete(7L,20L);var order=inOrder(media,storage,cache,summaries,clusters);
-        order.verify(media).ownedMedia(7L,20L);order.verify(media).removeLink(20L);order.verify(storage).delete("test/a","image/png");
+        order.verify(media).requireUser(7L);order.verify(media).ownedMedia(7L,20L);order.verify(media).removeLink(20L);order.verify(storage).delete("test/a","image/png");
         order.verify(media).delete(20L);order.verify(cache).invalidate(7L,20L);order.verify(summaries).invalidateOwner(7L);order.verify(clusters).refreshAfterChange(7L);
     }
     @Test void receiptDeletionDoesNotRefreshPhotoClusters() {

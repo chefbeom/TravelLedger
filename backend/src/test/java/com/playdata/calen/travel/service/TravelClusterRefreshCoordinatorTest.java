@@ -30,7 +30,9 @@ class TravelClusterRefreshCoordinatorTest {
         var manager = new DataSourceTransactionManager(dataSource);
         var leases = new WorkLeaseService(dataSource, manager);
         var service = mock(RefreshTravelPhotoClustersUseCase.class);
-        var coordinator = new TravelClusterRefreshCoordinator(dataSource, manager, leases, service);
+        var fence = mock(TravelClusterWithdrawalFence.class);
+        when(fence.lockAvailableOwner(anyLong())).thenReturn(true);
+        var coordinator = new TravelClusterRefreshCoordinator(dataSource, manager, leases, service, fence);
         AtomicBoolean first = new AtomicBoolean(true);
         var oldResult = new TravelPhotoClusterPolicy().cluster(List.of(point(1L)));
         var currentResult = new TravelPhotoClusterPolicy().cluster(List.of(point(2L)));

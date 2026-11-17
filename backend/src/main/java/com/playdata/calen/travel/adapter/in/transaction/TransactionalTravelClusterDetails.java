@@ -1,5 +1,6 @@
 package com.playdata.calen.travel.adapter.in.transaction;
 
+import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.travel.application.port.in.ManageTravelPhotoClustersUseCase;
 import com.playdata.calen.travel.application.port.out.*;
 import com.playdata.calen.travel.application.service.ManageTravelPhotoClustersService;
@@ -14,12 +15,14 @@ public class TransactionalTravelClusterDetails implements ManageTravelPhotoClust
     private final ManageTravelPhotoClustersUseCase delegate;
     private final TravelClusterDetailSynchronizationPort synchronization;
     private final TransactionTemplate reads;
+    private final AppUserService users;
 
     public TransactionalTravelClusterDetails(TravelClusterDetailStore store,
             TravelClusterDetailSynchronizationPort synchronization, TravelSummaryInvalidationPort summaries,
-            PlatformTransactionManager transactions) {
+            PlatformTransactionManager transactions, AppUserService users) {
         this.delegate = new ManageTravelPhotoClustersService(store, synchronization, summaries);
         this.synchronization = synchronization;
+        this.users = users;
         this.reads = new TransactionTemplate(transactions);
         reads.setReadOnly(true);
     }
@@ -31,6 +34,7 @@ public class TransactionalTravelClusterDetails implements ManageTravelPhotoClust
     }
     @Override @Transactional(isolation = Isolation.READ_COMMITTED)
     public Page changeRepresentative(Long owner, Long cluster, Long media) {
+        users.getRequiredUserForWrite(owner);
         return delegate.changeRepresentative(owner, cluster, media);
     }
 }

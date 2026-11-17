@@ -28,7 +28,7 @@ public class JpaTravelMediaAdapter implements TravelMediaStore {
     private final TravelDriveLinkService drive;
     @Override
     public void requireUser(Long owner) {
-        users.getRequiredUser(owner);
+        users.getRequiredUserForWrite(owner);
     }
 
     @Override

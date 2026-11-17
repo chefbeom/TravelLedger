@@ -44,7 +44,7 @@ class HouseholdGoalServiceTest {
     @Test
     void createGoalPersistsOwnerScopedGoalAtTarget() {
         AppUser owner = owner();
-        when(appUserService.getRequiredUser(USER_ID)).thenReturn(owner);
+        when(appUserService.getRequiredUserForWrite(USER_ID)).thenReturn(owner);
         when(householdGoalRepository.save(any(HouseholdGoal.class))).thenAnswer(invocation -> {
             HouseholdGoal goal = invocation.getArgument(0);
             goal.setId(99L);
@@ -70,7 +70,7 @@ class HouseholdGoalServiceTest {
         goal.setTargetAmountKrw(new BigDecimal("100000.00"));
         goal.setCurrentAmountKrw(new BigDecimal("100000.00"));
         goal.setStatus(HouseholdGoalStatus.ACHIEVED);
-        when(appUserService.getRequiredUser(USER_ID)).thenReturn(owner());
+        when(appUserService.getRequiredUserForWrite(USER_ID)).thenReturn(owner());
         when(householdGoalRepository.findByIdAndOwnerId(99L, USER_ID)).thenReturn(Optional.of(goal));
 
         service.archiveGoal(USER_ID, 99L);

@@ -32,6 +32,7 @@ public final class CreateRecordShareService implements CreateRecordShareUseCase 
         boolean edited = command.ledgerOverride() != null;
         ShareCreationPolicy.requireAllowedContent(command.kind(), edited);
         String memo = ShareCreationPolicy.normalizeMemo(command.shareMemo());
+        participants.lockActiveActors(userId, command.recipientIds());
         var sender = participants.requireActiveActor(userId);
         var group = participants.requireGroupAccess(command.groupId(), userId);
         // Source first, then each source/recipient row: preserve the existing lock order.

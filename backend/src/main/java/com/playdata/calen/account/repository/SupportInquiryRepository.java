@@ -12,6 +12,8 @@ public interface SupportInquiryRepository extends JpaRepository<SupportInquiry, 
 
     long countByAdminDeletedFalse();
 
+    boolean existsByAttachmentStoragePath(String attachmentStoragePath);
+
     Page<SupportInquiry> findAllBySenderIdOrderByCreatedAtDescIdDesc(Long senderId, Pageable pageable);
 
     List<SupportInquiry> findAllByAdminDeletedFalseOrderByCreatedAtDescIdDesc();

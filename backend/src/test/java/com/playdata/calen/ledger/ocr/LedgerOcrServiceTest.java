@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.TooManyRequestsException;
@@ -77,6 +78,12 @@ class LedgerOcrServiceTest {
     private LedgerImageAnalysisRequestRepository imageAnalysisRequestRepository;
 
     @Mock
+    private LedgerImageAnalysisHistoryWriter imageHistoryWriter;
+
+    @Mock
+    private AppUserRepository users;
+
+    @Mock
     private CategoryGroupRepository categoryGroupRepository;
 
     @Mock
@@ -89,6 +96,11 @@ class LedgerOcrServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(imageHistoryWriter.create(any(), any()))
+                .thenAnswer(call -> imageAnalysisRequestRepository.save(call.getArgument(1)));
+        org.mockito.Mockito.lenient().when(imageHistoryWriter.restart(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(call -> imageAnalysisRequestRepository.restart(call.getArgument(1), call.getArgument(0),
+                        call.getArgument(2), call.getArgument(3), call.getArgument(4), call.getArgument(5)));
         LedgerOcrProperties properties = new LedgerOcrProperties();
         properties.setEnabled(true);
         properties.setWorkflowUrl("https://ocr.example.internal/webhook");
@@ -105,8 +117,10 @@ class LedgerOcrServiceTest {
                 aiProperties,
                 remoteClient,
                 imageAnalysisRequestRepository,
+                imageHistoryWriter,
                 categoryGroupRepository,
                 categoryDetailRepository,
+                new LedgerOcrCategoryWriteFence(appUserService),
                 ledgerEntryRepository,
                 new ObjectMapper().findAndRegisterModules(),
                 new com.playdata.calen.ledger.application.service.FinalizeLedgerAiJobService(
@@ -842,7 +856,7 @@ class LedgerOcrServiceTest {
     }
 
     @Test void processingHistoryCannotDeleteItsImageOrRow() {
-        var user=stubUser(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
+        var user=stubUserForWrite(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
         history.setImageObjectKey("fixture/input");
         when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L,USER_ID)).thenReturn(Optional.of(history));
         var storage=org.mockito.Mockito.mock(LedgerImageStoragePort.class); installStorage(storage);
@@ -851,7 +865,7 @@ class LedgerOcrServiceTest {
     }
 
     @Test void completedHistoryKeepsStorageBeforeDatabaseDeletionOrdering() {
-        var user=stubUser(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
+        var user=stubUserForWrite(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
         history.setStatus(com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.COMPLETED); history.setImageObjectKey("fixture/input");
         when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L,USER_ID)).thenReturn(Optional.of(history));
         var storage=org.mockito.Mockito.mock(LedgerImageStoragePort.class); installStorage(storage);
@@ -860,8 +874,24 @@ class LedgerOcrServiceTest {
         order.verify(storage).delete("fixture/input"); order.verify(imageAnalysisRequestRepository).delete(history);
     }
 
+    @Test void recordingABucketDoesNotChangeExistingHistoryReadOrDeleteBehavior() {
+        var user=stubUserForWrite(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
+        history.setStatus(com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.COMPLETED);
+        history.setImageObjectKey("fixture/input"); history.setImageStorageBucket("original-bucket");
+        history.setFileName("receipt.jpg"); history.setContentType("image/jpeg");
+        when(appUserService.getRequiredUser(USER_ID)).thenReturn(user);
+        when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L,USER_ID)).thenReturn(Optional.of(history));
+        var storage=org.mockito.Mockito.mock(LedgerImageStoragePort.class); installStorage(storage);
+        var content=new LedgerImageStorageData.StoredImageContent(new byte[]{1}, "image/jpeg", "receipt.jpg");
+        when(storage.load("fixture/input", "receipt.jpg", "image/jpeg")).thenReturn(content);
+        assertThat(service.getHistoryImage(USER_ID,42L)).isEqualTo(content);
+        service.deleteHistory(USER_ID,42L);
+        verify(storage).delete("fixture/input");
+        verify(storage,never()).deleteFromBucket(any(), any());
+    }
+
     @Test void storageDeleteFailureDoesNotDeleteTheHistoryRow() {
-        var user=stubUser(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
+        var user=stubUserForWrite(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
         history.setStatus(com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.COMPLETED); history.setImageObjectKey("fixture/input");
         when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L,USER_ID)).thenReturn(Optional.of(history));
         var storage=org.mockito.Mockito.mock(LedgerImageStoragePort.class); installStorage(storage);
@@ -872,16 +902,24 @@ class LedgerOcrServiceTest {
     }
 
     private void installStorage(LedgerImageStoragePort storage) {
+        org.mockito.Mockito.lenient().when(users.findActiveForPreferenceUpdate(eq(USER_ID))).thenReturn(Optional.of(new AppUser()));
         ReflectionTestUtils.setField(service,"imageStorageService",storage);
         ReflectionTestUtils.setField(service,"imageInputWriter",
                 new com.playdata.calen.ledger.application.service.StoreLedgerImageInputService(storage,
-                        new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerImageInputReferenceAdapter(imageAnalysisRequestRepository)));
+                        new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerImageInputReferenceAdapter(imageAnalysisRequestRepository, users)));
     }
 
     private AppUser stubUser() {
         AppUser user = new AppUser();
         user.setId(USER_ID);
         when(appUserService.getRequiredUser(USER_ID)).thenReturn(user);
+        return user;
+    }
+
+    private AppUser stubUserForWrite() {
+        AppUser user = new AppUser();
+        user.setId(USER_ID);
+        when(appUserService.getRequiredUserForWrite(USER_ID)).thenReturn(user);
         return user;
     }
 }

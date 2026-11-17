@@ -12,6 +12,9 @@ import com.playdata.calen.drive.domain.DriveSharePermission;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -43,6 +46,8 @@ public class DriveShareService {
     private final DriveService driveService;
     private final ImageThumbnailService imageThumbnailService;
     private final DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService;
+    private final DriveShareParticipantFence participantFence;
+    private final EntityManager entities;
 
     public DriveShareService(
             DriveShareRepository driveShareRepository,
@@ -51,7 +56,9 @@ public class DriveShareService {
             DriveStorageService driveStorageService,
             DriveService driveService,
             ImageThumbnailService imageThumbnailService,
-            DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService
+            DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService,
+            DriveShareParticipantFence participantFence,
+            EntityManager entities
     ) {
         this.driveShareRepository = driveShareRepository;
         this.driveItemRepository = driveItemRepository;
@@ -60,6 +67,8 @@ public class DriveShareService {
         this.driveService = driveService;
         this.imageThumbnailService = imageThumbnailService;
         this.driveDownloadLinkAccessLogService = driveDownloadLinkAccessLogService;
+        this.participantFence = participantFence;
+        this.entities = entities;
     }
 
     public List<DriveDtos.SharedFileResponse> getReceivedShares(Long userId) {
@@ -143,12 +152,16 @@ public class DriveShareService {
         if (Objects.equals(owner.getId(), recipient.getId())) {
             throw new BadRequestException("본인에게는 공유할 수 없습니다.");
         }
+        participantFence.lockForCreation(owner.getId(), recipient.getId());
+        if (!recipient.getLoginId().equalsIgnoreCase(safeLoginId(recipientLoginId))) {
+            throw new NotFoundException("공유할 사용자를 찾지 못했습니다.");
+        }
 
         List<Long> normalizedIds = normalizeFileIds(fileIds);
         DriveSharePermission permission = normalizePermission(permissionValue);
         int affected = 0;
         for (Long fileId : normalizedIds) {
-            DriveItem item = driveService.getOwnedFile(userId, fileId);
+            DriveItem item = lockOwnedFile(userId, fileId);
             if (item.isTrashed()) {
                 throw new BadRequestException("휴지통에 있는 파일은 공유할 수 없습니다.");
             }
@@ -185,9 +198,11 @@ public class DriveShareService {
         AppUser recipient = appUserRepository.findByLoginId(safeLoginId(recipientLoginId))
                 .orElseThrow(() -> new NotFoundException("공유 대상을 찾지 못했습니다."));
 
+        participantFence.lockOwnerForWrite(userId);
+
         int affected = 0;
         for (Long fileId : normalizeFileIds(fileIds)) {
-            DriveItem item = driveService.getOwnedFile(userId, fileId);
+            DriveItem item = lockOwnedFile(userId, fileId);
             driveService.ensureUnlocked(item);
             if (driveShareRepository.findByItem_IdAndRecipient_Id(item.getId(), recipient.getId()).isPresent()) {
                 driveShareRepository.deleteByItem_IdAndRecipient_Id(item.getId(), recipient.getId());
@@ -204,9 +219,11 @@ public class DriveShareService {
 
     @Transactional
     public DriveDtos.ActionResponse cancelAllShares(Long userId, List<Long> fileIds) {
+        List<Long> normalizedIds = normalizeFileIds(fileIds);
+        participantFence.lockOwnerForWrite(userId);
         int affected = 0;
-        for (Long fileId : normalizeFileIds(fileIds)) {
-            DriveItem item = driveService.getOwnedFile(userId, fileId);
+        for (Long fileId : normalizedIds) {
+            DriveItem item = lockOwnedFile(userId, fileId);
             driveService.ensureUnlocked(item);
             List<DriveShare> shares = driveShareRepository.findAllByItem_Id(item.getId());
             if (!shares.isEmpty()) {
@@ -223,8 +240,11 @@ public class DriveShareService {
 
     @Transactional
     public DriveDtos.FileItemResponse saveSharedFileToDrive(Long userId, Long fileId, Long parentId) {
+        AppUser recipient = appUserRepository.findById(userId).filter(AppUser::isActive)
+                .orElseThrow(() -> new NotFoundException("사용자 정보를 찾지 못했습니다."));
         DriveShare share = driveShareRepository.findByItem_IdAndRecipient_Id(fileId, userId)
                 .orElseThrow(() -> new NotFoundException("공유된 파일을 찾지 못했습니다."));
+        share = lockCurrentShare(share, userId, fileId);
 
         DriveItem sourceItem = share.getItem();
         if (!sourceItem.isFile()) {
@@ -244,18 +264,20 @@ public class DriveShareService {
         driveStorageService.copyObject(sourceItem.getStoragePath(), targetObjectKey);
 
         DriveItem copiedItem = new DriveItem();
-        copiedItem.setOwner(driveService.getOwner(userId));
+        copiedItem.setOwner(recipient);
         copiedItem.setParent(parent);
         copiedItem.setItemType(DriveItemType.FILE);
         copiedItem.setOriginalName(sourceItem.getOriginalName());
         copiedItem.setExtension(sourceItem.getExtension());
         copiedItem.setStoredName(extractStoredName(targetObjectKey));
         copiedItem.setStoragePath(targetObjectKey);
+        copiedItem.setStorageBucket(driveStorageService.resolveBucket());
         copiedItem.setFileSize(sourceItem.getFileSize());
         copiedItem.setSharedFile(false);
         return driveService.toItemResponse(driveItemRepository.save(copiedItem));
     }
 
+    @Transactional
     public DriveService.DriveFilePayload downloadSharedFile(Long userId, Long fileId) {
         return downloadSharedFile(userId, fileId, null);
     }
@@ -271,6 +293,8 @@ public class DriveShareService {
             recordDirectShareAccess(null, fileId, null, userId, "not_found", metadata);
             throw new NotFoundException("Shared file not found.");
         }
+
+        share = lockCurrentShare(share, userId, fileId);
 
         DriveItem item = validateSharedFileForDownload(share, userId, metadata);
         ensureDownloadAllowed(share, userId, metadata);
@@ -296,6 +320,8 @@ public class DriveShareService {
             throw new NotFoundException("Shared file not found.");
         }
 
+        share = lockCurrentShare(share, userId, fileId);
+
         DriveItem item = validateSharedFileForDownload(share, userId, metadata);
         ensureDownloadAllowed(share, userId, metadata);
         item.setLastAccessedAt(LocalDateTime.now());
@@ -308,6 +334,7 @@ public class DriveShareService {
         return downloadUrl;
     }
 
+    @Transactional
     public DriveService.ThumbnailPayload loadSharedThumbnail(Long userId, Long fileId, Integer width) {
         DriveItem item = getSharedFile(userId, fileId);
         String contentType = resolveContentType(item.getExtension());
@@ -332,7 +359,46 @@ public class DriveShareService {
     private DriveItem getSharedFile(Long userId, Long fileId) {
         DriveShare share = driveShareRepository.findByItem_IdAndRecipient_Id(fileId, userId)
                 .orElseThrow(() -> new NotFoundException("Shared file not found."));
+        share = lockCurrentShare(share, userId, fileId);
         return validateSharedFile(share);
+    }
+
+    private DriveShare lockCurrentShare(DriveShare share, Long recipientId, Long fileId) {
+        if (share.getOwner() == null || share.getOwner().getId() == null || share.getRecipient() == null
+                || !Objects.equals(share.getRecipient().getId(), recipientId)) {
+            throw new NotFoundException("Shared file not found.");
+        }
+        Long ownerId = share.getOwner().getId();
+        participantFence.lockForAccess(ownerId, recipientId);
+        try {
+            entities.refresh(share, LockModeType.PESSIMISTIC_WRITE);
+            DriveItem item = share.getItem();
+            if (item == null || item.getId() == null) throw new NotFoundException("Shared file not found.");
+            entities.refresh(item, LockModeType.PESSIMISTIC_WRITE);
+            if (!Objects.equals(item.getId(), fileId) || item.getOwner() == null
+                    || !Objects.equals(item.getOwner().getId(), ownerId)
+                    || share.getOwner() == null || !Objects.equals(share.getOwner().getId(), ownerId)
+                    || share.getRecipient() == null || !Objects.equals(share.getRecipient().getId(), recipientId)) {
+                throw new NotFoundException("Shared file not found.");
+            }
+            return share;
+        } catch (EntityNotFoundException missing) {
+            throw new NotFoundException("Shared file not found.");
+        }
+    }
+
+    private DriveItem lockOwnedFile(Long userId, Long fileId) {
+        DriveItem item = driveService.getOwnedFile(userId, fileId);
+        try {
+            entities.refresh(item, LockModeType.PESSIMISTIC_WRITE);
+        } catch (EntityNotFoundException missing) {
+            throw new NotFoundException("드라이브 항목을 찾지 못했습니다.");
+        }
+        if (item.getOwner() == null || !Objects.equals(item.getOwner().getId(), userId)) {
+            throw new NotFoundException("드라이브 항목을 찾지 못했습니다.");
+        }
+        if (!item.isFile()) throw new BadRequestException("파일만 사용할 수 있습니다.");
+        return item;
     }
 
     private DriveItem getDownloadableSharedFile(Long userId, Long fileId) {
@@ -485,7 +551,9 @@ public class DriveShareService {
         if (fileIds == null || fileIds.isEmpty()) {
             throw new BadRequestException("파일을 선택해 주세요.");
         }
-        return fileIds.stream().filter(Objects::nonNull).distinct().toList();
+        // Withdrawal cleanup also locks items in ascending order. Keeping the same
+        // order for multi-file share mutations avoids cyclic item-lock waits.
+        return fileIds.stream().filter(Objects::nonNull).distinct().sorted().toList();
     }
 
     private String safeLoginId(String loginId) {

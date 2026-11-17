@@ -32,7 +32,7 @@ class LedgerAiExcelJobServiceTest {
             int start = cursor.isEmpty() ? 0 : Integer.parseInt(cursor) + 1;
             return pending.subList(start, Math.min(start + 100, pending.size()));
         });
-        var service = new LedgerAiExcelJobService(mock(LedgerAiExcelImportService.class), repository, leases,
+        var service = new LedgerAiExcelJobService(mock(LedgerAiExcelImportService.class), repository, mock(LedgerAiExcelJobWriter.class), leases,
                 new ObjectMapper(), mock(TaskExecutor.class), finalizer(repository));
 
         service.recover();
@@ -54,7 +54,7 @@ class LedgerAiExcelJobServiceTest {
         var next = new LedgerExcelAnalysisJob(); next.setId("100"); next.setCreatedAt(timestamp.plusSeconds(1));
         when(repository.findRecoveryPage(eq("PROCESSING"), any(), isNull(), eq(""), any())).thenReturn(firstPage);
         when(repository.findRecoveryPage(eq("PROCESSING"), any(), eq(timestamp), eq("099"), any())).thenReturn(List.of(next));
-        var service = new LedgerAiExcelJobService(mock(LedgerAiExcelImportService.class), repository, leases,
+        var service = new LedgerAiExcelJobService(mock(LedgerAiExcelImportService.class), repository, mock(LedgerAiExcelJobWriter.class), leases,
                 new ObjectMapper(), mock(TaskExecutor.class), finalizer(repository));
 
         service.recover();
@@ -83,7 +83,13 @@ class LedgerAiExcelJobServiceTest {
         when(repository.completeProcessing(anyString(), eq(7L), eq(0L), anyString())).thenAnswer(call -> {
             saved.get().setResultJson(call.getArgument(3)); saved.get().setInputJson(null); saved.get().setStatus("COMPLETED"); saved.get().setVersion(1L); return 1;
         });
-        var service = new LedgerAiExcelJobService(importer, repository, leases, new ObjectMapper(), executor, finalizer(repository));
+        var writer = mock(LedgerAiExcelJobWriter.class);
+        when(writer.create(eq(7L), anyString())).thenAnswer(call -> {
+            var job = new LedgerExcelAnalysisJob();
+            job.setId(java.util.UUID.randomUUID().toString()); job.setOwnerId(7L); job.setInputJson(call.getArgument(1));
+            return repository.saveAndFlush(job);
+        });
+        var service = new LedgerAiExcelJobService(importer, repository, writer, leases, new ObjectMapper(), executor, finalizer(repository));
         var response = service.start(7L, new MockMultipartFile("file", "file.xlsx", "application/octet-stream", new byte[]{1}));
         assertThat(response.status()).isEqualTo("PROCESSING");
         verify(importer, never()).analyzePreparedInput(anyString());

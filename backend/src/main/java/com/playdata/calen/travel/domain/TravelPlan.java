@@ -11,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
@@ -71,4 +72,9 @@ public class TravelPlan {
     private Boolean publicShared = false;
 
     private LocalDateTime publicSharedAt;
+
+    /** Former storage-key owners retained only when a shared plan is transferred. */
+    @Lob
+    @Column(name = "storage_owner_history_json", columnDefinition = "TEXT")
+    private String storageOwnerHistoryJson;
 }

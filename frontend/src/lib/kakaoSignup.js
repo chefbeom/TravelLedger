@@ -14,10 +14,7 @@ export function kakaoCallbackMessage(code) {
 }
 
 export function validateKakaoSignup(form) {
-  if (!form.loginId?.trim() || form.loginId.trim().length > 60) return '로그인 ID를 60자 이내로 입력해 주세요.'
   if (!form.displayName?.trim() || form.displayName.trim().length > 80) return '표시 이름을 80자 이내로 입력해 주세요.'
-  if ((form.password?.trim().length || 0) < 8) return '비밀번호는 8자 이상이어야 합니다.'
-  if (form.password !== form.passwordConfirmation) return '비밀번호 확인이 일치하지 않습니다.'
   if (!/^\d{8}$/.test(form.secondaryPin || '')) return '2차 비밀번호 숫자 8자리를 모두 입력해 주세요.'
   return ''
 }

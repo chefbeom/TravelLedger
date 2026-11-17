@@ -4,6 +4,7 @@ import com.playdata.calen.travel.application.port.out.TravelRouteUploadPort;
 import com.playdata.calen.travel.domain.model.TravelRouteData.GpxFile;
 import com.playdata.calen.travel.domain.model.TravelRouteUploadData.*;
 import com.playdata.calen.travel.service.TravelMediaStorageService;
+import com.playdata.calen.travel.service.TravelUploadGrantRegistry;
 import java.io.*;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -14,14 +15,17 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class TravelRouteUploadAdapter implements TravelRouteUploadPort {
     private final TravelMediaStorageService storage;
+    private final TravelUploadGrantRegistry grants;
     @Override public boolean supportsPresigned(){return storage.supportsPresignedUpload();}
     @Override public GpxFile store(Long owner,Long plan,Long route,Upload file) {
         return value(storage.storeRouteGpx(owner,plan,route,file==null?null:new MultipartUpload(file)));
     }
     @Override public List<Target> prepare(Long owner,Long plan,Long route,List<Candidate> files) {
-        return storage.preparePresignedRouteGpxUploads(owner,plan,route,files.stream().map(file->
+        var targets = storage.preparePresignedRouteGpxUploads(owner,plan,route,files.stream().map(file->
                 new TravelMediaStorageService.RouteGpxUploadCandidate(file.originalFileName(),file.contentType(),file.fileSize())).toList())
                 .stream().map(file->new Target(file.method(),file.uploadUrl(),file.objectKey(),file.storedFileName(),file.originalFileName(),file.contentType(),file.fileSize())).toList();
+        grants.recordRoutes(owner,plan,route,targets);
+        return targets;
     }
     @Override public GpxFile complete(Long owner,Long plan,Long route,Completed file) {
         return value(storage.completePresignedRouteGpxUpload(owner,plan,route,new TravelMediaStorageService.CompletedRouteGpxUpload(

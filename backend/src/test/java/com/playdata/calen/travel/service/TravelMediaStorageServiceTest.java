@@ -217,6 +217,33 @@ class TravelMediaStorageServiceTest {
         verify(internalMinioClient, never()).getPresignedObjectUrl(org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void sdkSignedUrlsAndAllSupportedThumbnailFormatsAreAcceptedByGrantTracking() {
+        // Presigning with an explicit region is local: this does not contact an object-storage server.
+        var publicClient = MinioClient.builder().endpoint("https://storage.example.com")
+                .credentials("synthetic-access", "synthetic-secret").region("us-east-1").build();
+        var service = createPresignedStorageService(mock(MinioClient.class), publicClient);
+        var repository = mock(com.playdata.calen.travel.repository.TravelUploadGrantRepository.class);
+        var properties = new MinioProperties(); properties.setBucket_cloud("travel-bucket"); properties.setPresignedUrlExpirySeconds(600);
+        var registry = new TravelUploadGrantRegistry(repository, properties);
+        org.springframework.test.util.ReflectionTestUtils.setField(registry, "configuredPrefix", "travel-media");
+        var adapter = new com.playdata.calen.travel.adapter.out.storage.TravelMediaStorageAdapter(service, registry);
+        for (String[] type : List.of(new String[]{"JPG", "image/jpeg"}, new String[]{"jpeg", "image/jpeg"},
+                new String[]{"png", "image/png"}, new String[]{"gif", "image/gif"}, new String[]{"webp", "image/webp"},
+                new String[]{"bmp", "image/bmp"}, new String[]{"pdf", "application/pdf"})) {
+            String thumbType = List.of("image/png", "image/gif", "image/webp").contains(type[1]) ? "image/png" : "image/jpeg";
+            var thumbnails = type[1].startsWith("image/") ? PreparedThumbnailProfile.defaultSpecs().stream()
+                    .map(spec -> new com.playdata.calen.travel.domain.model.TravelMediaData.ThumbnailCandidate(spec.key(), thumbType, 1))
+                    .toList() : List.<com.playdata.calen.travel.domain.model.TravelMediaData.ThumbnailCandidate>of();
+            var upload = adapter.prepare(1L, 2L, 3L, List.of(new com.playdata.calen.travel.domain.model.TravelMediaData.Candidate(
+                    "photo." + type[0], type[1], 1, thumbnails))).get(0);
+            assertThat(upload.uploadUrl()).startsWith("https://storage.example.com/");
+        }
+        var routes = new com.playdata.calen.travel.adapter.out.storage.TravelRouteUploadAdapter(service, registry);
+        routes.prepare(1L, 2L, 7L, List.of(new com.playdata.calen.travel.domain.model.TravelRouteUploadData.Candidate("route.gpx", "xml", 1)));
+        verify(repository, org.mockito.Mockito.times(32)).save(org.mockito.ArgumentMatchers.any());
+    }
+
 
     @Test
     void completePresignedGpxRejectsForeignOwnerPlanRouteAndAmbiguousKeysBeforeStat() throws Exception {
@@ -246,7 +273,7 @@ class TravelMediaStorageServiceTest {
     @Test
     void gpxPortBridgeKeepsValidationBeforeLazyReadAndExistingIoErrorTranslation() throws Exception {
         TravelMediaStorageService service=createLocalStorageService();
-        var adapter=new com.playdata.calen.travel.adapter.out.storage.TravelRouteUploadAdapter(service);
+        var adapter=new com.playdata.calen.travel.adapter.out.storage.TravelRouteUploadAdapter(service, mock(TravelUploadGrantRegistry.class));
         var input=mock(com.playdata.calen.travel.application.port.out.TravelRouteUploadPort.Upload.class);
         when(input.fileName()).thenReturn("not-gpx.png");when(input.size()).thenReturn(1L);
         when(input.bytes()).thenThrow(new java.io.IOException("synthetic read failure"));

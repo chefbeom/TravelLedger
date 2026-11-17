@@ -33,6 +33,10 @@ public final class ReadRecordMapService implements ReadRecordMapUseCase {
         return overview(access.shared(token), filter);
     }
 
+    @Override public OverviewResult calendarShared(Long viewer, Long grantId, Filter filter) {
+        return overview(access.calendarShared(viewer, grantId), filter);
+    }
+
     private OverviewResult overview(Scope scope, Filter filter) {
         Selection selection = select(scope, filter);
         Long owner = scope.ownerId();

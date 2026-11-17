@@ -104,7 +104,7 @@ public class LedgerExcelImportService {
 
     @Transactional
     public LedgerExcelImportResultResponse importRows(Long userId, LedgerExcelImportRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         Set<String> createdGroupNames = new LinkedHashSet<>();
         Set<String> createdDetailNames = new LinkedHashSet<>();
         Set<String> createdPaymentNames = new LinkedHashSet<>();

@@ -20,6 +20,7 @@ public class DriveDownloadLinkAccessLogService {
     private static final int MAX_STATUS_LENGTH = 32;
     private static final int MAX_CLIENT_ADDRESS_LENGTH = 64;
     private static final int MAX_USER_AGENT_LENGTH = 255;
+    public static final String ANONYMOUS_DIRECT_SHARE_FINGERPRINT = "0".repeat(64);
 
     private final DriveDownloadLinkAccessLogRepository driveDownloadLinkAccessLogRepository;
 
@@ -54,10 +55,15 @@ public class DriveDownloadLinkAccessLogService {
             String status,
             AccessMetadata metadata
     ) {
-        String fingerprintSource = "direct-share:" + safeId(shareId)
-                + ":item:" + safeId(itemId)
-                + ":recipient:" + safeId(recipientId);
-        record(null, itemId, ownerId, fingerprintSource, "shared_" + status, metadata);
+        // Do not retain recipient, share, address, user agent or a derived fingerprint.
+        // Item/owner, outcome and timestamp remain available to the file owner.
+        DriveDownloadLinkAccessLog log = new DriveDownloadLinkAccessLog();
+        log.setItemId(itemId);
+        log.setOwnerId(ownerId);
+        log.setStatus(truncate("shared_" + status, MAX_STATUS_LENGTH));
+        log.setTokenFingerprint(ANONYMOUS_DIRECT_SHARE_FINGERPRINT);
+        log.setDirectShareAnonymized(true);
+        driveDownloadLinkAccessLogRepository.save(log);
     }
 
     @Transactional(readOnly = true)
@@ -88,10 +94,6 @@ public class DriveDownloadLinkAccessLogService {
                 .userAgent(log.getUserAgent())
                 .accessedAt(log.getAccessedAt())
                 .build();
-    }
-
-    private String safeId(Long id) {
-        return id == null ? "unknown" : id.toString();
     }
 
     private String tokenFingerprint(String token) {

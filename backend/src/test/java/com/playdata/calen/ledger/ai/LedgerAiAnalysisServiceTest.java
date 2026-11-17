@@ -86,6 +86,9 @@ class LedgerAiAnalysisServiceTest {
     private LedgerAiAnalysisHistoryRepository historyRepository;
 
     @Mock
+    private LedgerAiAnalysisHistoryWriter historyWriter;
+
+    @Mock
     private LedgerSpendingAnalysisPort remoteClient;
 
     @Mock
@@ -98,6 +101,8 @@ class LedgerAiAnalysisServiceTest {
     @BeforeEach
     void setUp() {
         org.mockito.Mockito.lenient().when(historyRepository.completeProcessing(any(), any(), any(), any())).thenReturn(1);
+        org.mockito.Mockito.lenient().when(historyWriter.create(any(), any()))
+                .thenAnswer(call -> historyRepository.save(call.getArgument(1)));
         objectMapper = new ObjectMapper().findAndRegisterModules();
         properties = new LedgerAiAnalysisProperties();
         properties.setEnabled(true);
@@ -123,6 +128,7 @@ class LedgerAiAnalysisServiceTest {
                 appUserService,
                 datasets,
                 historyRepository,
+                historyWriter,
                 new com.playdata.calen.ledger.adapter.in.ai.LedgerAnalysisHistories(
                         new com.playdata.calen.ledger.adapter.out.persistence.LedgerAnalysisHistoryQueryAdapter(appUserService, historyRepository),
                         new com.playdata.calen.ledger.adapter.out.serialization.LedgerAnalysisHistoryJsonAdapter(codec)),

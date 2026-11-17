@@ -152,8 +152,9 @@ public class FamilyMediaStorageService {
             return;
         }
 
+        // Validate the entire batch before removing any object.
+        objectKeys.forEach(objectKey -> validateObjectKey(ownerId, categoryId, objectKey));
         objectKeys.forEach(objectKey -> {
-            validateObjectKey(ownerId, categoryId, objectKey);
             try {
                 minioClient.removeObject(
                         RemoveObjectArgs.builder()
@@ -440,7 +441,9 @@ public class FamilyMediaStorageService {
         ) + "/";
         if (!objectKey.equals(normalizedObjectKey)
                 || normalizedObjectKey.contains("..")
-                || !normalizedObjectKey.startsWith(expectedPrefix)) {
+                || !normalizedObjectKey.startsWith(expectedPrefix)
+                || normalizedObjectKey.length() == expectedPrefix.length()
+                || normalizedObjectKey.substring(expectedPrefix.length()).contains("/")) {
             throw new BadRequestException("Invalid uploaded file path.");
         }
     }

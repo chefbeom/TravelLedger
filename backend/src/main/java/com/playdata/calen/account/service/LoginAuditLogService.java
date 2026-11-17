@@ -5,6 +5,8 @@ import com.playdata.calen.account.domain.LoginAuditLog;
 import com.playdata.calen.account.domain.LoginAuditStatus;
 import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.repository.LoginAuditLogRepository;
+import com.playdata.calen.account.withdrawal.AuditLogAnonymization;
+import com.playdata.calen.account.withdrawal.WithdrawalAuditWriteFence;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -19,6 +21,7 @@ public class LoginAuditLogService {
 
     private final LoginAuditLogRepository loginAuditLogRepository;
     private final AppUserRepository appUserRepository;
+    private final WithdrawalAuditWriteFence withdrawalAuditWriteFence;
 
     @Transactional
     public void record(
@@ -37,6 +40,13 @@ public class LoginAuditLogService {
         log.setSuccess(status.isSuccess());
         log.setDetail(limit(detail));
         log.setAppUser(appUser);
+        var decision = withdrawalAuditWriteFence.inspect(loginId, appUser, status, detail);
+        if (decision.anonymizeActor()) {
+            AuditLogAnonymization.anonymizeActor(log);
+        } else if (decision.anonymizeTarget()) {
+            log.setDetail(AuditLogAnonymization.eventType(status, detail));
+        }
+        log.setUnknownFailurePrivacyProcessed(true);
         loginAuditLogRepository.save(log);
     }
 
@@ -51,6 +61,12 @@ public class LoginAuditLogService {
         AppUser adminUser = adminUserId != null
                 ? appUserRepository.findById(adminUserId).orElse(null)
                 : null;
+        if (adminUser == null) {
+            // An already-authorized request can finish after its actor's account was removed.
+            record(AuditLogAnonymization.ANONYMOUS, AuditLogAnonymization.ANONYMOUS, null,
+                    LoginAuditStatus.ADMIN_ACTION, AuditLogAnonymization.eventType(LoginAuditStatus.ADMIN_ACTION, detail), null);
+            return;
+        }
         record(
                 hasText(loginId) ? loginId : "unknown-admin",
                 hasText(clientIp) ? clientIp : "unknown",

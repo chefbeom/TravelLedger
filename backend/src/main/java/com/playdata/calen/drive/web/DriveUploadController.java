@@ -3,7 +3,6 @@ package com.playdata.calen.drive.web;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.service.DriveService;
-import com.playdata.calen.drive.service.DriveStorageService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,7 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('ADMIN')")
 public class DriveUploadController {
 
-    private final DriveStorageService driveStorageService;
     private final DriveService driveService;
 
     @PostMapping
@@ -27,7 +25,7 @@ public class DriveUploadController {
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestBody List<DriveDtos.UploadInitRequest> requests
     ) {
-        return driveStorageService.initUpload(currentUser.userId(), requests);
+        return driveService.initializeUpload(currentUser.userId(), requests);
     }
 
     @PostMapping("/complete")
@@ -43,6 +41,6 @@ public class DriveUploadController {
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestBody DriveDtos.UploadAbortRequest request
     ) {
-        return driveStorageService.abortUpload(currentUser.userId(), request);
+        return driveService.abortUpload(currentUser.userId(), request);
     }
 }

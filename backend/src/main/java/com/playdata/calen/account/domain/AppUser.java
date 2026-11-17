@@ -33,7 +33,8 @@ public class AppUser {
     @Column(length = 254, unique = true)
     private String email;
 
-    @Column(nullable = false, length = 100)
+    // Social-only accounts do not have a local password.
+    @Column(length = 100)
     private String passwordHash;
 
     @Column(length = 100)
@@ -52,4 +53,18 @@ public class AppUser {
 
     @Column(nullable = false)
     private boolean emailVerified = true;
+
+    /** An anonymized abandoned signup is never a reusable or reactivatable account. */
+    @Column(name = "expired_email_signup", nullable = false)
+    private boolean expiredEmailSignup = false;
+
+    // Shared across app nodes and token reissues while an email signup is pending.
+    @Column(name = "signup_pin_failures", nullable = false)
+    private int signupPinFailures;
+
+    @Column(name = "signup_pin_window_started_at")
+    private java.time.LocalDateTime signupPinWindowStartedAt;
+
+    @Column(name = "signup_pin_blocked_until")
+    private java.time.LocalDateTime signupPinBlockedUntil;
 }

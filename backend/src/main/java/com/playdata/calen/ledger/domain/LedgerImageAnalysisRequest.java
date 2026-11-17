@@ -67,6 +67,20 @@ public class LedgerImageAnalysisRequest {
     @Column(name = "image_object_key", length = 600)
     private String imageObjectKey;
 
+    // Null for historical uploads whose original bucket was not recorded.
+    @Column(name = "image_storage_bucket", length = 255)
+    private String imageStorageBucket;
+
+    @Column(name = "image_storage_id", length = 80)
+    private String imageStorageId;
+
+    @Column(name = "image_object_version", length = 1024)
+    private String imageObjectVersion;
+
+    // Optional, opaque provider ETag; it is not an immutable object identity.
+    @Column(name = "image_object_etag", length = 128)
+    private String imageObjectEtag;
+
     @Lob @Column(name = "effective_prompt", columnDefinition = "LONGTEXT")
     private String effectivePrompt;
 

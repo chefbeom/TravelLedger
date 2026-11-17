@@ -49,4 +49,33 @@ public class LedgerEmbeddingOutboxCapture {
         jdbc.update(LedgerEmbeddingOutboxSql.enqueueSelection("ledger_entries", "ledger_entry",
                 "owner_id = ? and deleted_at is not null"), ownerId);
     }
+
+    /** Privacy cleanup must leave tombstones even if capture or the remote API is now disabled. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void beforeWithdrawalRecurringRules(Long ownerId) {
+        rescheduleExistingOwnerJobs(ownerId, "recurring_rule");
+        jdbc.update(LedgerEmbeddingOutboxSql.enqueueSelection("recurring_ledger_rules", "recurring_rule",
+                "owner_id = ?"), ownerId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void beforeWithdrawalLedgerEntries(Long ownerId) {
+        rescheduleExistingOwnerJobs(ownerId, "ledger_entry");
+        jdbc.update(LedgerEmbeddingOutboxSql.enqueueSelection("ledger_entries", "ledger_entry",
+                "owner_id = ?"), ownerId);
+    }
+
+    private void rescheduleExistingOwnerJobs(Long ownerId, String type) {
+        // Also revisit deleted source IDs still known to the outbox, including failed jobs.
+        // A claimed upsert is fenced by the revision change and later reprocessed as a delete.
+        jdbc.update("""
+                update ledger_embedding_sync_jobs set revision = revision + 1,
+                    attempts = case when state = 'PROCESSING' then attempts else 0 end,
+                    next_attempt_at = case when state = 'PROCESSING' then next_attempt_at else current_timestamp(6) end,
+                    last_error_code = case when state = 'PROCESSING' then last_error_code else null end,
+                    state = case when state = 'PROCESSING' then state else 'PENDING' end,
+                    updated_at = current_timestamp(6)
+                where owner_id = ? and record_type = ?
+                """, ownerId, type);
+    }
 }

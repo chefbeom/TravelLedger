@@ -48,6 +48,10 @@ public class SocialAccount {
     @Column(name = "provider_user_id", nullable = false, length = 128)
     private String providerUserId;
 
+    // Populated only after validating the provider's token and subject for this app.
+    @Column(name = "provider_app_id")
+    private Long providerAppId;
+
     @Column(length = 254)
     private String email;
 

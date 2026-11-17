@@ -57,6 +57,7 @@ class WriteRecordMapServiceTest {
     @Test void collectionDeletionRevokesSharesThenDetachesOnlyMemberships() {
         service.deleteCollection(1L, 3L);
         var order = inOrder(catalog, mutations);
+        order.verify(catalog).requireActiveOwner(1L);
         order.verify(catalog).requireOwnedCollection(1L, 3L);
         order.verify(mutations).revokeCollectionShares(1L, 3L);
         order.verify(mutations).detachCollection(3L);
@@ -74,6 +75,7 @@ class WriteRecordMapServiceTest {
     @Test void deletionLocksVisitBeforeRemovingPhotosAndRow() {
         service.deleteVisit(1L, 9L);
         var order = inOrder(catalog, mutations);
+        order.verify(catalog).requireActiveOwner(1L);
         order.verify(catalog).ownedVisitPlace(1L, 9L, true);
         order.verify(mutations).deleteVisitPhotos(1L, 9L);
         order.verify(mutations).deleteVisit(9L);
@@ -86,6 +88,7 @@ class WriteRecordMapServiceTest {
         when(mutations.createImportedPlace(eq(1L), eq(8L), any(), eq(List.of(3L)), eq(now))).thenReturn(2L);
         assertThat(service.importTravel(1L, new TravelImport(8L, List.of(3L)))).isEqualTo(2L);
         var order = inOrder(catalog, mutations);
+        order.verify(catalog).requireActiveOwner(1L);
         order.verify(catalog).lockTravelSource(1L, 8L);
         order.verify(catalog).importedPlaceId(1L, 8L);
         order.verify(catalog).requireOwnedCollection(1L, 3L);

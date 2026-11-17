@@ -13,6 +13,7 @@ import com.playdata.calen.travel.adapter.support.*;
 import com.playdata.calen.travel.application.port.out.TravelMapLinkStore;
 import com.playdata.calen.travel.domain.*;
 import com.playdata.calen.travel.repository.*;
+import com.playdata.calen.travel.service.TravelPublicAccessWithdrawalFence;
 import com.playdata.calen.travel.domain.model.TravelMapLinkData.*;
 import com.playdata.calen.travel.domain.model.TravelOwnedMapData.*;
 import com.playdata.calen.travel.domain.model.TravelClusterDetailData.Media;
@@ -20,6 +21,9 @@ import com.playdata.calen.travel.domain.model.TravelMediaData.Download;
 import com.playdata.calen.travel.domain.model.TravelPhotoClusterData.PhotoPoint;
 import com.playdata.calen.travel.domain.model.TravelRouteData;
 import java.time.LocalDateTime;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.LockModeType;
 import java.util.*;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +42,9 @@ public class JpaTravelMapLinkAdapter implements TravelMapLinkStore {
     private final TravelMediaAssetRepository media;
     private final TravelRouteSegmentRepository routes;
     private final ObjectMapper json;
-    @Override public void requireActiveOwner(Long owner) { users.getRequiredUser(owner); }
+    private final TravelPublicAccessWithdrawalFence withdrawalFence;
+    private final EntityManager entities;
+    @Override public void requireActiveOwner(Long owner) { users.getRequiredUserForWrite(owner); }
     @Override public Set<Long> ownedPlans(Long owner, Collection<Long> ids) {
         return plans.findAllById(ids).stream().filter(plan -> plan.getOwner() != null && owner.equals(plan.getOwner().getId()))
                 .map(TravelPlan::getId).collect(Collectors.toSet());
@@ -63,7 +69,25 @@ public class JpaTravelMapLinkAdapter implements TravelMapLinkStore {
         return value(links.save(link));
     }
     @Override public Link active(String token) {
-        return value(links.findByTokenAndActiveTrue(token).orElseThrow(() -> new NotFoundException("Shared travel map not found.")));
+        var link = links.findByTokenAndActiveTrue(token)
+                .orElseThrow(() -> new NotFoundException("Shared travel map not found."));
+        if (link.getOwner() == null || link.getOwner().getId() == null) {
+            throw new NotFoundException("Shared travel map not found.");
+        }
+        Long owner = link.getOwner().getId();
+        try {
+            // A link can be read before the withdrawal transaction removes it. Lock the
+            // account first, then refresh the link after any wait, in that order.
+            withdrawalFence.requireAvailableOwner(owner);
+            entities.refresh(link, LockModeType.PESSIMISTIC_READ);
+            if (!Boolean.TRUE.equals(link.getActive()) || link.getOwner() == null
+                    || !owner.equals(link.getOwner().getId()) || !Objects.equals(token, link.getToken())) {
+                throw new NotFoundException("Shared travel map not found.");
+            }
+        } catch (EntityNotFoundException missing) {
+            throw new NotFoundException("Shared travel map not found.");
+        }
+        return value(link);
     }
     private Link value(TravelMapShareLink link) {
         var scope = new Scope(decode(link.getPlanIdsJson()), new LinkedHashSet<>(decode(link.getExcludedRecordIdsJson())),

@@ -11,7 +11,6 @@ import com.playdata.calen.ledger.application.port.out.LedgerAnalysisAdmissionPor
 import com.playdata.calen.ledger.domain.*;
 import com.playdata.calen.ledger.domain.model.LedgerAnalysisAdmissionData.AnalysisPlan;
 import com.playdata.calen.ledger.domain.model.LedgerAnalysisHistoryData.*;
-import com.playdata.calen.ledger.repository.LedgerAiAnalysisHistoryRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.util.Optional;
@@ -23,7 +22,7 @@ public final class LedgerAnalysisAdmissions {
     private LedgerAnalysisAdmissions() {}
     public static LedgerAnalysisAdmissionPort operation(Long userId, AnalysisPlan plan, AppUserService users,
             LedgerAiAnalysisProperties properties, LedgerAiAnalysisMetrics metrics, WorkLeaseService leases,
-            LedgerAiAnalysisHistoryRepository histories, ManageLedgerAnalysisHistoryUseCase queries,
+            Function<LedgerAiAnalysisHistory, LedgerAiAnalysisHistory> saveDraft, ManageLedgerAnalysisHistoryUseCase queries,
             LongConsumer submit, BiConsumer<Long, RuntimeException> failed) {
         return new LedgerAnalysisAdmissionPort() {
             private AppUser owner;
@@ -54,7 +53,7 @@ public final class LedgerAnalysisAdmissions {
                 var draft = LedgerAnalysisHistoryDrafts.create(owner, plan, properties, metrics);
                 draft.setStatus(LedgerAiAnalysisStatus.PROCESSING);
                 draft.setSummary("AI analysis is processing.");
-                pending = histories.save(draft);
+                pending = saveDraft.apply(draft);
             }
             @Override public void submit() { submit.accept(pending.getId()); }
             @Override public void submissionFailed(RuntimeException failure) { failed.accept(pending.getId(), failure); }

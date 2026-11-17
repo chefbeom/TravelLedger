@@ -32,6 +32,13 @@ class StoreLedgerImageInputServiceTest {
         var order=inOrder(storage,references); order.verify(storage).store(7L,11L,upload); order.verify(references).attach(7L,11L,image);
         order.verify(storage).delete("fixture/input"); verifyNoMoreInteractions(references);
     }
+    @Test void compensationUsesTheExactRecordedBucketInsteadOfTheCurrentDefault() {
+        var bucketImage = new StoredImage("fixture/input", LocalDateTime.now(), "original-bucket");
+        when(storage.supportsStorage()).thenReturn(true); when(storage.store(7L,11L,upload)).thenReturn(bucketImage);
+        assertThatThrownBy(() -> service.store(7L,11L,upload)).isInstanceOf(NotFoundException.class);
+        verify(storage).deleteFromBucket("original-bucket", "fixture/input");
+        verify(storage,never()).delete(any());
+    }
     @Test void uploadFailureNeverAttemptsAttachmentOrDeletion() {
         var failure=new IllegalStateException("fixture storage failure"); when(storage.supportsStorage()).thenReturn(true);
         when(storage.store(7L,11L,upload)).thenThrow(failure);

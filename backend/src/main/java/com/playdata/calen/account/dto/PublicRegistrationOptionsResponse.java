@@ -8,6 +8,10 @@ import java.util.List;
  */
 public record PublicRegistrationOptionsResponse(
         boolean publicRegistrationEnabled,
-        List<String> socialLoginProviders
+        List<String> socialLoginProviders,
+        boolean withdrawalRecoveryAvailable
 ) {
+    public PublicRegistrationOptionsResponse(boolean publicRegistrationEnabled, List<String> socialLoginProviders) {
+        this(publicRegistrationEnabled, socialLoginProviders, false);
+    }
 }

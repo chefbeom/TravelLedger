@@ -1,5 +1,6 @@
 package com.playdata.calen.account.social;
 
+import com.playdata.calen.account.security.AuthEndpointPolicy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.ServiceUnavailableException;
@@ -36,17 +37,46 @@ public class KakaoOAuthClient {
         return properties.isConfigured();
     }
 
+    public boolean isUnlinkConfigured() {
+        return StringUtils.hasText(properties.getAdminKey()) && AuthEndpointPolicy.isSafeUrl(properties.getUnlinkUri(), true);
+    }
+
+    /** Called from an idempotent withdrawal workflow; a failure must never be treated as success. */
+    public void unlinkAccount(String providerUserId) {
+        if (!isUnlinkConfigured()) {
+            throw new ServiceUnavailableException("카카오 연결 해제를 위한 서버 설정이 필요합니다.");
+        }
+        String subject = providerUserId == null ? "" : providerUserId.trim();
+        if (!subject.matches("[1-9][0-9]{0,18}")) {
+            throw new BadRequestException("카카오 연결 정보를 확인할 수 없습니다.");
+        }
+        try {
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add("target_id_type", "user_id");
+            form.add("target_id", subject);
+            JsonNode result = restClient.post().uri(properties.getUnlinkUri().trim())
+                    .header("Authorization", "KakaoAK " + properties.getAdminKey())
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(form).retrieve().body(JsonNode.class);
+            if (result == null || !subject.equals(result.path("id").asText(""))) {
+                throw new ServiceUnavailableException("카카오 연결 해제 결과를 확인할 수 없습니다.");
+            }
+        } catch (RestClientException exception) {
+            throw new ServiceUnavailableException("카카오 연결 해제 서버와 통신할 수 없습니다.");
+        }
+    }
+
     public String authorizationUrl(String state) {
         ensureConfigured();
         if (!StringUtils.hasText(state)) {
             throw new BadRequestException("OAuth 상태값이 없습니다.");
         }
-        return UriComponentsBuilder.fromUriString(properties.getAuthorizationUri())
+        return UriComponentsBuilder.fromUriString(properties.getAuthorizationUri().trim())
                 .queryParam("response_type", "code")
                 .queryParam("client_id", properties.getClientId())
-                .queryParam("redirect_uri", properties.getRedirectUri())
+                .queryParam("redirect_uri", properties.getRedirectUri().trim())
                 .queryParam("state", state)
-                .queryParam("scope", "account_email profile_nickname")
+                .queryParam("scope", "account_email,profile_nickname")
                 .build()
                 .encode()
                 .toUriString();
@@ -62,14 +92,14 @@ public class KakaoOAuthClient {
             MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
             form.add("grant_type", "authorization_code");
             form.add("client_id", properties.getClientId());
-            form.add("redirect_uri", properties.getRedirectUri());
+            form.add("redirect_uri", properties.getRedirectUri().trim());
             form.add("code", authorizationCode);
             if (StringUtils.hasText(properties.getClientSecret())) {
                 form.add("client_secret", properties.getClientSecret());
             }
 
             JsonNode token = restClient.post()
-                    .uri(properties.getTokenUri())
+                    .uri(properties.getTokenUri().trim())
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .body(form)
                     .retrieve()
@@ -80,11 +110,29 @@ public class KakaoOAuthClient {
             }
 
             JsonNode profile = restClient.get()
-                    .uri(properties.getUserInfoUri())
+                    .uri(properties.getUserInfoUri().trim())
                     .headers(headers -> headers.setBearerAuth(accessToken))
                     .retrieve()
                     .body(JsonNode.class);
-            return toIdentity(profile);
+            KakaoIdentity identity = toIdentity(profile);
+            if (properties.getExpectedAppId() == null) return identity;
+            JsonNode tokenInfo = restClient.get()
+                    .uri(properties.getTokenInfoUri().trim())
+                    .headers(headers -> headers.setBearerAuth(accessToken))
+                    .retrieve()
+                    .body(JsonNode.class);
+            if (tokenInfo == null || !tokenInfo.path("app_id").isIntegralNumber()
+                    || !tokenInfo.path("app_id").canConvertToLong()
+                    || !properties.getExpectedAppId().equals(tokenInfo.path("app_id").longValue())
+                    || !tokenInfo.path("id").isIntegralNumber() || !tokenInfo.path("id").canConvertToLong()
+                    || tokenInfo.path("id").longValue() <= 0
+                    || !tokenInfo.path("expires_in").isIntegralNumber() || !tokenInfo.path("expires_in").canConvertToLong()
+                    || tokenInfo.path("expires_in").longValue() <= 0
+                    || !identity.providerUserId().equals(tokenInfo.path("id").asText(""))) {
+                throw new ServiceUnavailableException("카카오 계정과 앱 정보를 확인할 수 없습니다.");
+            }
+            return new KakaoIdentity(identity.providerUserId(), identity.email(), identity.displayName(),
+                    identity.emailVerified(), properties.getExpectedAppId());
         } catch (RestClientException exception) {
             throw new ServiceUnavailableException("카카오 로그인 서버와 통신할 수 없습니다.");
         }

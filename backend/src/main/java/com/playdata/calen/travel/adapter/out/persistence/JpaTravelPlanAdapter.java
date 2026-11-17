@@ -2,6 +2,7 @@ package com.playdata.calen.travel.adapter.out.persistence;
 
 import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.account.withdrawal.PendingWithdrawalGuard;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.travel.application.port.out.TravelPlanStore;
 import com.playdata.calen.travel.domain.*;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class JpaTravelPlanAdapter implements TravelPlanStore {
     private final AppUserService users;
     private final AppUserRepository userRows;
+    private final PendingWithdrawalGuard withdrawals;
     private final TravelPlanRepository plans;
     private final TravelBudgetItemRepository budgets;
     private final TravelExpenseRecordRepository records;
@@ -30,8 +32,15 @@ public class JpaTravelPlanAdapter implements TravelPlanStore {
     private final TravelRouteSegmentRepository routes;
     private final TravelPlanShareRepository shares;
 
-    @Override public void requireActiveOwner(Long owner) { users.getRequiredUser(owner); }
+    @Override public void requireActiveOwner(Long owner) { users.getRequiredUserForWrite(owner); }
     @Override public void requireOwnedPlan(Long owner, Long id) {
+        // A stale managed plan update can otherwise restore a public flag after withdrawal.
+        // Keep ordinary disabled-account behavior unchanged, but fence pending withdrawals.
+        userRows.lockForAccountSecurityUpdate(owner)
+                .orElseThrow(() -> new NotFoundException("사용자 계정을 찾을 수 없습니다."));
+        if (withdrawals.hasPendingWithdrawalForUpdate(owner)) {
+            throw new NotFoundException("사용자 계정을 찾을 수 없습니다.");
+        }
         plans.findByIdAndOwnerId(id, owner).orElseThrow(() -> new NotFoundException("Travel plan not found."));
     }
 

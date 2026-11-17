@@ -15,6 +15,8 @@ import {
   createCategoryGroup,
   createEntry,
   createSplitLedgerPayment,
+  fetchSplitLedgerPayment,
+  updateSplitLedgerPayment,
   createLedgerAdjustment,
   createPaymentMethod,
   createTravelPlan,
@@ -175,6 +177,7 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  initialCalendarFocus: { type: Object, default: null },
 })
 
 const emit = defineEmits(['open-travel-record-location', 'ai-analysis-complete'])
@@ -566,6 +569,7 @@ const entryDateRange = ref({
 const aggregateWidgetConfigs = ref([])
 const aggregateSettingsReady = ref(false)
 const editingEntryId = ref(null)
+const editingSplitRevision = ref('')
 const amountInput = ref('')
 const isEntryTimeEnabled = ref(false)
 const calendarWorkspaceRef = ref(null)
@@ -695,6 +699,7 @@ const entryForm = reactive({
   splitMode: false,
   splitPayments: [],
   splitPaymentGroupId: '',
+  editingSplit: false,
 })
 
 let pendingSplitRequest = null
@@ -1444,6 +1449,19 @@ watch(
   },
   { immediate: true },
 )
+
+watch(() => props.initialCalendarFocus?.token, token => {
+  if (!token || !props.initialCalendarFocus?.date) return
+  householdAnchorDate.value = props.initialCalendarFocus.date
+}, { immediate: true })
+
+let openedCalendarFocusToken = ''
+watch(() => [props.initialCalendarFocus?.token, calendarReady.value, calendarWorkspaceRef.value], async ([token, ready, calendar]) => {
+  if (!token || !ready || !calendar || String(token) === openedCalendarFocusToken) return
+  openedCalendarFocusToken = String(token)
+  calendar.setSelectedDate?.(props.initialCalendarFocus.date)
+  await calendar.scrollToLedgerSheet?.()
+}, { immediate: true })
 
 watch(
   () => [
@@ -3059,6 +3077,8 @@ async function loadPastComparisons() {
 
 function resetEntryForm({ entryDate = calendarAnchorDate.value } = {}) {
   editingEntryId.value = null
+  editingSplitRevision.value = ''
+  entryForm.editingSplit = false
   entryForm.entryDate = entryDate || calendarAnchorDate.value
   entryForm.entryTime = '00:00'
   entryForm.title = ''
@@ -3095,6 +3115,8 @@ function resetEntryForm({ entryDate = calendarAnchorDate.value } = {}) {
 }
 
 function fillEntryForm(entry) {
+  editingSplitRevision.value = ''
+  entryForm.editingSplit = false
   editingEntryId.value = entry.id
   entryForm.entryDate = entry.entryDate
   entryForm.entryTime = normalizeEntryTimePayload(entry.entryTime)
@@ -3117,6 +3139,32 @@ function fillEntryForm(entry) {
   entryForm.splitPaymentGroupId = entry.splitPaymentGroupId || ''
   amountInput.value = String(Number(entry.amount || 0))
   isEntryTimeEnabled.value = hasEntryTimeValue(entry.entryTime)
+}
+
+async function handleSheetEdit(entry) {
+  if (!entry?.splitGroupId) { fillEntryForm(entry); return }
+  try {
+    const group = await fetchSplitLedgerPayment(entry.splitGroupId)
+    const parts = group.parts || []
+    if (parts.length < 2 || parts.some(part => part.deletedAt || part.hasAdjustmentHistory || part.adjustmentType)) {
+      throw new Error('삭제·환불·결제 취소 이력이 있는 분할 거래는 묶음으로 수정할 수 없습니다. 분할 결제 보기에서 각 수단의 처리 내역을 확인해 주세요.')
+    }
+    const first = parts[0]
+    const keys = ['entryDate', 'entryTime', 'entryType', 'title', 'memo', 'categoryGroupId', 'categoryDetailId', 'travelPlanId', 'travelRecordId']
+    if (parts.some(part => keys.some(key => (part[key] ?? null) !== (first[key] ?? null))) || parts.some(part => part.splitPaymentCount !== parts.length)) {
+      throw new Error('결제수단별 날짜 또는 내용이 다르거나 일부가 삭제되어 묶음으로 수정할 수 없습니다. 분할 결제 보기에서 개별 내역을 확인해 주세요.')
+    }
+    fillEntryForm(first)
+    editingSplitRevision.value = group.revision
+    entryForm.editingSplit = true
+    entryForm.splitMode = true
+    entryForm.amount = String(parts.reduce((sum, part) => sum + Math.round(Number(part.amount) * 100), 0) / 100)
+    amountInput.value = entryForm.amount
+    entryForm.splitPayments = parts.map(part => ({ paymentMethodId: String(part.paymentMethodId), amount: String(part.amount), installmentEnabled: Boolean(part.installmentMonths), installmentMonths: part.installmentMonths ? String(part.installmentMonths) : '', installmentInterestType: part.installmentInterestType || '', installmentInterestUnknown: Boolean(part.installmentMonths && !part.installmentInterestType) }))
+    entryForm.installmentEnabled = parts.some(part => part.installmentMonths)
+    await nextTick()
+    calendarWorkspaceRef.value?.scrollToEntryEditor?.()
+  } catch (error) { setFeedback('', error.message) }
 }
 
 async function fillEntryFormAndScroll(entry) {
@@ -5027,7 +5075,21 @@ async function submitEntry(shareAfterSave = false) {
     const submittedSnapshot = buildEntryFormSnapshot()
     const submittedPayload = buildEntryPayload()
     let savedEntry
-    if (editingEntryId.value) {
+    if (editingEntryId.value && entryForm.editingSplit) {
+      if (!entryForm.splitMode) throw new Error('분할 결제 묶음 수정에서는 분할 결제를 유지해 주세요.')
+      const rows = entryForm.splitPayments.map(row => {
+        if (!entryForm.installmentEnabled || !row.installmentEnabled) return { ...row, installmentMonths: '', installmentInterestType: '' }
+        if (!normalizeInstallmentMonths(row.installmentMonths, paymentMethods.value.find(method => String(method.id) === String(row.paymentMethodId)))) throw new Error('할부 개월을 입력해 주세요.')
+        normalizeInstallmentInterest(row.installmentInterestType, { allowUnknown: row.installmentInterestUnknown })
+        return row
+      })
+      const parts = prepareSplitPayment(submittedPayload, rows, paymentMethods.value)
+      const savedParts = await updateSplitLedgerPayment(entryForm.splitPaymentGroupId, { revision: editingSplitRevision.value, payment: { requestId: entryForm.splitPaymentGroupId, entry: submittedPayload, parts } })
+      savedEntry = savedParts[0]
+      savedSplit = true
+      undoableEntryAction.value = null
+      setFeedback('분할 결제 내역을 수정했습니다.')
+    } else if (editingEntryId.value) {
       const rollbackEntry = monthEntries.value.find((entry) => entry.id === editingEntryId.value)
         ?? statsEntries.value.find((entry) => entry.id === editingEntryId.value)
         ?? dashboard.value.recentEntries?.find((entry) => entry.id === editingEntryId.value)
@@ -5048,7 +5110,7 @@ async function submitEntry(shareAfterSave = false) {
       const rows = entryForm.splitPayments.map(row => {
         if (!entryForm.installmentEnabled || !row.installmentEnabled) return { ...row, installmentMonths: '', installmentInterestType: '' }
         if (!normalizeInstallmentMonths(row.installmentMonths, paymentMethods.value.find(method => String(method.id) === String(row.paymentMethodId)))) throw new Error('할부 개월을 입력해 주세요.')
-        normalizeInstallmentInterest(row.installmentInterestType)
+      normalizeInstallmentInterest(row.installmentInterestType)
         return row
       })
       if (entryForm.installmentEnabled && !rows.some(row => row.installmentMonths)) throw new Error('할부를 적용할 카드를 선택해 주세요.')
@@ -5754,6 +5816,7 @@ async function activatePayment(paymentId) {
     <CalendarWorkspace
       ref="calendarWorkspaceRef"
       v-else-if="householdTab === 'calendar'"
+      :focus-entry-id="props.initialCalendarFocus?.entryId"
       :current-user="props.currentUser"
       :quick-stats="quickStats"
       :month-label="monthLabel"
@@ -5833,7 +5896,7 @@ async function activatePayment(paymentId) {
       @share-entry="entryToShare = $event"
       @register-recurring="openRecurringLedgerFromEntry"
       @undo-entry-action="undoLastEntryAction"
-      @edit-entry="fillEntryForm"
+      @edit-entry="handleSheetEdit"
       @delete-entry="removeEntry"
       @adjust-entry="openLedgerAdjustment"
       @revert-adjustment="undoLedgerAdjustment"

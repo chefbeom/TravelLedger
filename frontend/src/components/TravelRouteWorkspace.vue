@@ -477,7 +477,9 @@ async function applyRouteFocusRequest(request) {
     ? routeSegments.value.find((route) => String(route.id || '') === targetRouteId)
     : null
 
-  if (targetRouteId && !targetRoute && !targetRouteDate) {
+  // The plan's routes can arrive after the focus request. Do not consume the
+  // token until the requested source actually exists in the loaded plan.
+  if (targetRouteId && !targetRoute) {
     return
   }
 

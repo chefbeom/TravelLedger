@@ -13,6 +13,7 @@ import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.dto.LedgerSplitPaymentRequest;
+import com.playdata.calen.ledger.dto.LedgerSplitPaymentUpdateRequest;
 import com.playdata.calen.ledger.dto.LedgerAdjustmentRequest;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
 import com.playdata.calen.ledger.dto.LedgerExchangeRateResponse;
@@ -200,6 +201,17 @@ public class LedgerEntryController {
             @Valid @RequestBody LedgerSplitPaymentRequest request
     ) {
         return ledgerEntryService.createSplitPayment(currentUser.userId(), request);
+    }
+
+    @GetMapping("/split-payments/{groupId}")
+    public LedgerEntryService.SplitPaymentGroup getSplitPayment(@AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable String groupId) {
+        return ledgerEntryService.getSplitPayment(currentUser.userId(), groupId);
+    }
+
+    @PutMapping("/split-payments/{groupId}")
+    public List<LedgerEntryResponse> updateSplitPayment(@AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable String groupId,
+            @Valid @RequestBody LedgerSplitPaymentUpdateRequest request) {
+        return ledgerEntryService.updateSplitPayment(currentUser.userId(), groupId, request);
     }
 
     @PatchMapping("/bulk")

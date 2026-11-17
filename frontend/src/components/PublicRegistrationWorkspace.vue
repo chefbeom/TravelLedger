@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import PinPadInput from './PinPadInput.vue'
 
 const props = defineProps({
@@ -12,6 +12,10 @@ const props = defineProps({
     default: false,
   },
   submitting: {
+    type: Boolean,
+    default: false,
+  },
+  resending: {
     type: Boolean,
     default: false,
   },
@@ -33,6 +37,10 @@ const form = reactive({
   rememberDevice: true,
 })
 const validationMessage = ref('')
+const resendAddress = ref('')
+watch(() => props.verificationRequested, requested => {
+  if (requested) resendAddress.value = form.email.trim()
+}, { immediate: true })
 const socialLoginProviders = computed(() => Array.isArray(props.options?.socialLoginProviders)
   ? props.options.socialLoginProviders
   : [])
@@ -70,6 +78,7 @@ function submitRegistration() {
         <p v-if="loading">가입 가능 여부를 확인하는 중입니다...</p>
         <template v-else-if="options?.publicRegistrationEnabled">
           <form class="stack-form" @submit.prevent="submitRegistration">
+            <p class="auth-copy__hint">이메일 인증 링크에서 가입 시 설정한 2차 비밀번호를 다시 입력합니다. 새 미인증 가입 신청은 마지막 인증 메일 요청 후 7일이 지나면 만료됩니다.</p>
             <input v-model="form.loginId" type="text" placeholder="로그인 ID" autocomplete="username" :disabled="submitting" required />
             <input v-model="form.displayName" type="text" placeholder="표시 이름" autocomplete="name" :disabled="submitting" required />
             <input v-model="form.email" type="email" placeholder="이메일" autocomplete="email" :disabled="submitting" required />
@@ -86,27 +95,30 @@ function submitRegistration() {
               <span>이 기기에서 로그인 상태 유지</span>
             </label>
             <p v-if="validationMessage" class="feedback feedback--error" role="alert">{{ validationMessage }}</p>
-            <button class="button button--primary" type="submit" :disabled="submitting">
+            <button class="button button--primary" type="submit" :disabled="submitting || resending">
               {{ submitting ? '인증 메일 보내는 중...' : '인증 메일 보내기' }}
             </button>
             <p v-if="verificationRequested" class="feedback feedback--success" role="status">
               인증 메일을 보냈습니다. 메일의 링크를 열어 가입을 완료해 주세요.
             </p>
-            <button
-              v-if="verificationRequested"
-              class="button button--ghost"
-              type="button"
-              :disabled="submitting"
-              @click="emit('resend-email', form.email.trim())"
-            >
-              인증 메일 다시 보내기
-            </button>
           </form>
         </template>
         <div v-else class="stack-form stack-form--readonly">
           <p>현재는 초대 링크로만 가입할 수 있습니다.</p>
           <p>관리자가 공개 회원가입을 켜면 이 페이지에서 바로 계정을 만들 수 있습니다.</p>
         </div>
+        <details :open="verificationRequested" class="stack-form">
+          <summary>이미 가입을 신청하셨나요? 인증 메일 다시 받기</summary>
+          <form class="stack-form" @submit.prevent="emit('resend-email', resendAddress.trim())">
+            <label for="signup-resend-email">가입에 사용한 이메일</label>
+            <input id="signup-resend-email" v-model="resendAddress" type="email" autocomplete="email"
+              :disabled="submitting || resending" required />
+            <p class="auth-copy__hint">메일은 60초 간격으로 요청할 수 있습니다. 마지막 발송 요청 후 7일이 지난 신청은 다시 가입해 주세요.</p>
+            <button class="button button--ghost" type="submit" :disabled="submitting || resending">
+              {{ resending ? '재전송 요청 중...' : '인증 메일 다시 보내기' }}
+            </button>
+          </form>
+        </details>
       </article>
 
       <article class="auth-card">

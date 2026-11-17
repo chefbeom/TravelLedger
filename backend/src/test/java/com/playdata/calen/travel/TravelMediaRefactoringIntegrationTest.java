@@ -56,9 +56,24 @@ class TravelMediaRefactoringIntegrationTest {
     @Autowired MockMvc mvc;
     @MockitoBean RedisCacheService redis;
     @MockitoBean TravelMediaStorageService storage;
+    @MockitoBean TravelUploadGrantRegistry grants;
     @MockitoBean TravelDriveLinkService drive;
     @MockitoBean TravelClusterRefreshCoordinator coordinator;
     record Fixture(long owner, long plan, long record) {}
+
+    @Test void legacyMediaPresignUsesWritableTransactions() {
+        when(storage.supportsPresignedUpload()).thenReturn(true);
+        when(storage.preparePresignedUploads(any(), any(), any(), any())).thenAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isFalse();
+            return List.of();
+        });
+        var request = new TravelMediaUploadPrepareRequest(TravelMediaType.PHOTO, null,
+                List.of(new TravelMediaUploadFileRequest("a.jpg", "image/jpeg", 1, List.of())));
+        var record = fixture(TravelRecordType.LEDGER);
+        legacy.prepareRecordMediaUpload(record.owner(), record.record(), request);
+        var memory = fixture(TravelRecordType.MEMORY);
+        legacy.prepareMemoryMediaUpload(memory.owner(), memory.record(), request);
+    }
 
     @Test void presignEndpointsKeepScopeNestedThumbnailsAndResponseNames() throws Exception {
         for (var type : TravelRecordType.values()) {

@@ -1,5 +1,7 @@
 package com.playdata.calen.drive.service;
 
+import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.account.withdrawal.PublicShareAccessGuard;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.drive.domain.DriveDownloadLink;
@@ -7,6 +9,8 @@ import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.drive.service.DriveDownloadLinkAccessLogService.AccessMetadata;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.security.SecureRandom;
@@ -33,9 +37,12 @@ public class DriveDownloadLinkService {
     private static final int MAX_MAX_DOWNLOADS = 1000;
 
     private final DriveDownloadLinkRepository driveDownloadLinkRepository;
+    private final AppUserService appUsers;
     private final DriveService driveService;
     private final DriveStorageService driveStorageService;
     private final DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService;
+    private final PublicShareAccessGuard publicShareAccessGuard;
+    private final EntityManager entities;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
@@ -44,6 +51,7 @@ public class DriveDownloadLinkService {
 
     @Transactional
     public DriveDtos.DownloadLinkResponse createLink(Long userId, Long fileId, DriveDtos.DownloadLinkCreateRequest request) {
+        appUsers.getRequiredUserForWrite(userId);
         DriveItem item = driveService.getOwnedFile(userId, fileId);
         if (item.isTrashed()) {
             throw new BadRequestException("Items in trash cannot be shared by link.");
@@ -72,6 +80,7 @@ public class DriveDownloadLinkService {
 
     @Transactional
     public DriveDtos.DownloadLinkResponse revokeLink(Long userId, Long linkId) {
+        appUsers.getRequiredUserForWrite(userId);
         DriveDownloadLink link = driveDownloadLinkRepository.findByIdAndOwner_Id(linkId, userId)
                 .orElseThrow(() -> new NotFoundException("Download link was not found."));
         driveService.ensureUnlocked(link.getItem());
@@ -127,11 +136,25 @@ public class DriveDownloadLinkService {
             throw new NotFoundException("Download link was not found.");
         }
 
+        Long ownerId = driveDownloadLinkRepository.findOwnerIdByToken(token.trim()).orElse(null);
+        if (ownerId == null) {
+            recordPublicDownloadLinkRequest("invalid");
+            recordPublicDownloadLinkAccess(null, token, "invalid", metadata);
+            throw new NotFoundException("Download link was not found.");
+        }
+        // Lock the account before the link; withdrawal uses the same order. Querying
+        // only the scalar owner above avoids retaining a stale link entity while waiting.
+        publicShareAccessGuard.lockAvailableOwner(ownerId);
         DriveDownloadLink link = driveDownloadLinkRepository.findByToken(token.trim()).orElse(null);
         if (link == null) {
             recordPublicDownloadLinkRequest("invalid");
             recordPublicDownloadLinkAccess(null, token, "invalid", metadata);
             throw new NotFoundException("Download link was not found.");
+        }
+        // A request-scoped persistence context may have seen this link before it was revoked.
+        entities.refresh(link, LockModeType.PESSIMISTIC_WRITE);
+        if (link.getOwner() == null || !ownerId.equals(link.getOwner().getId())) {
+            throw new BadRequestException("Download link is expired or no longer available.");
         }
 
         LocalDateTime now = LocalDateTime.now();

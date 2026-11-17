@@ -3,6 +3,7 @@ package com.playdata.calen.familyalbum.service;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.account.withdrawal.PendingWithdrawalGuard;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.familyalbum.domain.FamilyAlbum;
@@ -60,12 +61,14 @@ public class FamilyAlbumService {
 
     private final AppUserService appUserService;
     private final AppUserRepository appUserRepository;
+    private final PendingWithdrawalGuard pendingWithdrawalGuard;
     private final FamilyCategoryRepository familyCategoryRepository;
     private final FamilyCategoryMemberRepository familyCategoryMemberRepository;
     private final FamilyMediaAssetRepository familyMediaAssetRepository;
     private final FamilyAlbumRepository familyAlbumRepository;
     private final FamilyAlbumItemRepository familyAlbumItemRepository;
     private final FamilyMediaStorageService familyMediaStorageService;
+    private final FamilyMediaUploadGrantRegistry uploadGrants;
 
     public FamilyAlbumBootstrapResponse getBootstrap(Long userId) {
         appUserService.getRequiredUser(userId);
@@ -181,13 +184,8 @@ public class FamilyAlbumService {
 
     @Transactional
     public FamilyCategoryResponse createCategory(Long userId, FamilyCategoryCreateRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
-        FamilyCategory category = new FamilyCategory();
-        category.setOwner(owner);
-        category.setName(normalizeRequiredText(request.name(), "카테고리 이름은 필수입니다.", 120));
-        category.setDescription(normalizeOptionalText(request.description(), 500));
-        FamilyCategory savedCategory = familyCategoryRepository.save(category);
-
+        String name = normalizeRequiredText(request.name(), "카테고리 이름은 필수입니다.", 120);
+        String description = normalizeOptionalText(request.description(), 500);
         Set<Long> memberUserIds = new LinkedHashSet<>();
         memberUserIds.add(userId);
         if (request.memberUserIds() != null) {
@@ -196,13 +194,23 @@ public class FamilyAlbumService {
                     .forEach(memberUserIds::add);
         }
 
-        Map<Long, AppUser> usersById = appUserRepository.findAllById(memberUserIds).stream()
-                .filter(AppUser::isActive)
-                .collect(Collectors.toMap(AppUser::getId, Function.identity()));
-
-        if (usersById.size() != memberUserIds.size()) {
-            throw new BadRequestException("카테고리에 초대할 수 없는 사용자가 포함되어 있습니다.");
+        if (userId == null) throw new NotFoundException("사용자 계정을 찾을 수 없습니다.");
+        Map<Long, AppUser> usersById = new java.util.HashMap<>();
+        // All participants use a deterministic lock order, including the creator.
+        for (Long memberUserId : new java.util.TreeSet<>(memberUserIds)) {
+            AppUser active = appUserRepository.findActiveForPreferenceUpdate(memberUserId).orElse(null);
+            if (active == null) {
+                if (Objects.equals(memberUserId, userId)) throw new NotFoundException("사용자 계정을 찾을 수 없습니다.");
+                throw new BadRequestException("카테고리에 초대할 수 없는 사용자가 포함되어 있습니다.");
+            }
+            usersById.put(memberUserId, active);
         }
+
+        FamilyCategory category = new FamilyCategory();
+        category.setOwner(usersById.get(userId));
+        category.setName(name);
+        category.setDescription(description);
+        FamilyCategory savedCategory = familyCategoryRepository.save(category);
 
         List<FamilyCategoryMember> members = memberUserIds.stream()
                 .map(memberUserId -> {
@@ -224,7 +232,7 @@ public class FamilyAlbumService {
             String caption,
             List<MultipartFile> files
     ) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         FamilyCategory category = getAccessibleCategory(userId, categoryId);
         String normalizedCaption = normalizeOptionalText(caption, 240);
         List<MultipartFile> selectedFiles = (files == null ? Collections.<MultipartFile>emptyList() : files).stream()
@@ -251,7 +259,7 @@ public class FamilyAlbumService {
             Long categoryId,
             FamilyMediaUploadPrepareRequest request
     ) {
-        appUserService.getRequiredUser(userId);
+        appUserService.getRequiredUserForWrite(userId);
         FamilyCategory category = getAccessibleCategory(userId, categoryId);
         List<FamilyMediaUploadTargetResponse> uploads = familyMediaStorageService
                 .preparePresignedUploads(
@@ -277,6 +285,7 @@ public class FamilyAlbumService {
                         file.mediaType()
                 ))
                 .toList();
+        uploadGrants.recordIssued(userId, category.getId(), uploads);
         return new FamilyMediaUploadPrepareResponse("PRESIGNED", uploads);
     }
 
@@ -286,7 +295,7 @@ public class FamilyAlbumService {
             Long categoryId,
             FamilyMediaUploadCompleteRequest request
     ) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         FamilyCategory category = getAccessibleCategory(userId, categoryId);
         String normalizedCaption = normalizeOptionalText(request.caption(), 240);
         LocalDateTime now = LocalDateTime.now();
@@ -309,19 +318,33 @@ public class FamilyAlbumService {
         return savedAssets.stream().map(this::toMediaResponse).toList();
     }
 
+    @Transactional
     public void abortMediaUpload(
             Long userId,
             Long categoryId,
             FamilyMediaUploadAbortRequest request
     ) {
+        // Serialize with upload completion and withdrawal, both of which lock this user first.
+        // A presigned key can already belong to a confirmed (and even transferred) photo.
+        appUserService.getRequiredUserForWrite(userId);
         getAccessibleCategory(userId, categoryId);
+        if (request == null || request.objectKeys() == null || request.objectKeys().isEmpty()
+                || request.objectKeys().stream().anyMatch(key -> !StringUtils.hasText(key))) {
+            throw new BadRequestException("취소할 업로드 정보를 확인해 주세요.");
+        }
+        if (familyMediaAssetRepository.existsByStoragePathIn(request.objectKeys())) {
+            throw new BadRequestException("이미 등록된 사진이나 동영상은 업로드 취소로 삭제할 수 없습니다.");
+        }
         familyMediaStorageService.abortPresignedUploads(userId, categoryId, request.objectKeys());
     }
 
 
+    @Transactional
     public FamilyAlbumResponse createAlbum(Long userId, FamilyAlbumCreateRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
-        FamilyCategory category = getAccessibleCategory(userId, request.categoryId());
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
+        FamilyCategory category = familyCategoryRepository.lockById(request.categoryId())
+                .orElseThrow(() -> new NotFoundException("가족 카테고리를 찾을 수 없습니다."));
+        verifyCategoryAccess(userId, category);
         List<Long> mediaIds = distinctIds(request.mediaIds());
         if (mediaIds.isEmpty()) {
             throw new BadRequestException("앨범에 담을 사진이나 동영상을 하나 이상 선택해 주세요.");
@@ -336,6 +359,20 @@ public class FamilyAlbumService {
                 .anyMatch(asset -> !Objects.equals(asset.getCategory().getId(), category.getId()));
         if (hasDifferentCategory) {
             throw new BadRequestException("앨범에는 같은 카테고리의 파일만 담을 수 있습니다.");
+        }
+
+        // Do not create new references to files still owned by a withdrawing account.
+        // An ordinarily disabled account without a withdrawal retains its prior behavior.
+        var assetOwnerIds = mediaAssets.stream().map(asset -> asset.getOwner().getId())
+                .filter(id -> !Objects.equals(id, userId)).collect(Collectors.toCollection(java.util.TreeSet::new));
+        for (Long assetOwnerId : assetOwnerIds) {
+            appUserRepository.lockForAccountSecurityUpdate(assetOwnerId)
+                    .orElseThrow(() -> new BadRequestException("앨범에 담을 파일의 소유자를 확인할 수 없습니다."));
+            // Always check the pending request with a current read; a previously loaded
+            // AppUser can have stale active state in an existing persistence context.
+            if (pendingWithdrawalGuard.hasPendingWithdrawalForUpdate(assetOwnerId)) {
+                throw new BadRequestException("탈퇴 처리 중인 사용자의 사진은 새 앨범에 추가할 수 없습니다.");
+            }
         }
 
         FamilyAlbum album = new FamilyAlbum();

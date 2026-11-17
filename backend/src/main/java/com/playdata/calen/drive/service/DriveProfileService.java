@@ -33,20 +33,26 @@ public class DriveProfileService {
     private final DriveProfileSettingsRepository driveProfileSettingsRepository;
     private final DriveItemRepository driveItemRepository;
     private final DriveStorageService driveStorageService;
+    private final DriveShareParticipantFence accountFence;
 
     public DriveProfileService(
             AppUserRepository appUserRepository,
             DriveProfileSettingsRepository driveProfileSettingsRepository,
             DriveItemRepository driveItemRepository,
-            DriveStorageService driveStorageService
+            DriveStorageService driveStorageService,
+            DriveShareParticipantFence accountFence
     ) {
         this.appUserRepository = appUserRepository;
         this.driveProfileSettingsRepository = driveProfileSettingsRepository;
         this.driveItemRepository = driveItemRepository;
         this.driveStorageService = driveStorageService;
+        this.accountFence = accountFence;
     }
 
+    @Transactional
     public DriveDtos.ProfileSettingsResponse getSettings(Long userId) {
+        // Reading settings may create their default row, so serialize it with withdrawal.
+        accountFence.lockOwnerForWrite(userId);
         AppUser user = getUser(userId);
         DriveProfileSettings settings = getOrCreateSettings(user);
         return toSettingsResponse(user, settings);
@@ -54,6 +60,7 @@ public class DriveProfileService {
 
     @Transactional
     public DriveDtos.ProfileSettingsResponse updateSettings(Long userId, DriveDtos.ProfileSettingsUpdateRequest request) {
+        accountFence.lockOwnerForWrite(userId);
         AppUser user = getUser(userId);
         DriveProfileSettings settings = getOrCreateSettings(user);
 
@@ -107,6 +114,7 @@ public class DriveProfileService {
         }
         byte[] sanitizedImageBytes = sanitizeProfileImage(imageBytes);
 
+        accountFence.lockOwnerForWrite(userId);
         AppUser user = getUser(userId);
         DriveProfileSettings settings = getOrCreateSettings(user);
         String objectKey = driveStorageService.buildProfileImageObjectKey(userId);
@@ -116,12 +124,14 @@ public class DriveProfileService {
             throw new BadRequestException("Could not store the profile image.");
         }
         settings.setProfileImagePath(objectKey);
+        settings.setProfileImageBucket(driveStorageService.resolveBucket());
         return toSettingsResponse(user, settings);
     }
 
     public DriveService.DriveFilePayload loadProfileImage(Long userId) {
         AppUser user = getUser(userId);
-        DriveProfileSettings settings = getOrCreateSettings(user);
+        DriveProfileSettings settings = driveProfileSettingsRepository.findByUser_Id(user.getId())
+                .orElseThrow(() -> new NotFoundException("프로필 이미지가 없습니다."));
         if (!StringUtils.hasText(settings.getProfileImagePath())) {
             throw new NotFoundException("프로필 이미지가 없습니다.");
         }

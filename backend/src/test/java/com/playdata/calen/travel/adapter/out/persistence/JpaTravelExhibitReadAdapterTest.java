@@ -19,7 +19,8 @@ class JpaTravelExhibitReadAdapterTest {
     final TravelExpenseRecordRepository records = mock(TravelExpenseRecordRepository.class);
     final TravelMediaAssetRepository media = mock(TravelMediaAssetRepository.class);
     final TravelRouteSegmentRepository routes = mock(TravelRouteSegmentRepository.class);
-    final JpaTravelExhibitReadAdapter adapter = new JpaTravelExhibitReadAdapter(mock(AppUserService.class), plans, shares, budgets, records, media, routes, mock(TravelRoutePayloadPort.class));
+    final JpaTravelExhibitReadAdapter adapter = new JpaTravelExhibitReadAdapter(mock(AppUserService.class), plans, shares, budgets, records, media, routes, mock(TravelRoutePayloadPort.class),
+            mock(com.playdata.calen.travel.service.TravelSharingParticipantFence.class), mock(jakarta.persistence.EntityManager.class));
 
     @Test void publicCommunityPhotoDoesNotInitializePlanVisibility() {
         var asset = mock(TravelMediaAsset.class); var record = mock(TravelExpenseRecord.class);
@@ -48,12 +49,13 @@ class JpaTravelExhibitReadAdapterTest {
     }
 
     @Test void receivedShareIsRecipientScopedAndDoesNotLoadAttributionBeforeAuthorization() {
-        var share = mock(TravelPlanShare.class); var plan = mock(TravelPlan.class); var owner = mock(AppUser.class);
+        var share = mock(TravelPlanShare.class); var plan = mock(TravelPlan.class); var owner = mock(AppUser.class); var recipient = mock(AppUser.class);
         when(shares.findByIdAndRecipientId(9L, 2L)).thenReturn(Optional.of(share));
         when(share.getId()).thenReturn(9L); when(share.getPlan()).thenReturn(plan); when(plan.getOwner()).thenReturn(owner);
         when(owner.getId()).thenReturn(1L); when(plan.getId()).thenReturn(3L); when(plan.getStatus()).thenReturn(TravelPlanStatus.PLANNED);
+        when(share.getRecipient()).thenReturn(recipient); when(recipient.getId()).thenReturn(2L); when(share.getSharedBy()).thenReturn(owner);
         assertThat(adapter.receivedShare(2L, 9L).plan().ownerId()).isEqualTo(1L);
-        verify(share, never()).getSharedBy(); verify(owner, never()).getLoginId(); verify(owner, never()).getDisplayName();
+        verify(owner, never()).getLoginId(); verify(owner, never()).getDisplayName();
         verifyNoInteractions(budgets, records, media, routes);
     }
 }

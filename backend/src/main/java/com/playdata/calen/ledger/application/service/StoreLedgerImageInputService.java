@@ -19,7 +19,8 @@ public final class StoreLedgerImageInputService implements StoreLedgerImageInput
         if (!storage.supportsStorage()) return false;
         var stored=storage.store(ownerId,analysisId,image);
         if (references.attach(ownerId,analysisId,stored)==0) {
-            storage.delete(stored.objectKey());
+            if (stored.bucket() == null || stored.bucket().isBlank()) storage.delete(stored.objectKey());
+            else storage.deleteFromBucket(stored.bucket(), stored.objectKey());
             throw new NotFoundException("이미지 분석 기록을 찾을 수 없습니다.");
         }
         return true;

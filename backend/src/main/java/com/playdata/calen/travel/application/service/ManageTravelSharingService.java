@@ -30,6 +30,7 @@ public final class ManageTravelSharingService implements ManageTravelSharingUseC
         if (recipient.id().equals(sharer.id())) {
             throw new BadRequestException("자기 자신에게는 여행 전시를 공유할 수 없습니다.");
         }
+        store.lockForShare(sharer.id(), plan.id(), recipient.id(), recipient.loginId());
         var shareId = store.findShare(planId, recipient.id())
                 .orElseGet(() -> store.createShare(sharer.id(), plan.id(), recipient.id()));
         summaries.invalidatePublic();
@@ -100,7 +101,7 @@ public final class ManageTravelSharingService implements ManageTravelSharingUseC
         if (next) {
             TravelSharingPolicy.requireCompleted(plan.status());
         }
-        store.setPublicShare(plan.id(), next);
+        store.setPublicShare(owner, plan.id(), next);
         summaries.invalidateOwner(owner);
         summaries.invalidatePublic();
         return store.publicShare(plan.id());

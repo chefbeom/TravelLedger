@@ -13,8 +13,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.PaymentMethod;
@@ -45,6 +47,9 @@ class RecurringLedgerServiceTest {
 
     @Mock
     private AppUserService appUserService;
+
+    @Mock
+    private AppUserRepository appUserRepository;
 
     @Mock
     private RecurringLedgerRuleRepository ruleRepository;
@@ -123,6 +128,32 @@ class RecurringLedgerServiceTest {
         assertThat(storedOccurrence.get().getMode()).isEqualTo(RecurringLedgerMode.CONFIRM);
         assertThat(storedOccurrence.get().getStatus()).isEqualTo(RecurringLedgerOccurrenceStatus.PENDING);
     }
+
+    @Test
+    void inactiveOwnerCannotReceiveNewPendingOccurrences() {
+        LocalDate date = LocalDate.of(2045, 4, 15);
+        when(ruleRepository.findDueCandidateIds(eq(date), eq(0L), any())).thenReturn(List.of(31L));
+        when(ruleRepository.findOwnerIdById(31L)).thenReturn(Optional.of(7L));
+        when(appUserRepository.findActiveForPreferenceUpdate(7L)).thenReturn(Optional.empty());
+        assertThat(service().processDueDate(date)).isZero();
+        verify(ruleRepository, never()).findByIdForUpdate(anyLong());
+        verifyNoInteractions(occurrenceRepository, ledgerEntryService);
+    }
+
+    @Test
+    void inactiveOwnerCannotCreateOrChangeRecurringRulesOrOccurrences() {
+        when(appUserRepository.findActiveForPreferenceUpdate(7L)).thenReturn(Optional.empty());
+        for (Runnable mutation : List.<Runnable>of(
+                () -> service().createRule(7L, null),
+                () -> service().updateRule(7L, 31L, null),
+                () -> service().deactivateRule(7L, 31L),
+                () -> service().deleteRule(7L, 31L),
+                () -> service().approveOccurrence(7L, 41L),
+                () -> service().skipOccurrence(7L, 41L))) {
+            assertThatThrownBy(mutation::run).isInstanceOf(NotFoundException.class);
+        }
+        verifyNoInteractions(ruleRepository, occurrenceRepository, ledgerEntryService);
+    }
     @Test
     void approvingConfirmationOccurrenceCreatesTheExistingLedgerEntry() {
         LocalDate date = LocalDate.of(2045, 4, 15);
@@ -133,6 +164,7 @@ class RecurringLedgerServiceTest {
         occurrence.setScheduledDate(date);
         occurrence.setMode(RecurringLedgerMode.CONFIRM);
         occurrence.setStatus(RecurringLedgerOccurrenceStatus.PENDING);
+        when(appUserRepository.findActiveForPreferenceUpdate(7L)).thenReturn(Optional.of(rule.getOwner()));
         when(occurrenceRepository.findByIdAndRuleOwnerId(41L, 7L)).thenReturn(Optional.of(occurrence));
 
         LedgerEntryResponse createdEntry = mock(LedgerEntryResponse.class);
@@ -150,6 +182,7 @@ class RecurringLedgerServiceTest {
     @Test
     void activeRuleMustBePausedBeforeItCanBeDeleted() {
         RecurringLedgerRule rule = recurringRule(RecurringLedgerMode.AUTO, LocalDate.of(2045, 4, 15));
+        when(appUserRepository.findActiveForPreferenceUpdate(7L)).thenReturn(Optional.of(rule.getOwner()));
         when(ruleRepository.findByIdAndOwnerId(31L, 7L)).thenReturn(Optional.of(rule));
 
         assertThatThrownBy(() -> service().deleteRule(7L, 31L))
@@ -164,6 +197,7 @@ class RecurringLedgerServiceTest {
     void pausedRuleDeletesItsOccurrencesBeforeDeletingTheRule() {
         RecurringLedgerRule rule = recurringRule(RecurringLedgerMode.AUTO, LocalDate.of(2045, 4, 15));
         rule.setActive(false);
+        when(appUserRepository.findActiveForPreferenceUpdate(7L)).thenReturn(Optional.of(rule.getOwner()));
         when(ruleRepository.findByIdAndOwnerId(31L, 7L)).thenReturn(Optional.of(rule));
 
         service().deleteRule(7L, 31L);
@@ -176,6 +210,7 @@ class RecurringLedgerServiceTest {
     private RecurringLedgerService service() {
         return new RecurringLedgerService(
                 appUserService,
+                appUserRepository,
                 ruleRepository,
                 occurrenceRepository,
                 categoryGroupRepository,
@@ -191,6 +226,8 @@ class RecurringLedgerServiceTest {
             AtomicReference<RecurringLedgerOccurrence> storedOccurrence
     ) {
         when(ruleRepository.findDueCandidateIds(eq(date), eq(0L), any())).thenReturn(List.of(rule.getId()));
+        when(ruleRepository.findOwnerIdById(rule.getId())).thenReturn(Optional.of(rule.getOwner().getId()));
+        when(appUserRepository.findActiveForPreferenceUpdate(rule.getOwner().getId())).thenReturn(Optional.of(rule.getOwner()));
         when(ruleRepository.findByIdForUpdate(rule.getId())).thenReturn(Optional.of(rule));
         when(occurrenceRepository.findByRuleIdAndScheduledDate(rule.getId(), date))
                 .thenAnswer(invocation -> Optional.ofNullable(storedOccurrence.get()));

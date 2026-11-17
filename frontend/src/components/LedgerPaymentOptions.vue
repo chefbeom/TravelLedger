@@ -68,19 +68,19 @@ function changePartInstallment(row, event) {
 </script>
 
 <template>
-  <details class="payment-options" :open="editing && !!form.installmentMonths">
+  <details class="payment-options" :open="editing && (!!form.installmentMonths || form.editingSplit)">
     <summary>결제 옵션 <small v-if="form.splitMode || form.installmentEnabled">· {{ [form.splitMode && '분할 결제', form.installmentEnabled && '할부'].filter(Boolean).join(' · ') }}</small></summary>
     <div class="payment-options__body">
       <div class="payment-options__choices">
         <label class="payment-options__toggle payment-options__choice"><input type="checkbox" :checked="form.installmentEnabled" @change="setInstallment" /><span>할부 결제</span></label>
-        <label class="payment-options__toggle payment-options__choice"><input type="checkbox" :checked="form.splitMode" :disabled="!canSplit && !form.splitMode" @change="setSplit" /><span>분할 결제</span></label>
+        <label class="payment-options__toggle payment-options__choice"><input type="checkbox" :checked="form.splitMode" :disabled="form.editingSplit || (!canSplit && !form.splitMode)" @change="setSplit" /><span>분할 결제</span></label>
       </div>
       <p v-if="!canSplit && !editing" class="payment-options__hint">분할 결제는 원화 지출에서 사용할 수 있으며 여행 기록과 직접 연결할 수 없습니다.</p>
-      <p v-if="editing && form.splitPaymentGroupId" class="payment-options__hint">분할 결제의 각 수단은 개별 거래로 수정·환불·취소합니다.</p>
+      <p v-if="editing && form.splitPaymentGroupId">{{ form.editingSplit ? '기존 결제수단 수를 유지하며 금액과 수단을 수정합니다. 환불·취소·삭제는 수단별로 처리합니다.' : '분할 결제의 각 수단은 개별 거래로 수정·환불·취소합니다.' }}</p>
       <template v-if="form.splitMode">
         <p class="payment-options__hint">위 총 금액 {{ currency(Number(form.amount) || 0) }}원을 결제수단별로 나누어 입력하세요. 각 수단은 별도 거래로 저장됩니다.</p>
         <div v-for="(row, index) in form.splitPayments" :key="index" class="payment-options__part">
-          <div class="payment-options__part-head"><strong>결제 {{ index + 1 }}</strong><button type="button" class="button button--ghost" :disabled="form.splitPayments.length <= 2" :aria-label="`결제수단 ${index + 1} 삭제`" @click="removePart(index)">삭제</button></div>
+          <div class="payment-options__part-head"><strong>결제 {{ index + 1 }}</strong><button type="button" class="button button--ghost" :disabled="form.editingSplit || form.splitPayments.length <= 2" :aria-label="`결제수단 ${index + 1} 삭제`" @click="removePart(index)">삭제</button></div>
           <div class="payment-options__fields">
             <label><span>결제수단</span><select v-model="row.paymentMethodId" :aria-label="`결제수단 ${index + 1}`" @change="changeMethod(row)"><option value="">선택</option><option v-for="method in methods" :key="method.id" :value="String(method.id)">{{ method.name }}</option></select></label>
             <label><span>결제 금액{{ index === form.splitPayments.length - 1 ? ' · 잔액 자동입력' : '' }}</span><input :value="row.amount" type="number" inputmode="decimal" min="0.01" step="0.01" :aria-label="`수단 ${index + 1} 금액`" placeholder="0" @input="changeAmount($event, index)" /></label>
@@ -93,7 +93,7 @@ function changePartInstallment(row, event) {
             </div>
           </template>
         </div>
-        <div class="payment-options__footer"><button type="button" class="button button--secondary" :disabled="form.splitPayments.length >= 10" @click="addPart">수단 추가</button><span>입력 {{ currency(splitSum) }}원 · 남은 금액 {{ currency(remaining) }}원</span></div>
+        <div class="payment-options__footer"><button type="button" class="button button--secondary" :disabled="form.editingSplit || form.splitPayments.length >= 10" @click="addPart">수단 추가</button><span>입력 {{ currency(splitSum) }}원 · 남은 금액 {{ currency(remaining) }}원</span></div>
         <p class="payment-options__hint">마지막 수단에 남은 금액이 자동 입력되며 직접 수정할 수 있습니다. 다른 금액이나 총 금액을 변경하면 잔액을 다시 계산합니다.</p>
         <p v-if="amountNotice" class="payment-options__hint" role="status">{{ amountNotice }}</p>
         <p class="payment-options__hint">할부를 적용할 카드에서 각각 선택하세요. 할부는 표시 정보이며 금액을 월별로 나누지 않습니다.</p>

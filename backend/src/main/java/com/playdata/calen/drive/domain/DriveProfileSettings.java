@@ -60,6 +60,9 @@ public class DriveProfileSettings {
     @Column(length = 600)
     private String profileImagePath;
 
+    @Column(length = 255)
+    private String profileImageBucket;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

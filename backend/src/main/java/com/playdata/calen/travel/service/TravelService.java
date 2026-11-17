@@ -141,19 +141,24 @@ public class TravelService {
         return TravelMapLinkMapper.link(mapLinks.create(userId, TravelMapLinkMapper.draft(request)));
     }
 
+    @Transactional
     public TravelPublicMapShareResponse getTravelMapShare(String token) { return TravelMapLinkMapper.map(mapLinks.map(token)); }
 
+    @Transactional
     public TravelLoginMapPreviewResponse getTravelMapShareLoginPreview(String token) { return TravelMapLinkMapper.preview(mapLinks.preview(token)); }
 
+    @Transactional
     public MediaDownload getTravelMapShareLoginPreviewMarkerMediaDownload(String token, int number) {
         var download = mapLinks.previewMedia(token, number);
         return new MediaDownload(download.storagePath(), download.contentType(), download.fileName());
     }
 
+    @Transactional
     public TravelMyMapPhotoClusterPageResponse getTravelMapSharePhotoCluster(String token, Long cluster, Integer page, Integer size, Long focus) {
         return TravelMapLinkMapper.cluster(mapLinks.cluster(token, cluster, page, size, focus));
     }
 
+    @Transactional
     public MediaDownload getTravelMapShareMediaDownload(String token, Long media) {
         var download = mapLinks.media(token, media);
         return new MediaDownload(download.storagePath(), download.contentType(), download.fileName());
@@ -220,6 +225,7 @@ public class TravelService {
         return TravelExhibitMapper.page(exhibitReads.received(userId, page, size));
     }
 
+    @Transactional
     public TravelSharedExhibitDetailResponse getSharedExhibit(Long userId, Long shareId) {
         return TravelExhibitMapper.received(exhibitReads.receivedDetail(userId, shareId));
     }
@@ -319,6 +325,7 @@ public class TravelService {
         return TravelRouteMapper.response(routeFiles.upload(userId,routeId,TravelRouteUploadMapper.uploads(files)));
     }
 
+    @Transactional
     public TravelRouteGpxUploadPrepareResponse prepareRouteGpxUpload(Long userId,Long routeId,TravelRouteGpxUploadPrepareRequest request) {
         return TravelRouteUploadMapper.response(routeFiles.prepare(userId,routeId,TravelRouteUploadMapper.candidates(request)));
     }
@@ -328,6 +335,7 @@ public class TravelService {
         return TravelRouteMapper.response(routeFiles.complete(userId,routeId,TravelRouteUploadMapper.completed(request)));
     }
 
+    @Transactional
     public void abortRouteGpxUpload(Long userId,Long routeId,TravelRouteGpxUploadAbortRequest request) {
         routeFiles.abort(userId,routeId,request.objectKeys());
     }
@@ -336,6 +344,7 @@ public class TravelService {
         routeWrites.delete(userId,routeId);
     }
 
+    @Transactional
     public TravelMediaUploadPrepareResponse prepareRecordMediaUpload(Long userId, Long recordId, TravelMediaUploadPrepareRequest request) {
         return TravelMediaUploadMapper.response(ownedMedia.prepare(userId, recordId, TravelRecordType.LEDGER,
                 TravelMediaUploadMapper.candidates(request)));
@@ -347,6 +356,7 @@ public class TravelService {
                 request.mediaType(), request.caption(), TravelMediaUploadMapper.completed(request)));
     }
 
+    @Transactional
     public TravelMediaUploadPrepareResponse prepareMemoryMediaUpload(Long userId, Long memoryId, TravelMediaUploadPrepareRequest request) {
         return TravelMediaUploadMapper.response(ownedMedia.prepare(userId, memoryId, TravelRecordType.MEMORY,
                 TravelMediaUploadMapper.candidates(request)));
@@ -373,6 +383,7 @@ public class TravelService {
         return new MediaDownload(download.storagePath(), download.contentType(), download.fileName());
     }
 
+    @Transactional
     public MediaDownload getSharedExhibitMediaDownload(Long userId, Long shareId, Long mediaId) {
         var download = exhibitReads.receivedMedia(userId, shareId, mediaId);
         return new MediaDownload(download.storagePath(), download.contentType(), download.fileName());

@@ -69,7 +69,7 @@ test('split payment and installment information are entered and shown per method
   const sheet = page.getByRole('dialog', { name: '거래 시트' })
   const groupedRow = sheet.getByRole('row').filter({ hasText: '분할 구매' })
   await expect(groupedRow).toHaveCount(1)
-  await groupedRow.getByRole('button', { name: '상세보기' }).click()
+  await groupedRow.getByRole('button', { name: '분할 결제 보기' }).click()
   const details = page.getByRole('dialog', { name: '분할 결제 상세' })
   await expect(details.getByText('결제 1/2 · 카드')).toBeVisible()
   await expect(details.getByText('결제 2/2 · 현금')).toBeVisible()

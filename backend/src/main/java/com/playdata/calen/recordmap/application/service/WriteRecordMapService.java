@@ -30,6 +30,7 @@ public final class WriteRecordMapService implements WriteRecordMapUseCase {
     }
 
     @Override public void deletePlace(Long owner, Long id) {
+        catalog.requireActiveOwner(owner);
         catalog.requireOwnedPlace(owner, id);
         RecordMapWritePolicy.requireNoVisits(catalog.visitCount(owner, id));
         mutations.deletePlace(id);
@@ -42,6 +43,7 @@ public final class WriteRecordMapService implements WriteRecordMapUseCase {
     }
 
     @Override public void deleteCollection(Long owner, Long id) {
+        catalog.requireActiveOwner(owner);
         catalog.requireOwnedCollection(owner, id);
         mutations.revokeCollectionShares(owner, id);
         mutations.detachCollection(id);
@@ -49,6 +51,7 @@ public final class WriteRecordMapService implements WriteRecordMapUseCase {
     }
 
     @Override public Long saveVisit(Long owner, Long placeId, Long id, VisitDraft draft) {
+        catalog.requireActiveOwner(owner);
         if (draft.date() == null && draft.time() != null) throw new BadRequestException("방문 날짜 없이 시간만 저장할 수 없습니다.");
         catalog.requireOwnedPlace(owner, placeId);
         if (id != null) RecordMapWritePolicy.requireSamePlace(catalog.ownedVisitPlace(owner, id, false), placeId);
@@ -56,12 +59,14 @@ public final class WriteRecordMapService implements WriteRecordMapUseCase {
     }
 
     @Override public void deleteVisit(Long owner, Long id) {
+        catalog.requireActiveOwner(owner);
         catalog.ownedVisitPlace(owner, id, true);
         mutations.deleteVisitPhotos(owner, id);
         mutations.deleteVisit(id);
     }
 
     @Override public Long importTravel(Long owner, TravelImport request) {
+        catalog.requireActiveOwner(owner);
         // Lock the source before checking uniqueness or mutating collection membership.
         var source = catalog.lockTravelSource(owner, request.recordId());
         var draft = RecordMapWritePolicy.importedPlace(source);

@@ -23,6 +23,7 @@ import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateRequest;
 import com.playdata.calen.ledger.dto.LedgerClassificationDeleteRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerSplitPaymentRequest;
+import com.playdata.calen.ledger.dto.LedgerSplitPaymentUpdateRequest;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import java.math.BigDecimal;
@@ -108,6 +109,27 @@ class LedgerSplitPaymentIntegrationTest {
                 new LedgerSplitPaymentRequest.Part(other.cashId(), new BigDecimal("40"), null)));
         assertThatThrownBy(() -> ledger.createSplitPayment(f.id(), foreignMethod)).isInstanceOf(NotFoundException.class);
         assertThat(ledger.getEntries(f.id(), DATE, DATE)).isEmpty();
+    }
+
+    @Test void groupedEditKeepsIdsAndRejectsStaleOrAdjustedGroups() {
+        Fixture f = fixture(); Fixture other = fixture(); UUID id = UUID.randomUUID();
+        var created = ledger.createSplitPayment(f.id(), split(f, id, "60", "40", 3));
+        var loaded = ledger.getSplitPayment(f.id(), id.toString());
+        assertThatThrownBy(() -> ledger.getSplitPayment(other.id(), id.toString())).isInstanceOf(NotFoundException.class);
+        var updated = ledger.updateSplitPayment(f.id(), id.toString(), new LedgerSplitPaymentUpdateRequest(loaded.revision(), split(f, id, "70", "30", 3)));
+        assertThat(updated).extracting(item -> item.id()).containsExactly(created.get(0).id(), created.get(1).id());
+        assertThat(updated.get(0).amount()).isEqualByComparingTo("70");
+        assertThat(statistics.getOverview(f.id(), DATE, DATE).expense()).isEqualByComparingTo("100");
+        assertThatThrownBy(() -> ledger.updateSplitPayment(f.id(), id.toString(), new LedgerSplitPaymentUpdateRequest(loaded.revision(), split(f, id, "60", "40", 3)))).isInstanceOf(BadRequestException.class);
+        assertThat(ledger.getSplitPayment(f.id(), id.toString()).parts().get(0).amount()).isEqualByComparingTo("70");
+        var current = ledger.getSplitPayment(f.id(), id.toString());
+        var invalid = new LedgerSplitPaymentRequest(id, base(f, "100", null), List.of(
+                new LedgerSplitPaymentRequest.Part(f.cardId(), new BigDecimal("50"), null),
+                new LedgerSplitPaymentRequest.Part(other.cashId(), new BigDecimal("50"), null)));
+        assertThatThrownBy(() -> ledger.updateSplitPayment(f.id(), id.toString(), new LedgerSplitPaymentUpdateRequest(current.revision(), invalid))).isInstanceOf(NotFoundException.class);
+        assertThat(ledger.getSplitPayment(f.id(), id.toString()).parts().get(0).amount()).isEqualByComparingTo("70");
+        adjustments.create(f.id(), created.get(0).id(), new LedgerAdjustmentRequest(LedgerAdjustmentType.PAYMENT_CANCELLATION, DATE.plusDays(1), null, null, null, null, null, null, null, UUID.randomUUID()));
+        assertThatThrownBy(() -> ledger.getSplitPayment(f.id(), id.toString())).isInstanceOf(BadRequestException.class);
     }
 
     @Test void installmentDoesNotDivideTheAmountAndCanBeEditedOrCleared() {

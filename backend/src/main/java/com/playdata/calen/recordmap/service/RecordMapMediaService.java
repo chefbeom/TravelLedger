@@ -1,5 +1,6 @@
 package com.playdata.calen.recordmap.service;
 
+import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.recordmap.domain.*;
 import com.playdata.calen.recordmap.dto.RecordMapDtos.PhotoView;
@@ -21,9 +22,11 @@ public class RecordMapMediaService {
     private final TravelMediaAssetRepository travelPhotos;
     private final TravelMediaStorageService storage;
     private final RecordMapShareService sharing;
+    private final AppUserService users;
 
     @Transactional
     public PhotoView upload(Long owner, Long visitId, MultipartFile file) {
+        users.getRequiredUserForWrite(owner);
         PlaceVisit visit = visits.lockOwned(visitId, owner).orElseThrow(RecordMapShareService::unavailable);
         if (photos.countByVisitIdAndOwnerId(visitId, owner) >= 20) throw new BadRequestException("방문 기록당 사진은 최대 20장입니다.");
         String name = Optional.ofNullable(file.getOriginalFilename()).orElse("");
@@ -34,7 +37,7 @@ public class RecordMapMediaService {
         var stored = storage.store(owner, 0L, visitId, file);
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override public void afterCompletion(int status) {
-                if (status != STATUS_COMMITTED) storage.deleteImageWithThumbnailsQuietly(stored.storagePath(), stored.contentType());
+                if (status == STATUS_ROLLED_BACK) storage.deleteImageWithThumbnailsQuietly(stored.storagePath(), stored.contentType());
             }
         });
         if (!stored.contentType().startsWith("image/")) throw new BadRequestException("사진 파일만 등록할 수 있습니다.");
@@ -47,6 +50,7 @@ public class RecordMapMediaService {
 
     @Transactional
     public void delete(Long owner, Long photoId) {
+        users.getRequiredUserForWrite(owner);
         PlacePhoto photo = photos.findByIdAndOwnerId(photoId, owner).orElseThrow(RecordMapShareService::unavailable);
         deleteRows(List.of(photo));
     }

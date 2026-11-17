@@ -116,8 +116,10 @@ public class LedgerOcrService {
     private final LedgerAiAnalysisProperties aiProperties;
     private final LedgerImageExtractionPort imageExtraction;
     private final LedgerImageAnalysisRequestRepository imageAnalysisRequestRepository;
+    private final LedgerImageAnalysisHistoryWriter imageHistoryWriter;
     private final CategoryGroupRepository categoryGroupRepository;
     private final CategoryDetailRepository categoryDetailRepository;
+    private final LedgerOcrCategoryWriteFence categoryWriteFence;
     private final LedgerEntryRepository ledgerEntryRepository;
     private final ObjectMapper objectMapper;
     private final FinalizeLedgerAiJobUseCase finalizer;
@@ -289,7 +291,7 @@ public class LedgerOcrService {
             lease = workLeases == null ? null : workLeases.tryAcquire("image-job:" + historyId, java.time.Duration.ofMinutes(2));
             if (workLeases != null && lease == null)
                 throw new ServiceUnavailableException("이전 이미지 분석 작업이 정리 중입니다. 잠시 후 다시 요청해 주세요.");
-            if (imageAnalysisRequestRepository.restart(historyId, owner.getId(), history.getVersion(), type,
+            if (imageHistoryWriter.restart(owner.getId(), historyId, history.getVersion(), type,
                     effectivePrompt == null ? "" : effectivePrompt, LocalDateTime.now()) == 0) {
                 return existingAnalyzeResponse(imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, owner.getId())
                         .orElseThrow(() -> new NotFoundException("이미지 분석 기록을 찾을 수 없습니다.")));
@@ -657,7 +659,7 @@ public class LedgerOcrService {
 
     @Transactional
     public LedgerImageAnalysisHistoryDeleteResponse deleteHistory(Long userId, Long historyId) {
-        appUserService.getRequiredUser(userId);
+        appUserService.getRequiredUserForWrite(userId);
         LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId)
                 .orElseThrow(() -> new NotFoundException("Image analysis history was not found."));
         if (history.getStatus() == LedgerImageAnalysisStatus.PROCESSING) {
@@ -704,7 +706,7 @@ public class LedgerOcrService {
 
     @Transactional
     public LedgerImageAnalysisHistoryResponse markHistoryEntryApproved(Long userId, Long historyId, int entryIndex, Long entryId) {
-        appUserService.getRequiredUser(userId);
+        appUserService.getRequiredUserForWrite(userId);
         if (historyId == null) {
             throw new BadRequestException("이미지 분석 기록을 확인할 수 없습니다.");
         }
@@ -892,7 +894,7 @@ public class LedgerOcrService {
         history.setContentType(limit(file.getContentType(), 120));
         history.setFileSizeBytes(file.getSize());
         history.setSummary("AI 이미지 분석 요청을 처리 중입니다.");
-        return imageAnalysisRequestRepository.save(history);
+        return imageHistoryWriter.create(owner.getId(), history);
     }
 
     private void completeImageAnalysisRequest(LedgerImageAnalysisRequest history, LedgerOcrAnalyzeResponse response) {
@@ -1949,6 +1951,10 @@ public class LedgerOcrService {
         if (owner == null || owner.getId() == null) {
             return new ResolvedOcrCategory(null, null, null, null);
         }
+        return categoryWriteFence.withActiveOwner(owner.getId(), () -> resolveOcrCategoryLocked(owner, entryType, parsed));
+    }
+
+    private ResolvedOcrCategory resolveOcrCategoryLocked(AppUser owner, EntryType entryType, ParsedImageEntry parsed) {
         EntryType resolvedEntryType = entryType == EntryType.INCOME ? EntryType.INCOME : EntryType.EXPENSE;
         CategoryGroup group = findActiveCategoryGroup(owner.getId(), resolvedEntryType, parsed == null ? null : parsed.categoryGroupName());
         if (group == null) {

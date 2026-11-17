@@ -16,7 +16,6 @@ import com.playdata.calen.ledger.domain.model.LedgerAiJobData.*;
 import com.playdata.calen.ledger.domain.policy.LedgerAiJobLifecyclePolicy;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.FutureTask;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -30,6 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class LedgerAiExcelJobService {
     private final LedgerAiExcelImportService importer;
     private final LedgerExcelAnalysisJobRepository jobs;
+    private final LedgerAiExcelJobWriter jobWriter;
     private final WorkLeaseService leases;
     private final ObjectMapper mapper;
     private final TaskExecutor executor;
@@ -38,9 +38,9 @@ public class LedgerAiExcelJobService {
     private final RecoverLedgerAiJobsUseCase jobRecovery = new RecoverLedgerAiJobsService();
     private volatile WorkbookCursor recoveryCursor = new WorkbookCursor(null, "");
 
-    public LedgerAiExcelJobService(LedgerAiExcelImportService importer, LedgerExcelAnalysisJobRepository jobs,
+    public LedgerAiExcelJobService(LedgerAiExcelImportService importer, LedgerExcelAnalysisJobRepository jobs, LedgerAiExcelJobWriter jobWriter,
             WorkLeaseService leases, ObjectMapper mapper, @Qualifier("ledgerAiTaskExecutor") TaskExecutor executor, FinalizeLedgerAiJobUseCase finalizer) {
-        this.importer = importer; this.jobs = jobs; this.leases = leases; this.mapper = mapper; this.executor = executor;
+        this.importer = importer; this.jobs = jobs; this.jobWriter = jobWriter; this.leases = leases; this.mapper = mapper; this.executor = executor;
         this.finalizer = finalizer;
     }
 
@@ -50,9 +50,7 @@ public class LedgerAiExcelJobService {
             if (admission == null || jobs.countByOwnerIdAndStatus(userId, "PROCESSING") >= 5)
                 throw new TooManyRequestsException("진행 중인 Excel 분석이 많습니다. 잠시 후 다시 시도해 주세요.", 30);
             String input = importer.prepareInput(userId, file);
-            LedgerExcelAnalysisJob job = new LedgerExcelAnalysisJob();
-            job.setId(UUID.randomUUID().toString()); job.setOwnerId(userId); job.setInputJson(input);
-            jobs.saveAndFlush(job);
+            LedgerExcelAnalysisJob job = jobWriter.create(userId, input);
             submit(job, false);
             return response(job);
         }

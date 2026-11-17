@@ -19,6 +19,7 @@ public class OwnedTravelMapClusters implements TravelOwnedMapClusterPort {
     private final ObjectProvider<TravelClusterRefreshCoordinator> coordinators;
     private final RefreshTravelPhotoClustersUseCase projection;
     private final TravelMyMapPhotoClusterSnapshotService snapshots;
+    private final TravelClusterWithdrawalFence withdrawalFence;
     @Override @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Long awaitCurrent(Long owner) {
         var coordinator = coordinators.getIfAvailable();
@@ -30,6 +31,9 @@ public class OwnedTravelMapClusters implements TravelOwnedMapClusterPort {
         snapshot = TravelClusterSnapshotMapper.response(projection.stored(owner));
         if (snapshot == null && generation != null) snapshot = empty();
         if (snapshot != null) {
+            // A read transaction can have an old snapshot while withdrawal commits
+            // on another node. Do not repopulate the cache with that stale result.
+            withdrawalFence.requireAvailableOwner(owner);
             if (generation == null) snapshots.save(owner, snapshot); else snapshots.save(owner, generation, snapshot);
             return TravelOwnedMapMapper.photos(snapshot);
         }

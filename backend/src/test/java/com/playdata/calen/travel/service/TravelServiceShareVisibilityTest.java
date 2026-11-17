@@ -83,6 +83,11 @@ class TravelServiceShareVisibilityTest {
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
+        var accounts = mock(com.playdata.calen.account.repository.AppUserRepository.class);
+        var withdrawals = mock(com.playdata.calen.account.withdrawal.PendingWithdrawalGuard.class);
+        when(accounts.lockForAccountSecurityUpdate(anyLong())).thenAnswer(call -> {
+            var user = new AppUser(); user.setId(call.getArgument(0)); return Optional.of(user);
+        });
         ReflectTravelLedgerUseCase ledgerTravelBridgeService = mock(ReflectTravelLedgerUseCase.class);
         DataSource dataSource = mock(DataSource.class);
 
@@ -98,19 +103,23 @@ class TravelServiceShareVisibilityTest {
                 mock(com.playdata.calen.travel.application.port.in.ManageOwnedTravelMediaUseCase.class),
                 new com.playdata.calen.travel.application.service.ManageTravelSharingService(
                         new com.playdata.calen.travel.adapter.out.persistence.JpaTravelSharingAdapter(appUserService,
-                                mock(com.playdata.calen.account.repository.AppUserRepository.class), travelPlanRepository, travelPlanShareRepository,
-                                travelShareGroupRepository, travelShareGroupMemberRepository),
+                                accounts, withdrawals, travelPlanRepository, travelPlanShareRepository,
+                                travelShareGroupRepository, travelShareGroupMemberRepository,
+                                mock(com.playdata.calen.travel.service.TravelSharingParticipantFence.class),
+                                mock(jakarta.persistence.EntityManager.class)),
                         new com.playdata.calen.travel.adapter.out.cache.TravelSummaryCache(redisCacheService)),
                 new com.playdata.calen.travel.application.service.ReadTravelExhibitsService(
                         new com.playdata.calen.travel.adapter.out.persistence.JpaTravelExhibitReadAdapter(appUserService, travelPlanRepository,
                                 travelPlanShareRepository, travelBudgetItemRepository, travelExpenseRecordRepository, travelMediaAssetRepository,
-                                travelRouteSegmentRepository, new com.playdata.calen.travel.adapter.out.route.TravelRoutePayloadAdapter(new ObjectMapper(), dataSource, travelMediaStorageService)),
+                                travelRouteSegmentRepository, new com.playdata.calen.travel.adapter.out.route.TravelRoutePayloadAdapter(new ObjectMapper(), dataSource, travelMediaStorageService),
+                                mock(com.playdata.calen.travel.service.TravelSharingParticipantFence.class), mock(jakarta.persistence.EntityManager.class)),
                         new com.playdata.calen.travel.adapter.out.security.TravelPublicMediaTokenAdapter(travelPublicMediaTokenService)),
                 mock(com.playdata.calen.travel.application.port.in.ReadOwnedTravelMapUseCase.class),
                 new com.playdata.calen.travel.application.service.TravelMapLinksService(
                         new com.playdata.calen.travel.adapter.out.persistence.JpaTravelMapLinkAdapter(appUserService,
                                 mock(com.playdata.calen.account.repository.AppUserRepository.class), travelMapShareLinkRepository,
-                                travelPlanRepository, travelExpenseRecordRepository, travelMediaAssetRepository, travelRouteSegmentRepository, new ObjectMapper()),
+                                travelPlanRepository, travelExpenseRecordRepository, travelMediaAssetRepository, travelRouteSegmentRepository, new ObjectMapper(),
+                                mock(com.playdata.calen.travel.service.TravelPublicAccessWithdrawalFence.class), mock(jakarta.persistence.EntityManager.class)),
                         mock(com.playdata.calen.travel.application.port.out.TravelMapLinkRuntimePort.class),
                         new com.playdata.calen.travel.adapter.out.route.TravelRoutePayloadAdapter(new ObjectMapper(), dataSource, travelMediaStorageService), travelPhotoClusterPolicy),
                 mock(com.playdata.calen.travel.application.port.in.ReadTravelAtlasUseCase.class),

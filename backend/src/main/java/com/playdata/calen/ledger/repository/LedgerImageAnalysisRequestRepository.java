@@ -21,7 +21,7 @@ public interface LedgerImageAnalysisRequestRepository extends JpaRepository<Ledg
     Optional<LedgerImageAnalysisRequest> findByClientRequestIdAndOwnerId(String clientRequestId, Long ownerId);
 
     /** Restart the same history without changing its original identity, image or batch metadata. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update LedgerImageAnalysisRequest request
@@ -52,16 +52,32 @@ public interface LedgerImageAnalysisRequestRepository extends JpaRepository<Ledg
     java.util.List<CompletedReviewRow> findCompletedReviewRows(@Param("ownerId") Long ownerId,
             @Param("afterId") Long afterId, Pageable pageable);
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update LedgerImageAnalysisRequest request
-            set request.imageObjectKey = :objectKey, request.imageStoredAt = :now, request.updatedAt = :now,
+            set request.imageObjectKey = :objectKey, request.imageStorageBucket = null,
+                request.imageStorageId = null, request.imageObjectVersion = null, request.imageObjectEtag = null,
+                request.imageStoredAt = :now, request.updatedAt = :now,
                 request.version = request.version + 1
             where request.id = :id and request.owner.id = :ownerId
             """)
     int attachStoredImage(@Param("id") Long id, @Param("ownerId") Long ownerId,
             @Param("objectKey") String objectKey, @Param("now") LocalDateTime now);
+
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LedgerImageAnalysisRequest request
+            set request.imageObjectKey = :objectKey, request.imageStorageBucket = :bucket,
+                request.imageStorageId = :storageId, request.imageObjectVersion = :versionId, request.imageObjectEtag = :etag,
+                request.imageStoredAt = :now, request.updatedAt = :now, request.version = request.version + 1
+            where request.id = :id and request.owner.id = :ownerId
+            """)
+    int attachStoredImageWithBucket(@Param("id") Long id, @Param("ownerId") Long ownerId,
+            @Param("objectKey") String objectKey, @Param("bucket") String bucket,
+            @Param("storageId") String storageId, @Param("versionId") String versionId,
+            @Param("etag") String etag, @Param("now") LocalDateTime now);
 
     // Short, conditional writes must not merge the detached object held during remote inference.
     // Increment the version so ordinary JPA edits cannot overwrite a terminal transition either.

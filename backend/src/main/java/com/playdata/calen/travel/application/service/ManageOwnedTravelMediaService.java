@@ -1,12 +1,14 @@
 package com.playdata.calen.travel.application.service;
 
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.travel.application.port.in.ManageOwnedTravelMediaUseCase;
 import com.playdata.calen.travel.application.port.out.*;
 import com.playdata.calen.travel.domain.*;
 import com.playdata.calen.travel.domain.model.TravelMediaData.*;
 import com.playdata.calen.travel.domain.model.TravelClusterDetailData.Media;
 import com.playdata.calen.travel.domain.policy.TravelMediaPolicy;
+import com.playdata.calen.travel.domain.policy.TravelRecordPolicy;
 import java.util.*;
 
 public final class ManageOwnedTravelMediaService implements ManageOwnedTravelMediaUseCase {
@@ -26,6 +28,11 @@ public final class ManageOwnedTravelMediaService implements ManageOwnedTravelMed
 
     @Override
     public Prepared prepare(Long owner, Long record, TravelRecordType expected, List<Candidate> files) {
+        try {
+            media.requireUser(owner);
+        } catch (NotFoundException missingOwner) {
+            throw TravelRecordPolicy.unavailable(expected == TravelRecordType.MEMORY ? TravelRecordType.MEMORY : TravelRecordType.LEDGER);
+        }
         var access = media.ownedRecord(owner, record, expected);
         if (!storage.supportsPresigned()) {
             throw new BadRequestException("Travel media uploads require presigned object storage.");
@@ -74,6 +81,11 @@ public final class ManageOwnedTravelMediaService implements ManageOwnedTravelMed
 
     @Override
     public void delete(Long owner, Long id) {
+        try {
+            media.requireUser(owner);
+        } catch (NotFoundException missingOwner) {
+            throw new NotFoundException("Uploaded file not found.");
+        }
         var access = media.ownedMedia(owner, id);
         media.removeLink(id);
         storage.delete(access.download().storagePath(), access.download().contentType());

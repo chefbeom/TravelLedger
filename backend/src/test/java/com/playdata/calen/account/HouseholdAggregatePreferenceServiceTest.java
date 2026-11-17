@@ -153,7 +153,7 @@ class HouseholdAggregatePreferenceServiceTest {
         AppUser user = activeUser(1L);
         PaymentMethod paymentMethod = paymentMethod(7L);
 
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(user));
         when(paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(1L))
                 .thenReturn(List.of(paymentMethod));
 
@@ -182,7 +182,7 @@ class HouseholdAggregatePreferenceServiceTest {
 
         AppUser user = activeUser(1L);
 
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(user));
         when(paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(1L))
                 .thenReturn(List.of());
 

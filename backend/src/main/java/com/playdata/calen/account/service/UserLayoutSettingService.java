@@ -52,7 +52,9 @@ public class UserLayoutSettingService {
             throw new BadRequestException("Layout payload is too large.");
         }
 
-        AppUser owner = getRequiredActiveUser(userId);
+        // Serialize preference writes with account deactivation and withdrawal cleanup.
+        AppUser owner = appUserRepository.findActiveForPreferenceUpdate(userId)
+                .orElseThrow(() -> new NotFoundException("User account was not found."));
         UserLayoutSetting setting = userLayoutSettingRepository.findByOwnerIdAndLayoutScope(userId, normalizedScope)
                 .orElseGet(() -> {
                     UserLayoutSetting next = new UserLayoutSetting();

@@ -2,8 +2,8 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 const RecordMapWorkspace = defineAsyncComponent(() => import('./RecordMapWorkspace.vue'))
 const TravelWorkspace = defineAsyncComponent(() => import('./TravelWorkspace.vue'))
-const props = defineProps({ route: String, recordFocusRequest: Object })
-const emit = defineEmits(['open-household-travel-ledger', 'record-focus-consumed'])
+const props = defineProps({ route: String, recordFocusRequest: Object, placeFocusRequest: Object })
+const emit = defineEmits(['open-household-travel-ledger', 'record-focus-consumed', 'place-focus-consumed'])
 const mode = ref(props.route === 'travel' ? 'records' : 'travel')
 let leaveGuard = { active: false, message: '' }
 function onLeaveGuard(event) { leaveGuard = event.detail || {} }
@@ -16,6 +16,7 @@ function changeMode(value) {
 }
 watch(() => props.route, route => { mode.value = route === 'travel' ? 'records' : 'travel' })
 watch(() => props.recordFocusRequest?.token, token => { if (token) mode.value = 'travel' })
+watch(() => props.placeFocusRequest?.token, token => { if (token) mode.value = 'records' }, { immediate: true })
 const legacyRoute = computed(() => props.route === 'travel' ? 'my-map' : props.route)
 </script>
 <template>
@@ -24,7 +25,7 @@ const legacyRoute = computed(() => props.route === 'travel' ? 'my-map' : props.r
       <button class="button" :class="{ 'button--primary': mode === 'records' }" :aria-pressed="mode === 'records'" type="button" @click="changeMode('records')">내 장소</button>
       <button class="button" :class="{ 'button--primary': mode === 'travel' }" :aria-pressed="mode === 'travel'" type="button" @click="changeMode('travel')">여행 · 일정 · 경로</button>
     </nav>
-    <RecordMapWorkspace v-if="mode === 'records'" @open-travel="mode = 'travel'" />
+    <RecordMapWorkspace v-if="mode === 'records'" :place-focus-request="placeFocusRequest" @place-focus-consumed="emit('place-focus-consumed')" @open-travel="mode = 'travel'" />
     <TravelWorkspace v-else :route="legacyRoute" :record-focus-request="recordFocusRequest" @open-household-travel-ledger="emit('open-household-travel-ledger')" @record-focus-consumed="emit('record-focus-consumed', $event)" />
   </div>
 </template>

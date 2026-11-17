@@ -12,6 +12,9 @@ import org.springframework.data.repository.query.Param;
 public interface LedgerExcelAnalysisJobRepository extends JpaRepository<LedgerExcelAnalysisJob, String> {
     Optional<LedgerExcelAnalysisJob> findByIdAndOwnerId(String id, Long ownerId);
     long countByOwnerIdAndStatus(Long ownerId, String status);
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("delete from LedgerExcelAnalysisJob job where job.ownerId = :ownerId")
+    int removeForWithdrawal(@Param("ownerId") Long ownerId);
     @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

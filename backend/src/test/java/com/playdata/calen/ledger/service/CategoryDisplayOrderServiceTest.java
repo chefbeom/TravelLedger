@@ -69,7 +69,6 @@ class CategoryDisplayOrderServiceTest {
 
     @Test
     void reorderGroupsRejectsAnIncompleteOrDuplicatedOrder() {
-        owner();
         CategoryGroup food = group(10L, "식비", EntryType.EXPENSE, 0);
         CategoryGroup salary = group(20L, "급여", EntryType.INCOME, 1);
         when(categoryGroupRepository.findAllByOwnerIdOrderByDisplayOrderAscIdAsc(USER_ID))

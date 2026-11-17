@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
@@ -45,6 +46,7 @@ class RecordSharingServiceTest {
     @Mock TravelShareGroupRepository groups;
     @Mock TravelShareGroupMemberRepository members;
     @Mock AppUserService users;
+    @Mock AppUserRepository accounts;
     @Mock LedgerEntryService ledger;
     @Mock TravelService travel;
     @Mock EntityManager entityManager;
@@ -55,15 +57,19 @@ class RecordSharingServiceTest {
 
     @BeforeEach void setup() {
         var codec = new ShareSnapshotCodec(mapper);
-        var creation = new TransactionalCreateRecordShare(new JpaShareParticipantsAdapter(users, groups, members),
+        var creation = new TransactionalCreateRecordShare(new JpaShareParticipantsAdapter(users, accounts, groups, members, entityManager),
                 new JpaShareSourceAdapter(entityManager, ledger, codec), new JpaShareRequestsAdapter(shares, users, codec));
-        service = new RecordSharingService(shares, groups, members, users, ledger, travel, mapper, creation);
+        service = new RecordSharingService(shares, groups, members, users, ledger, travel, mapper, creation, entityManager);
         sender = user(1L); recipient = user(2L);
+        lenient().when(accounts.findActiveForPreferenceUpdate(anyLong()))
+                .thenAnswer(call -> Optional.of(user(call.getArgument(0))));
         group = new TravelShareGroup(); group.setId(5L); group.setOwner(sender); group.setName("가족");
         lenient().when(users.getRequiredUser(1L)).thenReturn(sender);
         lenient().when(users.getRequiredUser(2L)).thenReturn(recipient);
         lenient().when(groups.findById(5L)).thenReturn(Optional.of(group));
+        lenient().when(groups.findForShareUpdate(5L)).thenReturn(Optional.of(group));
         lenient().when(members.existsByGroupIdAndMemberId(5L, 2L)).thenReturn(true);
+        lenient().when(members.findForShareUpdate(5L, 2L)).thenReturn(Optional.of(membership(group, recipient)));
     }
 
     @Test void sharingOnlyQueuesSnapshotAndDoesNotCreateRecipientLedger() throws Exception {
@@ -128,7 +134,7 @@ class RecordSharingServiceTest {
         when(entityManager.find(LedgerEntry.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
         when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
         when(users.getRequiredUser(3L)).thenReturn(user(3L));
-        when(members.existsByGroupIdAndMemberId(5L, 3L)).thenReturn(true);
+        when(members.findForShareUpdate(5L, 3L)).thenReturn(Optional.of(membership(group, user(3L))));
         when(shares.save(any())).thenAnswer(call -> { RecordShare share = call.getArgument(0); share.setId(share.getRecipient().getId() + 10); return share; });
 
         var response = service.create(1L, new RecordShareDtos.Create(5L, RecordShareKind.LEDGER, 100L, List.of(2L, 3L),
@@ -265,8 +271,8 @@ class RecordSharingServiceTest {
     @Test void acceptedTravelCanBeRequestedAgainAfterMovingToAnotherGroup() {
         RecordShare old = share(RecordShareKind.TRAVEL); old.setStatus(RecordShareStatus.ACCEPTED);
         TravelShareGroup newGroup = new TravelShareGroup(); newGroup.setId(6L); newGroup.setOwner(sender); newGroup.setName("모임");
-        when(groups.findById(6L)).thenReturn(Optional.of(newGroup));
-        when(members.existsByGroupIdAndMemberId(6L, 2L)).thenReturn(true);
+        when(groups.findForShareUpdate(6L)).thenReturn(Optional.of(newGroup));
+        when(members.findForShareUpdate(6L, 2L)).thenReturn(Optional.of(membership(newGroup, recipient)));
         TravelPlan plan = new TravelPlan(); plan.setOwner(sender); plan.setName("여행");
         when(entityManager.find(TravelPlan.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(plan);
         when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.TRAVEL, 100L, 2L)).thenReturn(Optional.of(old));
@@ -297,8 +303,8 @@ class RecordSharingServiceTest {
         accepted.setImportedLedgerEntryId(300L);
         TravelShareGroup nextGroup = new TravelShareGroup();
         nextGroup.setId(6L); nextGroup.setOwner(sender); nextGroup.setName("모임");
-        when(groups.findById(6L)).thenReturn(Optional.of(nextGroup));
-        when(members.existsByGroupIdAndMemberId(6L, 2L)).thenReturn(true);
+        when(groups.findForShareUpdate(6L)).thenReturn(Optional.of(nextGroup));
+        when(members.findForShareUpdate(6L, 2L)).thenReturn(Optional.of(membership(nextGroup, recipient)));
         when(entityManager.find(LedgerEntry.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
         when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
         when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.LEDGER, 100L, 2L)).thenReturn(Optional.of(accepted));
@@ -344,6 +350,9 @@ class RecordSharingServiceTest {
     }
 
     private AppUser user(Long id) { AppUser user = new AppUser(); user.setId(id); user.setLoginId("test-user-" + id); user.setDisplayName("User " + id); return user; }
+    private TravelShareGroupMember membership(TravelShareGroup group, AppUser user) {
+        var member = new TravelShareGroupMember(); member.setGroup(group); member.setMember(user); return member;
+    }
     private LedgerEntry source(AppUser owner) { LedgerEntry entry = new LedgerEntry(); entry.setId(100L); entry.setOwner(owner); return entry; }
     private RecordShare share(RecordShareKind kind) {
         RecordShare share = new RecordShare(); share.setId(9L); share.setGroupId(5L); share.setGroupName("가족");

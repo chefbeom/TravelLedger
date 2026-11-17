@@ -49,6 +49,9 @@ public class DriveItemVersion {
     @Column(nullable = false, length = 600)
     private String storagePath;
 
+    @Column(length = 255)
+    private String storageBucket;
+
     @Column(nullable = false, length = 120)
     private String contentType;
 

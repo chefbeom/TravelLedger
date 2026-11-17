@@ -17,7 +17,21 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("select user from AppUser user where user.id = :id and user.active = true")
     Optional<AppUser> findActiveForPreferenceUpdate(@Param("id") Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select user from AppUser user where user.id = :id")
+    Optional<AppUser> lockForAccountSecurityUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select user from AppUser user where user.id = :id")
+    Optional<AppUser> lockForAccountSecurityRead(@Param("id") Long id);
+
     boolean existsByLoginId(String loginId);
+
+    boolean existsByLoginIdIgnoreCase(String loginId);
+
+    boolean existsByIdAndActiveTrue(Long id);
+
+    boolean existsByIdAndRoleAndActiveTrue(Long id, AppUserRole role);
 
     long countByActiveTrue();
 
@@ -31,9 +45,15 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findAllByRoleAndActiveTrueOrderByIdAsc(AppUserRole role);
 
+    @Query("select user.id from AppUser user where user.role = :role and user.active = true order by user.id")
+    List<Long> findActiveUserIdsByRole(@Param("role") AppUserRole role);
+
     Optional<AppUser> findByLoginId(String loginId);
 
     Optional<AppUser> findByEmailIgnoreCase(String email);
+
+    @Query("select user.id from AppUser user where lower(user.email) = lower(:email)")
+    Optional<Long> findIdByEmailIgnoreCase(@Param("email") String email);
 
     boolean existsByEmailIgnoreCase(String email);
 

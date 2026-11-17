@@ -35,6 +35,27 @@ class LedgerImageJobRepositoryTest {
         assertThatThrownBy(() -> repository.saveAndFlush(original)).isInstanceOf(OptimisticLockingFailureException.class);
     }
 
+    @Test void retryOfTheSameImageRetainsItsOriginalStorageHints() {
+        var owner = owner();
+        var failed = job(owner);
+        failed.setStatus(LedgerImageAnalysisStatus.FAILED);
+        failed.setImageObjectKey("original-key");
+        failed.setImageStorageBucket("original-bucket");
+        failed.setImageStorageId("fixture_storage_id_1234");
+        failed.setImageObjectVersion("original-version");
+        failed.setImageObjectEtag("original-etag");
+        repository.saveAndFlush(failed);
+        Long id = failed.getId(), version = failed.getVersion();
+        assertThat(repository.restart(id, owner.getId(), version, "AUTO", null, java.time.LocalDateTime.now())).isEqualTo(1);
+        var retried = repository.findById(id).orElseThrow();
+        assertThat(retried.getStatus()).isEqualTo(LedgerImageAnalysisStatus.PROCESSING);
+        assertThat(retried.getImageObjectKey()).isEqualTo("original-key");
+        assertThat(retried.getImageStorageBucket()).isEqualTo("original-bucket");
+        assertThat(retried.getImageStorageId()).isEqualTo("fixture_storage_id_1234");
+        assertThat(retried.getImageObjectVersion()).isEqualTo("original-version");
+        assertThat(retried.getImageObjectEtag()).isEqualTo("original-etag");
+    }
+
     private AppUser owner() {
         AppUser owner = new AppUser(); owner.setLoginId("owner"); owner.setDisplayName("owner"); owner.setPasswordHash("test-only-hash");
         return entityManager.persistAndFlush(owner);

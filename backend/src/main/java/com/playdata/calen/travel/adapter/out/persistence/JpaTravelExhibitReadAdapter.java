@@ -12,6 +12,10 @@ import com.playdata.calen.travel.domain.model.TravelMediaData.Download;
 import com.playdata.calen.travel.domain.model.TravelPlanDetailData;
 import com.playdata.calen.travel.domain.policy.*;
 import com.playdata.calen.travel.repository.*;
+import com.playdata.calen.travel.service.TravelSharingParticipantFence;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -30,6 +34,8 @@ public class JpaTravelExhibitReadAdapter implements TravelExhibitReadStore {
     private final TravelMediaAssetRepository media;
     private final TravelRouteSegmentRepository routes;
     private final TravelRoutePayloadPort payload;
+    private final TravelSharingParticipantFence participantFence;
+    private final EntityManager entities;
 
     @Override public void requireActiveViewer(Long viewer) { users.getRequiredUser(viewer); }
     @Override public Page completedShares(Long viewer, int page, int size) {
@@ -38,6 +44,25 @@ public class JpaTravelExhibitReadAdapter implements TravelExhibitReadStore {
     }
     @Override public Access receivedShare(Long viewer, Long id) {
         var share = shares.findByIdAndRecipientId(id, viewer).orElseThrow(() -> new NotFoundException("공유된 여행 전시를 찾을 수 없습니다."));
+        if (share.getPlan() == null || share.getPlan().getOwner() == null || share.getPlan().getOwner().getId() == null) {
+            throw new NotFoundException("공유된 여행 전시를 찾을 수 없습니다.");
+        }
+        Long owner = share.getPlan().getOwner().getId();
+        participantFence.lockForAccess(owner, viewer);
+        try {
+            // The share may have been revoked while this request waited for withdrawal.
+            entities.refresh(share, LockModeType.PESSIMISTIC_WRITE);
+            if (share.getPlan() == null) throw new NotFoundException("공유된 여행 전시를 찾을 수 없습니다.");
+            entities.refresh(share.getPlan(), LockModeType.PESSIMISTIC_READ);
+        } catch (EntityNotFoundException missing) {
+            throw new NotFoundException("공유된 여행 전시를 찾을 수 없습니다.");
+        }
+        if (share.getRecipient() == null || !viewer.equals(share.getRecipient().getId())
+                || share.getPlan() == null || share.getPlan().getOwner() == null
+                || !owner.equals(share.getPlan().getOwner().getId()) || share.getSharedBy() == null
+                || !owner.equals(share.getSharedBy().getId())) {
+            throw new NotFoundException("공유된 여행 전시를 찾을 수 없습니다.");
+        }
         return new Access(share.getId(), plan(share.getPlan()));
     }
     @Override public Plan ownedPlan(Long owner, Long id) {

@@ -38,6 +38,7 @@ class ManageTravelSharingServiceTest {
         order.verify(store).activeOwner(1L);
         order.verify(store).ownedPlan(1L, 3L);
         order.verify(store).activeRecipient("recipient");
+        order.verify(store).lockForShare(1L, 3L, 2L, "canonical");
         order.verify(store).findShare(3L, 2L);
         order.verify(store).createShare(1L, 3L, 2L);
         order.verify(cache).invalidatePublic();
@@ -151,18 +152,18 @@ class ManageTravelSharingServiceTest {
         when(store.ownedPlan(1L, 3L)).thenReturn(new Plan(3L, TravelPlanStatus.COMPLETED));
         sharing.publicShare(1L, 3L, true);
         var order = inOrder(store, cache);
-        order.verify(store).ownedPlan(1L, 3L); order.verify(store).setPublicShare(3L, true);
+        order.verify(store).ownedPlan(1L, 3L); order.verify(store).setPublicShare(1L, 3L, true);
         order.verify(cache).invalidateOwner(1L); order.verify(cache).invalidatePublic(); order.verify(store).publicShare(3L);
         verify(store, never()).activeOwner(any());
         when(store.ownedPlan(1L, 3L)).thenReturn(new Plan(3L, null));
         sharing.publicShare(1L, 3L, null);
-        verify(store).setPublicShare(3L, false);
+        verify(store).setPublicShare(1L, 3L, false);
     }
 
     @Test void incompletePublicEnableDoesNotMutateOrEvictAndSnapshotFailureHappensAfterEviction() {
         when(store.ownedPlan(1L, 3L)).thenReturn(new Plan(3L, TravelPlanStatus.PLANNED));
         assertThatThrownBy(() -> sharing.publicShare(1L, 3L, true)).hasMessage("완성된 여행만 다른 사용자에게 공유할 수 있습니다.");
-        verify(store, never()).setPublicShare(any(), anyBoolean()); verifyNoInteractions(cache);
+        verify(store, never()).setPublicShare(any(), any(), anyBoolean()); verifyNoInteractions(cache);
         when(store.ownedPlan(1L, 3L)).thenReturn(new Plan(3L, TravelPlanStatus.COMPLETED));
         when(store.publicShare(3L)).thenThrow(new IllegalStateException("synthetic snapshot"));
         assertThatThrownBy(() -> sharing.publicShare(1L, 3L, true)).hasMessage("synthetic snapshot");

@@ -4,6 +4,10 @@ public record KakaoIdentity(
         String providerUserId,
         String email,
         String displayName,
-        boolean emailVerified
+        boolean emailVerified,
+        Long providerAppId
 ) {
+    public KakaoIdentity(String providerUserId, String email, String displayName, boolean emailVerified) {
+        this(providerUserId, email, displayName, emailVerified, null);
+    }
 }

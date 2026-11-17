@@ -8,6 +8,9 @@ public record AppUserResponse(
         String displayName,
         AppUserRole role,
         boolean admin,
-        boolean active
+        boolean active,
+        boolean localLoginEnabled,
+        String email,
+        boolean emailVerified
 ) {
 }

@@ -16,8 +16,8 @@ public class TransactionalTravelExhibits implements ReadTravelExhibitsUseCase {
         delegate = new ReadTravelExhibitsService(store, tokens);
     }
     @Override public Page received(Long viewer, Integer page, Integer size) { return delegate.received(viewer, page, size); }
-    @Override public Detail receivedDetail(Long viewer, Long share) { return delegate.receivedDetail(viewer, share); }
-    @Override public Download receivedMedia(Long viewer, Long share, Long media) { return delegate.receivedMedia(viewer, share, media); }
+    @Override @Transactional public Detail receivedDetail(Long viewer, Long share) { return delegate.receivedDetail(viewer, share); }
+    @Override @Transactional public Download receivedMedia(Long viewer, Long share, Long media) { return delegate.receivedMedia(viewer, share, media); }
     @Override public Download publicMedia(Long media, String token) { return delegate.publicMedia(media, token); }
     @Override public Detail recordShareDetail(Long owner, Long plan, Long share) { return delegate.recordShareDetail(owner, plan, share); }
     @Override public Download recordShareMedia(Long owner, Long plan, Long media) { return delegate.recordShareMedia(owner, plan, media); }

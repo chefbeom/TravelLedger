@@ -5,10 +5,17 @@ import com.playdata.calen.common.exception.NotFoundException;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.LinkOption;
+import java.nio.charset.StandardCharsets;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -37,6 +44,10 @@ public class SupportInquiryStorageService {
     @Value("${app.support.attachment-storage-path:${user.dir}/uploads/support-inquiries}")
     private String attachmentStoragePath;
 
+    /** Optional until an operator provisions and verifies a dedicated storage marker. */
+    @Value("${app.support.attachment-storage-id:}")
+    private String attachmentStorageId;
+
     private Path rootPath;
 
     @PostConstruct
@@ -62,6 +73,7 @@ public class SupportInquiryStorageService {
         String extension = extractExtension(originalFileName);
         String contentType = resolveAllowedContentType(extension, file.getContentType());
         validateBinarySignature(file, contentType);
+        String verifiedStorageId = verifiedStorageId();
 
         Path userDirectory = rootPath.resolve("user-" + userId).normalize();
         if (!userDirectory.startsWith(rootPath)) {
@@ -76,8 +88,19 @@ public class SupportInquiryStorageService {
                 throw new BadRequestException("이미지 저장 경로를 만들 수 없습니다.");
             }
 
-            try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            boolean created = false;
+            MessageDigest digest = sha256();
+            try (InputStream inputStream = new DigestInputStream(file.getInputStream(), digest)) {
+                try (OutputStream outputStream = Files.newOutputStream(targetPath,
+                        StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                    created = true;
+                    inputStream.transferTo(outputStream);
+                }
+            } catch (IOException | RuntimeException failure) {
+                if (created) {
+                    try { Files.deleteIfExists(targetPath); } catch (IOException | SecurityException ignored) { /* retry requires operator review */ }
+                }
+                throw failure;
             }
 
             String relativeStoragePath = rootPath.relativize(targetPath).toString().replace('\\', '/');
@@ -85,11 +108,39 @@ public class SupportInquiryStorageService {
                     relativeStoragePath,
                     originalFileName,
                     contentType,
-                    file.getSize()
+                    file.getSize(),
+                    verifiedStorageId,
+                    HexFormat.of().formatHex(digest.digest())
             );
         } catch (IOException exception) {
             throw new IllegalStateException("문의 첨부 이미지를 저장할 수 없습니다.", exception);
         }
+    }
+
+    private String verifiedStorageId() {
+        String id = attachmentStorageId == null ? "" : attachmentStorageId.trim();
+        if (id.isEmpty()) return null;
+        if (!id.matches("[A-Za-z0-9_-]{16,80}")) throw new IllegalStateException("문의 첨부 저장소 식별 설정이 잘못되었습니다.");
+        Path marker = rootPath.resolve(".calen-support-storage-id");
+        try {
+            if (!Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IllegalStateException("문의 첨부 저장소 식별을 확인할 수 없습니다.");
+            }
+            try (InputStream input = Files.newInputStream(marker, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+                byte[] value = input.readNBytes(129);
+                if (value.length > 128 || !id.equals(new String(value, StandardCharsets.UTF_8).trim())) {
+                    throw new IllegalStateException("문의 첨부 저장소 식별을 확인할 수 없습니다.");
+                }
+            }
+        } catch (IOException exception) {
+            throw new IllegalStateException("문의 첨부 저장소 식별을 확인할 수 없습니다.");
+        }
+        return id;
+    }
+
+    private MessageDigest sha256() {
+        try { return MessageDigest.getInstance("SHA-256"); }
+        catch (NoSuchAlgorithmException exception) { throw new IllegalStateException("SHA-256 is unavailable.", exception); }
     }
 
     public Resource loadAsResource(String storedPath) {
@@ -204,7 +255,13 @@ public class SupportInquiryStorageService {
             String storagePath,
             String originalFileName,
             String contentType,
-            long size
+            long size,
+            String storageId,
+            String sha256
     ) {
+        public StoredSupportAttachment(String storagePath, String originalFileName, String contentType, long size) {
+            this(storagePath, originalFileName, contentType, size, null, null);
+        }
+        @Override public String toString() { return "StoredSupportAttachment[redacted]"; }
     }
 }

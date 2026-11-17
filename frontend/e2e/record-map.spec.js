@@ -287,12 +287,17 @@ test('converting a dated trip requires confirmation and preserves its saved reco
     status: 'PLANNED', colorHex: '#3182F6', budgetItems: [], records: [],
     memoryRecords: [{ id: 7, title: '기존 장소', memoryDate: '2026-10-02' }], mediaItems: [], routeSegments: [] }
   let updates = 0
+  let rejectUpdate = false
   await page.route('**/api/travel/**', route => {
     const request = route.request(), path = new URL(request.url()).pathname
     if (path === '/api/travel/portfolio') return route.fulfill({ json: { includedPlanCount: 1, plans: [plan], memoryRecords: [], routeSegments: [], mediaItems: [] } })
     if (path === '/api/travel/my-map') return route.fulfill({ json: { includedPlanCount: 1, markers: [], routes: [], photoPins: [], photoClusters: [] } })
     if (path === '/api/travel/plans') return route.fulfill({ json: [plan] })
-    if (path === '/api/travel/plans/90' && request.method() === 'PUT') { updates++; Object.assign(plan, request.postDataJSON()); return route.fulfill({ json: plan }) }
+    if (path === '/api/travel/plans/90' && request.method() === 'PUT') {
+      updates++
+      if (rejectUpdate) return route.fulfill({ status: 400, json: { message: '저장 가능한 길이와 형식으로 입력값을 확인해 주세요.' } })
+      Object.assign(plan, request.postDataJSON()); return route.fulfill({ json: plan })
+    }
     if (path === '/api/travel/plans/90') return route.fulfill({ json: plan })
     return route.fulfill({ json: [] })
   })
@@ -305,9 +310,16 @@ test('converting a dated trip requires confirmation and preserves its saved reco
   await setup.getByRole('button', { name: '저장하고 지도 열기' }).click()
   expect(updates).toBe(0)
   expect(plan.startDate).toBe('2026-10-01')
+  rejectUpdate = true
   page.once('dialog', dialog => dialog.accept())
   await setup.getByRole('button', { name: '저장하고 지도 열기' }).click()
-  await expect.poll(() => updates).toBe(1)
+  await expect(page.getByText(/기간 없음 저장 중 데이터베이스 제약 오류/)).toBeVisible()
+  await expect(setup.getByLabel('기간 없음')).toBeChecked()
+  expect(plan.startDate).toBe('2026-10-01')
+  rejectUpdate = false
+  page.once('dialog', dialog => dialog.accept())
+  await setup.getByRole('button', { name: '저장하고 지도 열기' }).click()
+  await expect.poll(() => updates).toBe(2)
   expect(plan).toMatchObject({ startDate: null, endDate: null, noPeriod: true, memoryRecords: [{ id: 7, title: '기존 장소', memoryDate: '2026-10-02' }] })
 })
 

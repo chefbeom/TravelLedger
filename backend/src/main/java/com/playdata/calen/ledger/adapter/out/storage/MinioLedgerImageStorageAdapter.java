@@ -6,10 +6,12 @@ import com.playdata.calen.ledger.domain.model.LedgerImageStorageData.*;
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.ServiceUnavailableException;
+import com.playdata.calen.common.storage.LedgerImageStorageMarker;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.ObjectWriteResponse;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.Locale;
@@ -17,6 +19,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -30,6 +33,8 @@ public class MinioLedgerImageStorageAdapter implements LedgerImageStoragePort {
 
     private final ObjectProvider<MinioClient> minioClientProvider;
     private final MinioProperties minioProperties;
+    @Value("${app.ledger.ocr.image-storage-id:}")
+    private String imageStorageId;
 
     public StoredImage store(Long ownerId, Long analysisId, Upload file) {
         ensureStorageConfigured();
@@ -38,18 +43,31 @@ public class MinioLedgerImageStorageAdapter implements LedgerImageStoragePort {
         }
         String objectKey = buildObjectKey(ownerId, analysisId, file.fileName());
         String contentType = normalizeContentType(file.contentType());
+        String bucket = resolveBucket();
+        MinioClient client = minioClient();
+        String configuredId = imageStorageId == null ? "" : imageStorageId.trim();
+        String storageId = LedgerImageStorageMarker.matches(client, bucket, configuredId) ? configuredId : null;
         try (InputStream inputStream = file.openStream()) {
-            minioClient().putObject(
+            ObjectWriteResponse response = client.putObject(
                     PutObjectArgs.builder()
-                            .bucket(resolveBucket())
+                            .bucket(bucket)
                             .object(objectKey)
                             .stream(inputStream, file.size(), -1)
                             .contentType(contentType)
                             .build()
             );
-            return new StoredImage(objectKey, LocalDateTime.now());
+            String version = response == null ? null : response.versionId();
+            // Keep even heavily JSON-escaped IDs within the encrypted task's 2 KiB payload limit.
+            if (version == null || version.isBlank() || version.length() > 512
+                    || version.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 512
+                    || version.chars().anyMatch(Character::isISOControl)) version = null;
+            // ETag is an opaque comparison hint, not proof of ownership, content or a unique version.
+            // Do not retain a fingerprint when the optional storage identity was not verified.
+            String etag = storageId == null || response == null ? null : response.etag();
+            if (etag != null && !etag.matches("[A-Za-z0-9_-]{1,128}")) etag = null;
+            return new StoredImage(objectKey, LocalDateTime.now(), bucket, storageId, version, etag);
         } catch (Exception exception) {
-            log.error("Failed to store ledger OCR image. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
+            log.error("Failed to store ledger OCR image. bucket={}, objectKey={}", bucket, objectKey, exception);
             throw new ServiceUnavailableException(STORAGE_UNAVAILABLE_MESSAGE);
         }
     }
@@ -76,19 +94,25 @@ public class MinioLedgerImageStorageAdapter implements LedgerImageStoragePort {
     }
 
     public void delete(String objectKey) {
+        deleteFromBucket(resolveBucket(), objectKey);
+    }
+
+    @Override
+    public void deleteFromBucket(String bucket, String objectKey) {
         if (!StringUtils.hasText(objectKey)) {
             return;
         }
         ensureStorageConfigured();
+        if (!StringUtils.hasText(bucket)) throw new BadRequestException("Stored OCR image bucket is missing.");
         try {
             minioClient().removeObject(
                     RemoveObjectArgs.builder()
-                            .bucket(resolveBucket())
+                            .bucket(bucket)
                             .object(objectKey)
                             .build()
             );
         } catch (Exception exception) {
-            log.error("Failed to delete ledger OCR image. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
+            log.error("Failed to delete ledger OCR image. bucket={}, objectKey={}", bucket, objectKey, exception);
             throw new ServiceUnavailableException(STORAGE_UNAVAILABLE_MESSAGE);
         }
     }

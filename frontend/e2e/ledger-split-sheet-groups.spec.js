@@ -1,6 +1,34 @@
 import { expect, test } from '@playwright/test'
 import { mockPersonalization } from './fixtures/calendarPersonalization.js'
 
+test('split manager opens the populated group editor and saves all methods together', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-22T12:00:00'))
+  const groupId = 'f1dc41a8-a4cf-4abc-bcab-eee55343644f'
+  const base = { entryDate: '2026-10-22', entryTime: '12:30', entryType: 'EXPENSE', title: '그룹 수정', categoryGroupId: 101, categoryGroupName: '식비', categoryDetailId: 102, categoryDetailName: '외식', memo: '메모', splitPaymentGroupId: groupId, splitPaymentCount: 2 }
+  const entries = [{ ...base, id: 31, splitPaymentIndex: 1, amount: 30000, paymentMethodId: 103, paymentMethodName: '검증용 카드' }, { ...base, id: 32, splitPaymentIndex: 2, amount: 20000, paymentMethodId: 103, paymentMethodName: '검증용 카드' }]
+  const state = await mockPersonalization(page, { entries })
+  let update
+  await page.route(`**/api/entries/split-payments/${groupId}`, route => {
+    if (route.request().method() === 'PUT') { update = route.request().postDataJSON(); return route.fulfill({ json: entries }) }
+    return route.fulfill({ json: { revision: 'test-revision', parts: entries } })
+  })
+  await page.getByRole('region', { name: '달력 조회', exact: true }).getByRole('button', { name: '거래 시트 열기' }).click()
+  await page.getByRole('dialog', { name: '거래 시트' }).getByRole('row').filter({ hasText: '그룹 수정' }).getByRole('button', { name: '수정', exact: true }).click()
+  const manager = page.getByRole('dialog', { name: '거래 관리' })
+  await expect(manager.getByRole('button', { name: /^환불/ })).toBeVisible()
+  await manager.getByRole('button', { name: /^거래 내용 수정/ }).click()
+  await expect(page.getByRole('status').filter({ hasText: '거래 수정 중' })).toBeVisible()
+  await expect(page.getByLabel('수단 1 금액')).toHaveValue('30000')
+  await expect(page.getByLabel('수단 2 금액')).toHaveValue('20000')
+  await page.getByLabel('수단 1 금액').fill('35000')
+  await expect(page.getByLabel('수단 2 금액')).toHaveValue('15000')
+  await page.getByRole('button', { name: '거래 수정', exact: true }).click()
+  await expect.poll(() => update?.payment?.parts?.[0]?.amount).toBe(35000)
+  expect(update.revision).toBe('test-revision')
+  expect(update.payment.parts[1].amount).toBe(15000)
+  expect(state.errors).toEqual([])
+})
+
 test('split purchases use one compact row with per-method detail and actions', async ({ page }, testInfo) => {
   await page.clock.setFixedTime(new Date('2026-10-22T12:00:00'))
   const base = { entryDate: '2026-10-22', entryTime: '12:30', entryType: 'EXPENSE', title: '분할 구매',
@@ -22,6 +50,16 @@ test('split purchases use one compact row with per-method detail and actions', a
   await expect(row).toContainText('분할 결제 · 3개 수단')
   await expect(row).toContainText('₩50,000')
   await expect(row).toContainText('처리 이력 있음')
+  await expect(row.getByRole('button', { name: '수정', exact: true })).toBeVisible()
+  await expect(row.getByRole('button', { name: '공유', exact: true })).toBeVisible()
+  await expect(row.getByRole('button', { name: '분할 결제 보기', exact: true })).toBeVisible()
+  const buttonsFit = await row.locator('.split-sheet-actions').evaluate(element => {
+    const buttons = [...element.querySelectorAll('button')]
+    return buttons.every((button, index) => button.scrollWidth <= button.clientWidth + 1
+      && button.scrollHeight <= button.clientHeight + 1
+      && (!index || buttons[index - 1].getBoundingClientRect().right <= button.getBoundingClientRect().left + 1))
+  })
+  expect(buttonsFit).toBe(true)
   await expect(sheet.getByRole('row').filter({ hasText: '이동된 수단' })).toContainText('1/2개 표시')
   await sheet.screenshot({ path: testInfo.outputPath('split-group-sheet.png') })
   const groupCheckbox = row.getByRole('checkbox', { name: '분할 구매 분할 거래 선택', includeHidden: true })
@@ -29,8 +67,20 @@ test('split purchases use one compact row with per-method detail and actions', a
     await groupCheckbox.check()
     await expect(groupCheckbox).toBeChecked()
   }
-  await row.getByRole('button', { name: '상세보기' }).click()
+  await row.getByRole('button', { name: '수정', exact: true }).click()
   const detail = page.getByRole('dialog', { name: '분할 결제 상세' })
+  const groupManager = page.getByRole('dialog', { name: '거래 관리' })
+  for (const label of ['거래 내용 수정', '환불', '결제 취소', '삭제']) await expect(groupManager.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible()
+  await groupManager.getByRole('button', { name: /^환불/ }).click()
+  await expect(detail.getByRole('status')).toContainText('선택한 수단에만 적용')
+  await expect(detail.locator('.split-detail-part').filter({ hasText: '카드 A' }).getByRole('button', { name: '이 수단 환불' })).toBeVisible()
+  await expect(detail.locator('.split-detail-part').filter({ hasText: '카드 B' }).getByRole('button', { name: '이 수단 환불' })).toHaveCount(0)
+  await detail.getByRole('button', { name: '닫기' }).click()
+  await row.getByRole('button', { name: '공유', exact: true }).click()
+  await expect(detail.getByRole('status')).toContainText('공유할 결제수단')
+  await detail.getByRole('button', { name: '닫기' }).click()
+  await row.getByRole('button', { name: '분할 결제 보기' }).click()
+  await expect(detail.getByRole('status')).toHaveCount(0)
   await expect(detail.getByText('결제 1/3 · 카드 A')).toBeVisible()
   await expect(detail.getByText('결제 2/3 · 포인트')).toBeVisible()
   await expect(detail.getByText('결제 3/3 · 카드 B')).toBeVisible()
@@ -53,10 +103,10 @@ test('split purchases use one compact row with per-method detail and actions', a
   await page.keyboard.press('Escape')
   await expect(detail).toHaveCount(0)
   await expect(sheet).toBeVisible()
-  await sheet.getByRole('row').filter({ hasText: '이동된 수단' }).getByRole('button', { name: '상세보기' }).click()
+  await sheet.getByRole('row').filter({ hasText: '이동된 수단' }).getByRole('button', { name: '분할 결제 보기' }).click()
   await expect(detail).toContainText('현재 날짜와 필터에 해당하는 수단만 표시합니다')
   await detail.getByRole('button', { name: '닫기' }).click()
-  await row.getByRole('button', { name: '상세보기' }).click()
+  await row.getByRole('button', { name: '분할 결제 보기' }).click()
   await detail.locator('.split-detail-part').filter({ hasText: '카드 A' }).getByRole('button', { name: '수정·처리' }).click()
   await manager.getByRole('button', { name: /^환불/ }).click()
   const refund = page.getByRole('dialog', { name: '환불 기록' })
@@ -81,7 +131,7 @@ test('edited parts with different details are not hidden and type filtering show
   const row = sheet.getByRole('row').filter({ hasText: '첫 항목' })
   await expect(row).toContainText('수단별로 다름')
   await expect(row).toContainText('혼합')
-  await row.getByRole('button', { name: '상세보기' }).click()
+  await row.getByRole('button', { name: '분할 결제 보기' }).click()
   const detail = page.getByRole('dialog', { name: '분할 결제 상세' })
   await expect(detail.getByText('첫 메모', { exact: true })).toBeVisible()
   await expect(detail.getByText('다른 메모', { exact: true })).toBeVisible()
@@ -90,7 +140,7 @@ test('edited parts with different details are not hidden and type filtering show
   await sheet.getByLabel('거래 구분').selectOption('EXPENSE')
   await expect(row).toContainText('1/2개 표시')
   await expect(row).toContainText('₩12,000')
-  await row.getByRole('button', { name: '상세보기' }).click()
+  await row.getByRole('button', { name: '분할 결제 보기' }).click()
   await expect(detail).toContainText('현재 날짜와 필터에 해당하는 수단만 표시합니다')
   await expect(detail.getByText('다른 메모', { exact: true })).toHaveCount(0)
   expect(state.errors).toEqual([])

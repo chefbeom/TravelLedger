@@ -5,13 +5,15 @@ import static org.mockito.Mockito.*;
 
 import com.playdata.calen.travel.domain.model.TravelMediaData.*;
 import com.playdata.calen.travel.service.TravelMediaStorageService;
+import com.playdata.calen.travel.service.TravelUploadGrantRegistry;
 import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class TravelMediaStorageAdapterTest {
     final TravelMediaStorageService sdk = mock(TravelMediaStorageService.class);
-    final TravelMediaStorageAdapter adapter = new TravelMediaStorageAdapter(sdk);
+    final TravelUploadGrantRegistry grants = mock(TravelUploadGrantRegistry.class);
+    final TravelMediaStorageAdapter adapter = new TravelMediaStorageAdapter(sdk, grants);
 
     @Test void presignKeepsServerResolvedScopeAndAllOriginalAndThumbnailFields() {
         var candidate = new Candidate(" photo.jpg ", "image/jpeg", 21,
@@ -27,6 +29,7 @@ class TravelMediaStorageAdapterTest {
                 new Target("PUT", "https://storage.invalid/original", "scoped/key", "stored.jpg", "photo.jpg", "image/jpeg", 21,
                         List.of(new ThumbnailTarget("480", "PUT", "https://storage.invalid/thumb", "scoped/thumb", "image/png", 5))));
         verify(sdk).preparePresignedUploads(1L, 2L, 3L, List.of(wire));
+        verify(grants).recordMedia(eq(1L), eq(2L), eq(3L), anyList());
         verifyNoMoreInteractions(sdk);
     }
 

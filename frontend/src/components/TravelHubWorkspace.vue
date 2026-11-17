@@ -1877,7 +1877,11 @@ async function handleSubmitPlan() {
     resetBudgetForm()
     resetRecordForm()
   } catch (error) {
-    setFeedback('', error.message)
+    if (planForm.noPeriod && error.status === 400 && error.message === '저장 가능한 길이와 형식으로 입력값을 확인해 주세요.') {
+      setFeedback('', '기간 없음 저장 중 데이터베이스 제약 오류가 발생했습니다. 관리자에게 여행 기간 열 설정과 입력값 확인을 요청해 주세요.')
+    } else {
+      setFeedback('', error.message)
+    }
   } finally {
     isSubmitting.value = false
     activeSubmit.value = ''

@@ -60,7 +60,7 @@ public class PaymentMethodService {
 
     @Transactional
     public List<PaymentMethodResponse> reorder(Long userId, DisplayOrderRequest request) {
-        appUserService.getRequiredUser(userId);
+        appUserService.getRequiredUserForWrite(userId);
         List<PaymentMethod> paymentMethods = paymentMethodRepository.findAllByOwnerIdOrderByDisplayOrderAscIdAsc(userId);
         List<Long> orderedIds = request == null ? null : request.orderedIds();
         validateExactOrder(orderedIds, paymentMethods.stream().map(PaymentMethod::getId).toList());
@@ -75,7 +75,7 @@ public class PaymentMethodService {
 
     @Transactional
     public PaymentMethodResponse create(Long userId, PaymentMethodRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         String name = normalizeName(request.name());
         if (paymentMethodRepository.findFirstByOwnerIdAndNameIgnoreCaseOrderByIdAsc(owner.getId(), name).isPresent()) {
             throw new BadRequestException("이미 있는 결제수단입니다.");
@@ -91,6 +91,7 @@ public class PaymentMethodService {
 
     @Transactional
     public void deactivate(Long userId, Long id) {
+        appUserService.getRequiredUserForWrite(userId);
         PaymentMethod paymentMethod = paymentMethodRepository.findByIdAndOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("결제수단을 찾을 수 없습니다."));
         paymentMethod.setActive(false);
@@ -98,6 +99,7 @@ public class PaymentMethodService {
 
     @Transactional
     public PaymentMethodResponse activate(Long userId, Long id) {
+        appUserService.getRequiredUserForWrite(userId);
         PaymentMethod paymentMethod = paymentMethodRepository.findByIdAndOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("결제수단을 찾을 수 없습니다."));
         paymentMethod.setActive(true);

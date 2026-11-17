@@ -33,7 +33,8 @@ public class SmtpEmailVerificationSender implements EmailVerificationSender {
             message.setSubject("TravelLedger 이메일 인증");
             message.setText("아래 링크를 열어 이메일 인증을 완료해 주세요.\n\n"
                     + verificationUrl + "\n\n"
-                    + "인증 유효 시간: " + validity.toMinutes() + "분");
+                    + "인증 유효 시간: " + validity.toMinutes() + "분\n\n"
+                    + "직접 요청하지 않았다면 링크를 사용하지 마세요. 인증 링크를 다른 사람과 공유하지 마세요.");
             mailSender.send(message);
         } catch (RuntimeException exception) {
             throw new ServiceUnavailableException("이메일 인증 메일을 보낼 수 없습니다.");

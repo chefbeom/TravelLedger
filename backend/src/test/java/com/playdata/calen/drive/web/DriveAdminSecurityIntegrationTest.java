@@ -24,6 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(properties = {
         "app.seed.enabled=true",
@@ -125,6 +126,7 @@ class DriveAdminSecurityIntegrationTest {
     }
 
     @Test
+    @Transactional
     void administratorUserStatusMutationRequiresCsrfAndRecordsSafeAuditDetail() throws Exception {
         AppUserPrincipal admin = principal(1L, "admin", AppUserRole.ADMIN);
 

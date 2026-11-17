@@ -6,6 +6,7 @@ import java.util.List;
 public interface ReadRecordMapUseCase {
     OverviewResult owned(Long owner, Long collectionId, Filter filter);
     OverviewResult shared(String token, Filter filter);
+    OverviewResult calendarShared(Long viewer, Long grantId, Filter filter);
     List<VisitResult> placeVisits(Long owner, Long placeId, int page);
     CandidatePage travelCandidates(Long owner, int page);
 }

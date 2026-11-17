@@ -29,7 +29,8 @@ class RecordSharedTravelAccessTest {
     @BeforeEach void connectTheRealMovedReadFlow() {
         service = new ReadTravelExhibitsService(new JpaTravelExhibitReadAdapter(
                 mock(AppUserService.class), plans, mock(TravelPlanShareRepository.class), mock(TravelBudgetItemRepository.class),
-                mock(TravelExpenseRecordRepository.class), media, mock(TravelRouteSegmentRepository.class), mock(TravelRoutePayloadPort.class)),
+                mock(TravelExpenseRecordRepository.class), media, mock(TravelRouteSegmentRepository.class), mock(TravelRoutePayloadPort.class),
+                mock(TravelSharingParticipantFence.class), mock(jakarta.persistence.EntityManager.class)),
                 mock(TravelPublicMediaTokenPort.class));
     }
 

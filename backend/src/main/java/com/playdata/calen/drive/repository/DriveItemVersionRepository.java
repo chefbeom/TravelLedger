@@ -14,5 +14,7 @@ public interface DriveItemVersionRepository extends JpaRepository<DriveItemVersi
 
     long countByItem_IdAndOwner_Id(Long itemId, Long ownerId);
 
+    boolean existsByStoragePathIn(Collection<String> storagePaths);
+
     void deleteAllByItem_IdIn(Collection<Long> itemIds);
 }

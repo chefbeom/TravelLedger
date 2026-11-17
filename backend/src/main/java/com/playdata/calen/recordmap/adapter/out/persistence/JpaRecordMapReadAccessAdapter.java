@@ -1,6 +1,7 @@
 package com.playdata.calen.recordmap.adapter.out.persistence;
 
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.calendar.CalendarMapShareService;
 import com.playdata.calen.recordmap.application.port.out.RecordMapReadAccessPort;
 import com.playdata.calen.recordmap.domain.model.RecordMapReadData.Scope;
 import com.playdata.calen.recordmap.repository.PlaceCollectionRepository;
@@ -19,6 +20,7 @@ public class JpaRecordMapReadAccessAdapter implements RecordMapReadAccessPort {
     private final PlaceCollectionRepository collections;
     private final RecordPlaceRepository places;
     private final RecordMapShareService sharing;
+    private final CalendarMapShareService calendarMaps;
 
     @Override public Scope owned(Long owner, Long collectionId) {
         users.getRequiredUser(owner);
@@ -30,6 +32,7 @@ public class JpaRecordMapReadAccessAdapter implements RecordMapReadAccessPort {
         var share = sharing.resolve(token);
         return new Scope(share.getOwnerId(), share.getCollection().getId(), true, share.isIncludeVisits());
     }
+    @Override public Scope calendarShared(Long viewer, Long grantId) { return calendarMaps.scope(viewer, grantId); }
 
     @Override public void requireOwnedPlace(Long owner, Long placeId) {
         places.findByIdAndOwnerId(placeId, owner).orElseThrow(RecordMapShareService::unavailable);

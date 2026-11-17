@@ -17,7 +17,6 @@ public class LedgerOcrProperties {
     private Duration readTimeout = Duration.ofSeconds(45);
     private DataSize maxFileSize = DataSize.ofMegabytes(10);
     private int maxPendingPerUser = 20;
-
     public int getMaxPendingPerUser() {
         return maxPendingPerUser;
     }

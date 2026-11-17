@@ -21,6 +21,7 @@ public class TransactionalRecordMapReads implements ReadRecordMapUseCase {
 
     @Override public OverviewResult owned(Long owner, Long collectionId, Filter filter) { return delegate.owned(owner, collectionId, filter); }
     @Override public OverviewResult shared(String token, Filter filter) { return delegate.shared(token, filter); }
+    @Override public OverviewResult calendarShared(Long viewer, Long grantId, Filter filter) { return delegate.calendarShared(viewer, grantId, filter); }
     @Override public List<VisitResult> placeVisits(Long owner, Long placeId, int page) { return delegate.placeVisits(owner, placeId, page); }
     @Override public CandidatePage travelCandidates(Long owner, int page) { return delegate.travelCandidates(owner, page); }
 }

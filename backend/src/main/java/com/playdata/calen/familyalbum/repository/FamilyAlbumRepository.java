@@ -8,4 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface FamilyAlbumRepository extends JpaRepository<FamilyAlbum, Long> {
 
     List<FamilyAlbum> findAllByCategoryIdInOrderByCreatedAtDescIdDesc(Collection<Long> categoryIds);
+
+    List<FamilyAlbum> findAllByOwnerId(Long ownerId);
+
+    boolean existsByCategoryIdAndOwnerIdNot(Long categoryId, Long ownerId);
 }

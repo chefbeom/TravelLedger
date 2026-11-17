@@ -45,6 +45,13 @@ public class SupportInquiry {
     @Column(length = 255)
     private String attachmentStoragePath;
 
+    /** Null for legacy attachments whose storage provenance was not recorded. */
+    @Column(length = 80)
+    private String attachmentStorageId;
+
+    @Column(length = 64)
+    private String attachmentSha256;
+
     @Column(length = 120)
     private String attachmentContentType;
 

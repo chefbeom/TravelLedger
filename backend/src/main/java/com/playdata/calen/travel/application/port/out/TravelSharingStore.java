@@ -9,6 +9,7 @@ public interface TravelSharingStore {
     Recipient activeOwner(Long owner);
     Optional<Recipient> activeRecipient(String login);
     Plan ownedPlan(Long owner, Long plan);
+    void lockForShare(Long owner, Long plan, Long recipient, String recipientLogin);
     Optional<Long> findShare(Long plan, Long recipient);
     Long createShare(Long owner, Long plan, Long recipient);
     Share share(Long share);
@@ -18,6 +19,6 @@ public interface TravelSharingStore {
     List<Group> groups(Long owner);
     Group replaceGroup(Long owner, String name, List<Recipient> recipients);
     void deleteGroup(Long owner, Long group);
-    void setPublicShare(Long ownedPlan, boolean enabled);
+    void setPublicShare(Long owner, Long ownedPlan, boolean enabled);
     PublicShare publicShare(Long ownedPlan);
 }

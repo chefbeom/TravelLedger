@@ -12,7 +12,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.account.withdrawal.AccountWithdrawalRequest;
+import com.playdata.calen.account.withdrawal.AccountWithdrawalRequestRepository;
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.PaymentMethod;
@@ -28,15 +31,16 @@ import com.playdata.calen.sharing.adapter.support.RecordShareContractMapper;
 import com.playdata.calen.sharing.application.port.in.CreateRecordShareCommand;
 import com.playdata.calen.sharing.application.port.in.CreateRecordShareUseCase;
 import com.playdata.calen.sharing.application.port.out.ShareRequestsPort;
-import com.playdata.calen.sharing.application.port.out.ShareSourcePort;
 import com.playdata.calen.sharing.domain.RecordShareKind;
 import com.playdata.calen.sharing.domain.RecordShareStatus;
 import com.playdata.calen.sharing.domain.model.ShareCreationData.Receipt;
 import com.playdata.calen.sharing.dto.RecordShareDtos;
 import com.playdata.calen.sharing.service.RecordSharingService;
+import com.playdata.calen.sharing.service.RecordShareWithdrawalService;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,11 +51,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
@@ -72,7 +71,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 })
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-@Import(RecordShareEditedSnapshotIntegrationTest.SourceProbeConfiguration.class)
 class RecordShareEditedSnapshotIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -86,8 +84,9 @@ class RecordShareEditedSnapshotIntegrationTest {
     @Autowired CreateRecordShareUseCase creation;
     @Autowired ShareRequestsPort creationStore;
     @Autowired RecordSharingService sharing;
+    @Autowired RecordShareWithdrawalService withdrawalShares;
+    @Autowired AccountWithdrawalRequestRepository withdrawalRequests;
     @Autowired PlatformTransactionManager transactionManager;
-    @Autowired SourceLockProbe sourceProbe;
 
     @Test
     void editedShareCommitsOnlySnapshotThenImportsUsingRecipientsOwnCatalog() throws Exception {
@@ -128,6 +127,40 @@ class RecordShareEditedSnapshotIntegrationTest {
         assertThat(saved.path("travelPlanId").isNull()).isTrue();
         assertOriginalUnchanged(f);
         assertThat(entries.count()).isEqualTo(entryCount + 1);
+    }
+
+    @Test
+    void withdrawingSenderRemovesTheEnvelopeButPreservesTheActuallyAcceptedRecipientCopy() throws Exception {
+        Fixture f = fixture();
+        Map<String, Object> edit = edit(f);
+        long shareId = postJson("hana", "/api/record-shares", request(f, edit)).get(0).path("id").asLong();
+        Map<String, Object> approval = new LinkedHashMap<>(edit);
+        approval.put("categoryGroupId", f.receiverCategory());
+        approval.put("paymentMethodId", f.receiverPayment());
+        long importedId = postJson("minsu", "/api/record-shares/" + shareId + "/accept-ledger", approval)
+                .path("importedLedgerEntryId").asLong();
+        AppUser sender = users.findByLoginId("hana").orElseThrow();
+        sender.setActive(false);
+        users.saveAndFlush(sender);
+        var withdrawal = new AccountWithdrawalRequest(); withdrawal.setId(UUID.randomUUID().toString());
+        withdrawal.setUserId(sender.getId()); withdrawal.setState(AccountWithdrawalRequest.State.IN_PROGRESS);
+        withdrawal.setRequestedAt(LocalDateTime.now()); withdrawal.setUpdatedAt(LocalDateTime.now());
+        withdrawalRequests.saveAndFlush(withdrawal);
+        try {
+            new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                    withdrawalShares.removeEnvelopesForInactiveUser(sender.getId()));
+            assertThat(shares.findById(shareId)).isEmpty();
+            LedgerEntryResponse preserved = ledger.getEntryForSharing(userId("minsu"), importedId);
+            assertThat(preserved.title()).isEqualTo("공유용 저녁 절반");
+            assertThat(preserved.amount()).isEqualByComparingTo("7500");
+            assertThat(preserved.categoryGroupId()).isEqualTo(f.receiverCategory());
+            assertThat(preserved.paymentMethodId()).isEqualTo(f.receiverPayment());
+        } finally {
+            withdrawalRequests.deleteById(withdrawal.getId());
+            AppUser reactivated = users.findById(sender.getId()).orElseThrow();
+            reactivated.setActive(true);
+            users.saveAndFlush(reactivated);
+        }
     }
 
     @Test
@@ -226,6 +259,45 @@ class RecordShareEditedSnapshotIntegrationTest {
     }
 
     @Test
+    void shareStartedBeforeRecipientDeactivationCannotBeSavedAfterItCommits() throws Exception {
+        Fixture f = fixture();
+        long senderId = userId("hana"), recipientId = userId("minsu"), before = shares.count();
+        var command = command(request(f, edit(f)));
+        var executor = Executors.newFixedThreadPool(2);
+        var locked = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try {
+            var deactivate = executor.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                AppUser recipient = users.lockForAccountSecurityUpdate(recipientId).orElseThrow();
+                recipient.setActive(false);
+                users.saveAndFlush(recipient);
+                locked.countDown();
+                try {
+                    if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("deactivation timed out");
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+            }));
+            assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+            var create = executor.submit(() -> creation.create(senderId, command));
+            assertThatThrownBy(() -> create.get(300, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+            release.countDown();
+            deactivate.get(5, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> create.get(5, TimeUnit.SECONDS)).isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(NotFoundException.class);
+            assertThat(shares.count()).isEqualTo(before);
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
+            AppUser recipient = users.findById(recipientId).orElseThrow();
+            recipient.setActive(true);
+            users.saveAndFlush(recipient);
+        }
+    }
+
+    @Test
     void approvalCannotBeUndoneByConcurrentReshareThroughAnotherGroup() throws Exception {
         Fixture f = fixture();
         long senderId = userId("hana"), receiverId = userId("minsu");
@@ -238,14 +310,15 @@ class RecordShareEditedSnapshotIntegrationTest {
         long entriesBefore = entries.count();
         ExecutorService executor = Executors.newSingleThreadExecutor();
         AtomicReference<Future<List<Receipt>>> reShare = new AtomicReference<>();
-        CountDownLatch sourceLocked = new CountDownLatch(1);
         try {
             new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+                // Real acceptance now serializes on the recipient before locking a share.
+                users.findActiveForPreferenceUpdate(receiverId).orElseThrow();
                 shares.findLockedById(id).orElseThrow();
-                sourceProbe.next.set(sourceLocked);
                 reShare.set(executor.submit(() -> creation.create(senderId, command)));
-                try { assertThat(sourceLocked.await(5, TimeUnit.SECONDS)).as("reshare reached the source lock while approval owns the share row").isTrue(); }
-                catch (InterruptedException failure) { Thread.currentThread().interrupt(); throw new IllegalStateException(failure); }
+                assertThatThrownBy(() -> reShare.get().get(300, TimeUnit.MILLISECONDS))
+                        .as("reshare waits while approval owns the recipient lock")
+                        .isInstanceOf(TimeoutException.class);
                 sharing.acceptLedger(receiverId, id, approval);
             });
             Receipt result = reShare.get().get(10, TimeUnit.SECONDS).get(0);
@@ -255,7 +328,7 @@ class RecordShareEditedSnapshotIntegrationTest {
             assertThat(shares.findById(id).orElseThrow().getStatus()).isEqualTo(RecordShareStatus.ACCEPTED);
             assertThat(entries.count()).isEqualTo(entriesBefore + 1);
             assertOriginalUnchanged(f);
-        } finally { sourceProbe.next.set(null); executor.shutdownNow(); }
+        } finally { executor.shutdownNow(); }
     }
 
     @Test
@@ -266,20 +339,6 @@ class RecordShareEditedSnapshotIntegrationTest {
 
     private CreateRecordShareCommand command(Map<String, Object> body) {
         return RecordShareContractMapper.command(json.convertValue(body, RecordShareDtos.Create.class));
-    }
-
-    static class SourceLockProbe { final AtomicReference<CountDownLatch> next = new AtomicReference<>(); }
-    @TestConfiguration
-    static class SourceProbeConfiguration {
-        @Bean SourceLockProbe sourceLockProbe() { return new SourceLockProbe(); }
-        @Bean @Primary ShareSourcePort observedSource(@Qualifier("jpaShareSourceAdapter") ShareSourcePort actual, SourceLockProbe probe) {
-            return (owner, kind, source, edit) -> {
-                var result = actual.lockOwnedSource(owner, kind, source, edit);
-                var latch = probe.next.getAndSet(null);
-                if (latch != null) latch.countDown();
-                return result;
-            };
-        }
     }
 
     private Fixture fixture() throws Exception {

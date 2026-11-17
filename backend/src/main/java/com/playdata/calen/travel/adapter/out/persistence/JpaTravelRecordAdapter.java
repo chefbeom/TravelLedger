@@ -1,5 +1,6 @@
 package com.playdata.calen.travel.adapter.out.persistence;
 
+import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.travel.application.port.out.TravelRecordStore;
 import com.playdata.calen.travel.domain.TravelExpenseRecord;
@@ -17,15 +18,18 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(propagation = Propagation.MANDATORY)
 public class JpaTravelRecordAdapter implements TravelRecordStore {
+    private final AppUserService users;
     private final TravelPlanRepository plans;
     private final TravelExpenseRecordRepository records;
     private final TravelMediaAssetRepository media;
     private final TravelAttachmentCleanup cleanup;
 
     @Override public Plan ownedPlan(Long owner, Long id) {
+        users.getRequiredUserForWrite(owner);
         return plan(plans.findByIdAndOwnerId(id, owner).orElseThrow(() -> new NotFoundException("Travel plan not found.")));
     }
     @Override public Optional<Access> ownedRecord(Long owner, Long id) {
+        users.getRequiredUserForWrite(owner);
         return records.findByIdAndPlanOwnerId(id, owner).map(r -> new Access(r.getId(), plan(r.getPlan()), r.getRecordType()));
     }
     @Override public Long create(Long planId, Value value) {

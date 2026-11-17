@@ -18,7 +18,7 @@ public class TransactionalTravelRouteFiles implements ManageTravelRouteFilesUseC
         delegate=new ManageTravelRouteFilesService(routes,storage,summaries);
     }
     @Override @Transactional public Result upload(Long owner,Long route,List<Upload> files){return delegate.upload(owner,route,files);}
-    @Override public Prepared prepare(Long owner,Long route,List<Candidate> files){return delegate.prepare(owner,route,files);}
+    @Override @Transactional public Prepared prepare(Long owner,Long route,List<Candidate> files){return delegate.prepare(owner,route,files);}
     @Override @Transactional public Result complete(Long owner,Long route,List<Completed> files){return delegate.complete(owner,route,files);}
-    @Override public void abort(Long owner,Long route,List<String> keys){delegate.abort(owner,route,keys);}
+    @Override @Transactional public void abort(Long owner,Long route,List<String> keys){delegate.abort(owner,route,keys);}
 }

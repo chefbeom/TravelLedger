@@ -26,13 +26,16 @@ public class TravelClusterRefreshCoordinator {
     private final TransactionTemplate writes;
     private final WorkLeaseService leases;
     private final RefreshTravelPhotoClustersUseCase projection;
+    private final TravelClusterWithdrawalFence withdrawalFence;
     private final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
     private final ConcurrentHashMap<Long, CompletableFuture<Void>> tasks = new ConcurrentHashMap<>();
     private volatile long recoveryOwnerCursor;
 
     public TravelClusterRefreshCoordinator(DataSource dataSource, PlatformTransactionManager manager,
-            WorkLeaseService leases, RefreshTravelPhotoClustersUseCase projection) {
+            WorkLeaseService leases, RefreshTravelPhotoClustersUseCase projection,
+            TravelClusterWithdrawalFence withdrawalFence) {
         jdbc = new JdbcTemplate(dataSource); this.leases = leases; this.projection = projection;
+        this.withdrawalFence = withdrawalFence;
         writes = new TransactionTemplate(manager);
         writes.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         executor.setCorePoolSize(1); executor.setMaxPoolSize(1); executor.setQueueCapacity(64);
@@ -46,6 +49,7 @@ public class TravelClusterRefreshCoordinator {
 
     /** Dirty state commits atomically with the media change. No calculation runs in this transaction. */
     public void markDirtyInCurrentTransaction(Long userId) {
+        withdrawalFence.requireAvailableOwner(userId);
         int updated = jdbc.update("update travel_photo_cluster_refresh_jobs set generation = generation + 1, dirty = true where owner_id = ?", userId);
         if (updated == 0) {
             try { jdbc.update("insert into travel_photo_cluster_refresh_jobs (owner_id, generation, processed_generation, dirty) values (?, 1, 0, true)", userId); }
@@ -106,6 +110,9 @@ public class TravelClusterRefreshCoordinator {
                 var clusters = projection.compute(userId);
                 if (!lease.isValid()) return;
                 writes.executeWithoutResult(transaction -> {
+                    // All cluster writers and withdrawal acquire the account first,
+                    // then the generation row, preventing both resurrection and deadlock.
+                    if (!withdrawalFence.lockAvailableOwner(userId)) return;
                     Status latest = status(userId, true);
                     if (latest == null || latest.generation() != initial.generation() || !lease.isValid()) return;
                     projection.apply(userId, clusters);
@@ -117,6 +124,7 @@ public class TravelClusterRefreshCoordinator {
 
     /** Serializes manual representative changes with the background writer in the caller's transaction. */
     public void lockManualRefresh(Long userId) {
+        withdrawalFence.requireAvailableOwner(userId);
         Status status = status(userId, true);
         if (status == null) {
             markDirtyInCurrentTransaction(userId);

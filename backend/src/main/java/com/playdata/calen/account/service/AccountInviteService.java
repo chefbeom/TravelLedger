@@ -6,6 +6,8 @@ import com.playdata.calen.account.dto.AccountInviteCreateResponse;
 import com.playdata.calen.account.dto.AccountInviteDetailsResponse;
 import com.playdata.calen.account.repository.AccountInviteRepository;
 import com.playdata.calen.common.exception.BadRequestException;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -28,11 +30,15 @@ public class AccountInviteService {
 
     private final AccountInviteRepository accountInviteRepository;
     private final AppUserService appUserService;
+    private final InviteWithdrawalFence withdrawalFence;
+    private final EntityManager entities;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
     public AccountInviteCreateResponse createInvite(Long creatorUserId, Integer expiresInHours) {
-        AppUser creator = appUserService.getRequiredUser(creatorUserId);
+        AppUser creator = appUserService.getRequiredUserForWrite(creatorUserId);
+        entities.refresh(creator, LockModeType.PESSIMISTIC_WRITE);
+        if (!creator.isActive()) throw new BadRequestException(INVALID_INVITE_MESSAGE);
         int normalizedHours = normalizeExpiresInHours(expiresInHours);
 
         String rawToken = generateUniqueToken();
@@ -46,9 +52,9 @@ public class AccountInviteService {
         return new AccountInviteCreateResponse(rawToken, savedInvite.getExpiresAt());
     }
 
+    @Transactional
     public AccountInviteDetailsResponse getInviteDetails(String rawToken) {
-        AccountInvite invite = accountInviteRepository.findWithCreatorByTokenHash(hashToken(rawToken))
-                .orElseThrow(() -> new BadRequestException(INVALID_INVITE_MESSAGE));
+        AccountInvite invite = lockAvailableInvite(rawToken);
 
         ensureAvailable(invite);
         return new AccountInviteDetailsResponse(
@@ -59,8 +65,7 @@ public class AccountInviteService {
 
     @Transactional
     public AppUser acceptInvite(String rawToken, String loginId, String displayName, String password, String secondaryPin) {
-        AccountInvite invite = accountInviteRepository.findForUpdateByTokenHash(hashToken(rawToken))
-                .orElseThrow(() -> new BadRequestException(INVALID_INVITE_MESSAGE));
+        AccountInvite invite = lockAvailableInvite(rawToken);
 
         ensureAvailable(invite);
 
@@ -70,9 +75,24 @@ public class AccountInviteService {
         return createdUser;
     }
 
+    private AccountInvite lockAvailableInvite(String rawToken) {
+        String hash = hashToken(rawToken);
+        Long creatorId = accountInviteRepository.findCreatorIdByTokenHash(hash)
+                .orElseThrow(() -> new BadRequestException(INVALID_INVITE_MESSAGE));
+        AppUser creator = withdrawalFence.lockAvailableCreator(creatorId);
+        if (creator == null) throw new BadRequestException(INVALID_INVITE_MESSAGE);
+        AccountInvite invite = accountInviteRepository.findForUpdateByTokenHash(hash)
+                .orElseThrow(() -> new BadRequestException(INVALID_INVITE_MESSAGE));
+        entities.refresh(invite, LockModeType.PESSIMISTIC_WRITE);
+        if (invite.getCreatedBy() == null || !creatorId.equals(invite.getCreatedBy().getId())) {
+            throw new BadRequestException(INVALID_INVITE_MESSAGE);
+        }
+        return invite;
+    }
+
     private void ensureAvailable(AccountInvite invite) {
         LocalDateTime now = LocalDateTime.now();
-        if (invite.getUsedAt() != null || invite.getExpiresAt().isBefore(now)) {
+        if (invite.getUsedAt() != null || invite.getRevokedAt() != null || invite.getExpiresAt().isBefore(now)) {
             throw new BadRequestException(INVALID_INVITE_MESSAGE);
         }
     }

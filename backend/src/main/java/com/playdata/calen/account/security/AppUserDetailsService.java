@@ -20,4 +20,11 @@ public class AppUserDetailsService implements UserDetailsService {
                 .map(AppUserPrincipal::from)
                 .orElseThrow(() -> new UsernameNotFoundException("사용자 계정을 찾을 수 없습니다."));
     }
+
+    public UserDetails loadActiveById(long userId) {
+        return appUserRepository.findById(userId)
+                .filter(user -> user.isActive() && user.isEmailVerified())
+                .map(AppUserPrincipal::from)
+                .orElseThrow(() -> new UsernameNotFoundException("사용자 계정을 찾을 수 없습니다."));
+    }
 }

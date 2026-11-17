@@ -72,6 +72,7 @@ public class LedgerAiAnalysisService {
     private final AppUserService appUserService;
     private final PrepareLedgerAnalysisDatasetUseCase datasetPreparation;
     private final LedgerAiAnalysisHistoryRepository historyRepository;
+    private final LedgerAiAnalysisHistoryWriter historyWriter;
     private final ManageLedgerAnalysisHistoryUseCase historyAccess;
     private final LedgerAiAnalysisProperties properties;
     private final LedgerAiAnalysisStatusService statusService;
@@ -107,7 +108,7 @@ public class LedgerAiAnalysisService {
 
     private LedgerAiAnalysisHistoryDetailResponse startResolvedAnalysis(Long userId, AnalysisPlan plan) {
         return LedgerAnalysisHistoryMapper.response(analysisStart.start(LedgerAnalysisAdmissions.operation(
-                userId, plan, appUserService, properties, aiMetrics, workLeases, historyRepository, historyAccess,
+                userId, plan, appUserService, properties, aiMetrics, workLeases, draft -> historyWriter.create(userId, draft), historyAccess,
                 id -> submitAnalysisTask(userId, id, plan),
                 (id, failure) -> markAnalysisFailed(userId, id, failure)), DUPLICATE_SUPPRESSION_WINDOW));
     }
@@ -152,7 +153,7 @@ public class LedgerAiAnalysisService {
         LedgerAiAnalysisHistory pending = baseHistory(owner, plan);
         pending.setStatus(LedgerAiAnalysisStatus.PROCESSING);
         pending.setRequestPayloadJson(aiJsonCodec.write(payload));
-        pending = historyRepository.save(pending);
+        pending = historyWriter.create(userId, pending);
         Long historyId = pending.getId();
         Timer.Sample aiRequestTimer = aiMetrics.startAiRequestTimer();
         boolean aiRequestRecorded = false;

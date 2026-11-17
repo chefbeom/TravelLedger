@@ -20,7 +20,8 @@ import lombok.Setter;
         name = "email_verification_tokens",
         indexes = {
                 @Index(name = "idx_email_verification_tokens_user", columnList = "user_id,used_at"),
-                @Index(name = "idx_email_verification_tokens_expires", columnList = "expires_at")
+                @Index(name = "idx_email_verification_tokens_expires", columnList = "expires_at"),
+                @Index(name = "idx_email_signup_cleanup", columnList = "cleanup_eligible,used_at,created_at,user_id")
         }
 )
 @Getter
@@ -47,4 +48,8 @@ public class EmailVerificationToken {
 
     @Column(name = "used_at")
     private LocalDateTime usedAt;
+
+    /** Only new, specifically tracked registrations can be expired automatically. */
+    @Column(name = "cleanup_eligible", nullable = false)
+    private boolean cleanupEligible = false;
 }

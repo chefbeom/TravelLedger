@@ -22,7 +22,7 @@ public class RecordMapShareService {
 
     @Transactional
     public ShareView create(Long owner, Long collectionId, ShareRequest request) {
-        users.getRequiredUser(owner);
+        users.getRequiredUserForWrite(owner);
         PlaceCollection collection = collections.findByIdAndOwnerId(collectionId, owner).orElseThrow(RecordMapShareService::unavailable);
         byte[] bytes = new byte[32]; RANDOM.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -41,6 +41,7 @@ public class RecordMapShareService {
 
     @Transactional
     public void revoke(Long owner, Long id) {
+        users.getRequiredUserForWrite(owner);
         RecordMapShare share = shares.findByIdAndOwnerId(id, owner).orElseThrow(RecordMapShareService::unavailable);
         share.setActive(false);
     }

@@ -5,6 +5,7 @@ import PinPadInput from './components/PinPadInput.vue'
 import { MOBILE_LAYOUT_QUERY, resolveLayoutMode } from './lib/responsiveLayout'
 import { createModalMutationFilter } from './lib/modalMutationFilter'
 import { kakaoCallbackMessage } from './lib/kakaoSignup'
+import { bootstrapAuthentication } from './lib/sessionBootstrap'
 import './styles/socialAuth.css'
 import {
   acceptInvite,
@@ -20,6 +21,7 @@ import {
 const AdminWorkspace = defineAsyncComponent(() => import('./components/AdminWorkspace.vue'))
 const HouseholdWorkspace = defineAsyncComponent(() => import('./components/HouseholdWorkspace.vue'))
 const MainDashboardWorkspace = defineAsyncComponent(() => import('./components/MainDashboardWorkspace.vue'))
+const IntegratedCalendarWorkspace = defineAsyncComponent(() => import('./components/IntegratedCalendarWorkspace.vue'))
 const CalenDriveWorkspace = defineAsyncComponent(() => import('./components/CalenDriveWorkspace.vue'))
 const ProfileWorkspace = defineAsyncComponent(() => import('./components/ProfileWorkspace.vue'))
 const TravelWorkspace = defineAsyncComponent(() => import('./components/RecordMapHubWorkspace.vue'))
@@ -30,6 +32,7 @@ const PetCompanion = defineAsyncComponent(() => import('./components/PetCompanio
 const PublicRegistrationWorkspace = defineAsyncComponent(() => import('./components/PublicRegistrationWorkspace.vue'))
 const EmailVerificationWorkspace = defineAsyncComponent(() => import('./components/EmailVerificationWorkspace.vue'))
 const KakaoRegistrationWorkspace = defineAsyncComponent(() => import('./components/KakaoRegistrationWorkspace.vue'))
+const KakaoWithdrawalRecoveryWorkspace = defineAsyncComponent(() => import('./components/KakaoWithdrawalRecoveryWorkspace.vue'))
 
 const legacyFeatureItems = [
   {
@@ -141,6 +144,10 @@ const routeMeta = {
     title: '기록·지도',
     description: '일상 기록, 장소 모음, 여행 경로와 사진을 관리합니다.',
   },
+  'integrated-calendar': {
+    title: '통합 달력',
+    description: '가계부와 기록, 여행과 개인 일정을 날짜별로 확인합니다.',
+  },
   'record-map-share': {
     title: '공유된 기록 지도',
     description: '공개가 허용된 모음의 장소와 기록을 읽기 전용으로 봅니다.',
@@ -189,6 +196,14 @@ const routeMeta = {
     title: '이메일 인증',
     description: '이메일 인증을 완료해 계정을 활성화합니다.',
   },
+  'verify-profile-email': {
+    title: '계정 이메일 인증',
+    description: '계정에 등록할 이메일을 확인합니다.',
+  },
+  'withdraw-kakao': {
+    title: '카카오 계정 탈퇴 확인',
+    description: '인증 이메일과 2차 비밀번호로 탈퇴 요청을 확인합니다.',
+  },
   'kakao-complete': {
     title: '카카오 회원가입',
     description: '카카오 계정과 TravelLedger 계정을 연결합니다.',
@@ -220,10 +235,12 @@ let mobileModalScrollSyncQueued = false
 let mobileModalScrollRestore = null
 const inviteToken = ref(initialRouteState.token)
 const householdInitialTab = ref('')
+const calendarLedgerFocusRequest = ref(null)
 const travelRecordFocusRequest = ref(null)
+const calendarPlaceFocusRequest = ref(null)
 const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
-const registrationOptions = ref({ publicRegistrationEnabled: false, socialLoginProviders: [] })
+const registrationOptions = ref({ publicRegistrationEnabled: false, socialLoginProviders: [], withdrawalRecoveryAvailable: false })
 const isRegistrationOptionsLoading = ref(false)
 const registrationVerificationRequested = ref(false)
 const themeMode = ref('default')
@@ -256,7 +273,7 @@ const pageMeta = computed(() => {
   return normalizedRouteMeta[routeKey] || normalizedRouteMeta.launcher
 })
 const isLoginScreen = computed(() => authChecked.value && !currentUser.value && ![
-  'record-map-share', 'travel-share', 'invite', 'verify-email', 'kakao-complete', 'signup',
+  'record-map-share', 'travel-share', 'invite', 'verify-email', 'verify-profile-email', 'withdraw-kakao', 'kakao-complete', 'signup',
 ].includes(activeRoute.value))
 const isTossTheme = computed(() => themeMode.value === 'toss')
 const launcherItems = computed(() => {
@@ -272,6 +289,7 @@ const headerNavItems = computed(() => {
     { key: 'launcher', label: '메뉴' },
     { key: 'household', label: '가계부' },
     { key: 'travel', label: '기록·지도' },
+    { key: 'integrated-calendar', label: '통합 달력' },
   ]
   if (currentUser.value?.admin) {
     items.push({ key: 'drive', label: '드라이브' })
@@ -292,6 +310,7 @@ let inviteRequestSequence = 0
 
 function resolveRouteState(hash) {
   const route = String(hash || '').replace(/^#/, '').trim()
+  if (route.startsWith('profile?')) return { route: 'profile', token: '' }
   if (route.startsWith('signup?')) {
     return { route: 'signup', token: '', kakaoError: new URLSearchParams(route.slice('signup?'.length)).get('kakao') }
   }
@@ -315,11 +334,19 @@ function resolveRouteState(hash) {
     }
   }
 
+  if (route.toLowerCase().startsWith('verify-profile-email/')) {
+    return { route: 'verify-profile-email', token: decodeURIComponent(route.slice('verify-profile-email/'.length)).trim() }
+  }
+
   if (route.toLowerCase().startsWith('verify-email/')) {
     return {
       route: 'verify-email',
       token: decodeURIComponent(route.slice('verify-email/'.length)).trim(),
     }
+  }
+
+  if (route.toLowerCase().startsWith('withdraw-kakao/')) {
+    return { route: 'withdraw-kakao', token: decodeURIComponent(route.slice('withdraw-kakao/'.length)).trim() }
   }
 
   if (route.toLowerCase() === 'oauth/kakao/complete') {
@@ -506,6 +533,9 @@ function toggleTheme() {
 
 
 function buildCurrentHashRoute() {
+  if (activeRoute.value === 'withdraw-kakao' && inviteToken.value) {
+    return `withdraw-kakao/${encodeURIComponent(inviteToken.value)}`
+  }
   if (activeRoute.value === 'invite' && inviteToken.value) {
     return `invite/${encodeURIComponent(inviteToken.value)}`
   }
@@ -574,6 +604,7 @@ function navigate(route, options = {}) {
     return
   }
   profileModalOpen.value = false
+  if (nextRoute !== 'household' || !options.calendarFocus) calendarLedgerFocusRequest.value = null
   householdInitialTab.value = nextRoute === 'household' ? (options.householdTab || '') : ''
   activeRoute.value = nextRoute
   inviteToken.value = ''
@@ -612,6 +643,24 @@ function navigateTravelRecordLocation(payload = {}) {
     }
   }
   navigate('travel-money')
+}
+
+function navigateCalendarTravelSource(payload = {}) {
+  if (!payload.planId) return
+  travelRecordFocusRequest.value = { ...payload, token: Date.now() }
+  navigate('travel-money')
+}
+
+function navigateCalendarPlaceSource(payload = {}) {
+  if (!payload.placeId) return
+  calendarPlaceFocusRequest.value = { ...payload, token: Date.now() }
+  navigate('travel')
+}
+
+function navigateCalendarLedgerSource(payload = {}) {
+  if (!payload.date || !payload.entryId) return
+  calendarLedgerFocusRequest.value = { ...payload, token: Date.now() }
+  navigate('household', { householdTab: 'calendar', calendarFocus: true })
 }
 
 function clearTravelRecordFocusRequest(payload = {}) {
@@ -661,9 +710,10 @@ async function loadRegistrationOptions() {
     registrationOptions.value = {
       publicRegistrationEnabled: Boolean(response?.publicRegistrationEnabled),
       socialLoginProviders: Array.isArray(response?.socialLoginProviders) ? response.socialLoginProviders : [],
+      withdrawalRecoveryAvailable: Boolean(response?.withdrawalRecoveryAvailable),
     }
   } catch {
-    registrationOptions.value = { publicRegistrationEnabled: false, socialLoginProviders: [] }
+    registrationOptions.value = { publicRegistrationEnabled: false, socialLoginProviders: [], withdrawalRecoveryAvailable: false }
   } finally {
     isRegistrationOptionsLoading.value = false
   }
@@ -850,7 +900,19 @@ async function handleLogout() {
   setFeedback('로그아웃되었습니다.')
 }
 
-watch([activeRoute, inviteToken], ([route, token]) => {
+function handleWithdrawalRequested() {
+  currentUser.value = null
+  loginForm.password = ''
+  loginForm.secondaryPin = ''
+  inviteForm.password = ''
+  inviteForm.secondaryPin = ''
+  profileModalOpen.value = false
+  navigate('launcher')
+  setFeedback('탈퇴 요청을 접수했습니다. 자료 정리 완료는 별도로 확인해야 합니다.')
+}
+
+watch([authChecked, activeRoute, inviteToken], ([checked, route, token]) => {
+  if (!checked) return
   if (route === 'invite') {
     loadInviteDetails(token)
     return
@@ -1028,8 +1090,7 @@ onMounted(() => {
     })
   }
   queueMobileModalBackgroundScrollSync()
-  loadRegistrationOptions()
-  restoreSession()
+  void bootstrapAuthentication(restoreSession, loadRegistrationOptions)
 })
 
 onBeforeUnmount(() => {
@@ -1160,14 +1221,21 @@ onBeforeUnmount(() => {
       <div v-if="errorMessage" class="feedback feedback--error auth-feedback">{{ errorMessage }}</div>
     </template>
 
-    <template v-else-if="activeRoute === 'verify-email'">
+    <template v-else-if="activeRoute === 'verify-email' || activeRoute === 'verify-profile-email'">
       <EmailVerificationWorkspace
         :token="inviteToken"
+        :profile-mode="activeRoute === 'verify-profile-email'"
+        @verified="restoreSession"
         @go-login="navigate('launcher')"
         @go-signup="navigate('signup')"
       />
       <div v-if="successMessage" class="feedback feedback--success auth-feedback">{{ successMessage }}</div>
       <div v-if="errorMessage" class="feedback feedback--error auth-feedback">{{ errorMessage }}</div>
+    </template>
+
+    <template v-else-if="activeRoute === 'withdraw-kakao'">
+      <KakaoWithdrawalRecoveryWorkspace :token="inviteToken" :authenticated="Boolean(currentUser)"
+        @go-login="navigate('launcher')" @logout="handleLogout" @withdrawal-requested="handleWithdrawalRequested" />
     </template>
 
     <template v-else-if="activeRoute === 'kakao-complete'">
@@ -1186,6 +1254,7 @@ onBeforeUnmount(() => {
         :options="registrationOptions"
         :loading="isRegistrationOptionsLoading"
         :submitting="isSubmitting && activeSubmit === 'register'"
+        :resending="isSubmitting && activeSubmit === 'resend-email'"
         :verification-requested="registrationVerificationRequested"
         @register="handlePublicRegistration"
         @resend-email="handleResendEmailVerification"
@@ -1245,6 +1314,8 @@ onBeforeUnmount(() => {
               >
                 카카오로 계속
               </button>
+              <button v-if="registrationOptions.withdrawalRecoveryAvailable" class="button button--ghost" type="button"
+                :disabled="isSubmitting" @click="navigate('withdraw-kakao')">카카오 연결 해제 후 탈퇴 확인</button>
             </form>
             <div v-if="successMessage" class="feedback feedback--success auth-feedback" role="status">{{ successMessage }}</div>
             <div v-if="errorMessage" class="feedback feedback--error auth-feedback" role="alert">{{ errorMessage }}</div>
@@ -1312,11 +1383,13 @@ onBeforeUnmount(() => {
           />
         </div>
         <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" @exit-admin-access="navigate('launcher')" />
+        <IntegratedCalendarWorkspace v-else-if="activeRoute === 'integrated-calendar'" @navigate="navigate" @open-travel-source="navigateCalendarTravelSource" @open-place-source="navigateCalendarPlaceSource" @open-ledger-source="navigateCalendarLedgerSource" />
 
         <HouseholdWorkspace
           v-else-if="activeRoute === 'household'"
           :current-user="currentUser"
           :initial-tab="householdInitialTab"
+          :initial-calendar-focus="calendarLedgerFocusRequest"
           @open-travel-record-location="navigateTravelRecordLocation"
           @ai-analysis-complete="handlePetAiAnalysisComplete"
         />
@@ -1325,8 +1398,10 @@ onBeforeUnmount(() => {
           v-else-if="travelRouteKeys.has(activeRoute)"
           :route="activeRoute"
           :record-focus-request="travelRecordFocusRequest"
+          :place-focus-request="calendarPlaceFocusRequest"
           @open-household-travel-ledger="navigateHouseholdTravelLedger"
           @record-focus-consumed="clearTravelRecordFocusRequest"
+          @place-focus-consumed="calendarPlaceFocusRequest = null"
         />
 
         <PetCompanion
@@ -1344,7 +1419,7 @@ onBeforeUnmount(() => {
               <button class="button button--ghost" type="button" @click="closeProfileModal">닫기</button>
             </header>
             <div class="travel-modal__body profile-workspace-modal__body">
-              <ProfileWorkspace :current-user="currentUser" embedded />
+              <ProfileWorkspace :current-user="currentUser" embedded @withdrawal-requested="handleWithdrawalRequested" />
             </div>
           </section>
         </div>

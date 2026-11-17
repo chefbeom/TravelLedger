@@ -105,7 +105,7 @@ class LedgerClassificationRuleServiceTest {
 
     @Test
     void approveRecommendedRuleCreatesActiveOwnerRuleFromDraft() {
-        stubUser();
+        stubUserForWrite();
         CategoryGroup food = categoryGroup(10L, "Food", EntryType.EXPENSE);
         when(categoryGroupRepository.findByIdAndOwnerId(10L, USER_ID)).thenReturn(Optional.of(food));
         when(ledgerClassificationRuleRepository.save(any(LedgerClassificationRule.class))).thenAnswer(invocation -> {
@@ -134,7 +134,7 @@ class LedgerClassificationRuleServiceTest {
 
     @Test
     void createRuleRejectsCategoryDetailFromDifferentGroup() {
-        AppUser user = stubUser();
+        AppUser user = stubUserForWrite();
         CategoryGroup selectedGroup = categoryGroup(10L, "Food", EntryType.EXPENSE);
         CategoryGroup otherGroup = categoryGroup(11L, "Transport", EntryType.EXPENSE);
         CategoryDetail otherDetail = categoryDetail(30L, otherGroup, "Taxi");
@@ -164,6 +164,16 @@ class LedgerClassificationRuleServiceTest {
         user.setDisplayName("Owner");
         user.setActive(true);
         when(appUserService.getRequiredUser(USER_ID)).thenReturn(user);
+        return user;
+    }
+
+    private AppUser stubUserForWrite() {
+        AppUser user = new AppUser();
+        user.setId(USER_ID);
+        user.setLoginId("owner");
+        user.setDisplayName("Owner");
+        user.setActive(true);
+        when(appUserService.getRequiredUserForWrite(USER_ID)).thenReturn(user);
         return user;
     }
 

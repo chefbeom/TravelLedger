@@ -2,14 +2,22 @@ package com.playdata.calen.account.service;
 
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.domain.AppUserRole;
+import com.playdata.calen.account.domain.SocialLoginProvider;
 import com.playdata.calen.account.dto.AppUserResponse;
 import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.account.repository.SocialAccountRepository;
 import com.playdata.calen.account.security.SecondaryPinMismatchException;
+import com.playdata.calen.account.security.AccountSecurityVersion;
+import com.playdata.calen.account.withdrawal.WithdrawalChallengeRevoker;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,9 +31,12 @@ import org.springframework.util.StringUtils;
 public class AppUserService {
 
     private final AppUserRepository appUserRepository;
+    private final SocialAccountRepository socialAccounts;
     private final AccountSetupService accountSetupService;
     private final PasswordEncoder passwordEncoder;
     private final SecondaryPinAttemptService secondaryPinAttemptService;
+    private final WithdrawalChallengeRevoker withdrawalChallengeRevoker;
+    private final EntityManager entities;
 
     public AppUser getRequiredUser(Long userId) {
         return appUserRepository.findById(userId)
@@ -128,6 +139,27 @@ public class AppUserService {
         );
     }
 
+    @Transactional
+    public AppUser registerKakaoOnlyUser(String displayNameRaw, String emailRaw, String secondaryPinRaw) {
+        String displayName = normalizeRequired(displayNameRaw, "표시 이름은 필수입니다.", 80);
+        String email = normalizeRegistrationEmail(emailRaw);
+        String secondaryPin = normalizeSecondaryPin(secondaryPinRaw);
+        // Existing sharing and audit features use a stable identifier; it is not a login credential.
+        String internalId = "kakao_" + UUID.randomUUID().toString().replace("-", "");
+        AppUser user = new AppUser();
+        user.setLoginId(internalId);
+        user.setDisplayName(displayName);
+        user.setEmail(email);
+        user.setPasswordHash(null);
+        user.setSecondaryPinHash(passwordEncoder.encode(secondaryPin));
+        user.setRole(AppUserRole.USER);
+        user.setActive(true);
+        user.setEmailVerified(true);
+        AppUser savedUser = appUserRepository.save(user);
+        accountSetupService.initializeDefaults(savedUser);
+        return savedUser;
+    }
+
     public void ensureSecondaryPinMatches(AppUser user, String secondaryPinRaw) {
         Long userId = user != null ? user.getId() : null;
         secondaryPinAttemptService.ensureAllowed(userId);
@@ -147,14 +179,42 @@ public class AppUserService {
         secondaryPinAttemptService.recordSuccess(userId);
     }
 
-    public void verifySecondaryPin(Long userId, String secondaryPinRaw) {
-        ensureSecondaryPinMatches(getRequiredUser(userId), secondaryPinRaw);
+    /** Report ordinary signup PIN failures without marking the caller's transaction rollback-only. */
+    public SignupPinResult checkSignupPin(AppUser user, String secondaryPinRaw) {
+        try {
+            ensureSecondaryPinMatches(user, secondaryPinRaw);
+            return SignupPinResult.MATCH;
+        } catch (com.playdata.calen.common.exception.TooManyRequestsException limited) {
+            return SignupPinResult.LIMITED;
+        } catch (SecondaryPinMismatchException | BadRequestException mismatch) {
+            return SignupPinResult.MISMATCH;
+        }
     }
 
+    public enum SignupPinResult { MATCH, MISMATCH, LIMITED }
+
+    @Transactional
+    public void verifySecondaryPin(Long userId, String secondaryPinRaw) {
+        ensureSecondaryPinMatches(lockCurrentActiveUser(userId), secondaryPinRaw);
+    }
+
+    @Transactional
+    public String verifySecondaryPinForKakaoLink(Long userId, String secondaryPinRaw) {
+        AppUser user = lockCurrentActiveUser(userId);
+        ensureSecondaryPinMatches(user, secondaryPinRaw);
+        return AccountSecurityVersion.forKakaoLink(user);
+    }
+
+    @Transactional
     public String verifyPrivacyAccess(Long userId, String passwordRaw, String secondaryPinRaw) {
-        AppUser user = getRequiredUser(userId);
+        AppUser user = lockCurrentActiveUser(userId);
         String password = passwordRaw != null ? passwordRaw.trim() : "";
-        if (!StringUtils.hasText(user.getPasswordHash()) || !passwordEncoder.matches(password, user.getPasswordHash())) {
+        if (user.getPasswordHash() == null && !socialAccounts.existsByUserIdAndProvider(userId, SocialLoginProvider.KAKAO)) {
+            throw new BadRequestException("계정 인증 정보를 확인할 수 없습니다.");
+        }
+        if (user.getPasswordHash() != null
+                && (!StringUtils.hasText(user.getPasswordHash())
+                || !passwordEncoder.matches(password, user.getPasswordHash()))) {
             throw new BadRequestException("현재 비밀번호가 일치하지 않습니다.");
         }
 
@@ -165,7 +225,7 @@ public class AppUserService {
 
     @Transactional
     public void updatePassword(Long userId, String secondaryPinRaw, String newPasswordRaw) {
-        AppUser user = getRequiredUser(userId);
+        AppUser user = lockCurrentActiveUser(userId);
         ensureSecondaryPinMatches(user, secondaryPinRaw);
 
         String newPassword = newPasswordRaw != null ? newPasswordRaw.trim() : "";
@@ -173,17 +233,27 @@ public class AppUserService {
             throw new BadRequestException("비밀번호는 8자 이상이어야 합니다.");
         }
 
+        withdrawalChallengeRevoker.revoke(userId, LocalDateTime.now());
         user.setPasswordHash(passwordEncoder.encode(newPassword));
     }
 
     @Transactional
     public String updateSecondaryPin(Long userId, String currentSecondaryPinRaw, String newSecondaryPinRaw) {
-        AppUser user = getRequiredUser(userId);
+        AppUser user = lockCurrentActiveUser(userId);
         ensureSecondaryPinMatches(user, currentSecondaryPinRaw);
 
         String normalizedSecondaryPin = normalizeSecondaryPin(newSecondaryPinRaw);
+        withdrawalChallengeRevoker.revoke(userId, LocalDateTime.now());
         user.setSecondaryPinHash(passwordEncoder.encode(normalizedSecondaryPin));
         return normalizedSecondaryPin;
+    }
+
+    private AppUser lockCurrentActiveUser(Long userId) {
+        AppUser user = appUserRepository.findActiveForPreferenceUpdate(userId)
+                .orElseThrow(() -> new NotFoundException("사용자 계정을 찾을 수 없습니다."));
+        entities.refresh(user, LockModeType.PESSIMISTIC_WRITE);
+        if (!user.isActive()) throw new NotFoundException("사용자 계정을 찾을 수 없습니다.");
+        return user;
     }
 
     public AppUserRole normalizeRole(AppUser user) {
@@ -198,7 +268,10 @@ public class AppUserService {
                 user.getDisplayName(),
                 role,
                 role.isAdmin(),
-                user.isActive()
+                user.isActive(),
+                user.getPasswordHash() != null,
+                user.getEmail(),
+                user.getEmail() != null && user.isEmailVerified()
         );
     }
 
@@ -259,7 +332,7 @@ public class AppUserService {
         return email;
     }
 
-    private String normalizeEmailFormat(String emailRaw) {
+    public String normalizeEmailFormat(String emailRaw) {
         String email = emailRaw != null ? emailRaw.trim().toLowerCase(Locale.ROOT) : "";
         if (email.length() > 254 || !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             throw new BadRequestException("올바른 이메일 주소를 입력해 주세요.");

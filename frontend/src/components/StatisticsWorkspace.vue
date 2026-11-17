@@ -235,7 +235,7 @@ function adjustmentLabel(entry) {
 function paymentInfoLabel(entry) {
   const labels = []
   if (entry.splitPaymentGroupId) labels.push(`분할 ${entry.splitPaymentIndex}/${entry.splitPaymentCount} · 묶음 ${entry.splitPaymentGroupId.slice(0, 8)}`)
-  if (entry.installmentMonths) labels.push(`${entry.installmentMonths}개월 할부`)
+  if (entry.installmentMonths) labels.push(`${entry.installmentMonths}개월 ${entry.installmentInterestType === 'FREE' ? '무이자 ' : entry.installmentInterestType === 'INTEREST' ? '유이자 ' : ''}할부`)
   return labels.join(' · ')
 }
 const trashResultSelection = useTableSelection(computed(() => props.trashResults))

@@ -7,10 +7,22 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 
 public interface TravelPlanShareRepository extends JpaRepository<TravelPlanShare, Long> {
 
     Optional<TravelPlanShare> findByPlanIdAndRecipientId(Long planId, Long recipientId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select share from TravelPlanShare share where share.plan.id = :plan and share.recipient.id = :recipient")
+    Optional<TravelPlanShare> findForUpdate(@Param("plan") Long planId, @Param("recipient") Long recipientId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select share from TravelPlanShare share where share.id = :id and share.plan.id = :plan and share.sharedBy.id = :owner")
+    Optional<TravelPlanShare> findOwnedForUpdate(@Param("id") Long id, @Param("plan") Long planId, @Param("owner") Long ownerId);
 
     List<TravelPlanShare> findAllByRecipientIdOrderByCreatedAtDescIdDesc(Long recipientId);
 

@@ -35,7 +35,7 @@ public class HouseholdGoalService {
 
     @Transactional
     public HouseholdGoalResponse createGoal(Long userId, HouseholdGoalRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         HouseholdGoal goal = new HouseholdGoal();
         goal.setOwner(owner);
         apply(goal, request);
@@ -45,7 +45,7 @@ public class HouseholdGoalService {
 
     @Transactional
     public HouseholdGoalResponse updateGoal(Long userId, Long goalId, HouseholdGoalRequest request) {
-        appUserService.getRequiredUser(userId);
+        appUserService.getRequiredUserForWrite(userId);
         HouseholdGoal goal = householdGoalRepository.findByIdAndOwnerId(goalId, userId)
                 .orElseThrow(() -> new NotFoundException("Household goal was not found."));
         apply(goal, request);
@@ -54,7 +54,7 @@ public class HouseholdGoalService {
 
     @Transactional
     public HouseholdGoalResponse archiveGoal(Long userId, Long goalId) {
-        appUserService.getRequiredUser(userId);
+        appUserService.getRequiredUserForWrite(userId);
         HouseholdGoal goal = householdGoalRepository.findByIdAndOwnerId(goalId, userId)
                 .orElseThrow(() -> new NotFoundException("Household goal was not found."));
         goal.setStatus(HouseholdGoalStatus.ARCHIVED);

@@ -48,7 +48,7 @@ public class LedgerClassificationRuleService {
 
     @Transactional
     public LedgerClassificationRuleResponse createRule(Long userId, LedgerClassificationRuleRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         LedgerClassificationRule rule = new LedgerClassificationRule();
         rule.setOwner(owner);
         apply(rule, userId, request);
@@ -57,7 +57,7 @@ public class LedgerClassificationRuleService {
 
     @Transactional
     public LedgerClassificationRuleResponse approveRecommendedRule(Long userId, LedgerClassificationRuleRequest request) {
-        AppUser owner = appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
         LedgerClassificationRule rule = new LedgerClassificationRule();
         rule.setOwner(owner);
         apply(rule, userId, approvedRecommendationRequest(request));
@@ -66,7 +66,7 @@ public class LedgerClassificationRuleService {
 
     @Transactional
     public LedgerClassificationRuleResponse updateRule(Long userId, Long ruleId, LedgerClassificationRuleRequest request) {
-        appUserService.getRequiredUser(userId);
+        appUserService.getRequiredUserForWrite(userId);
         LedgerClassificationRule rule = ledgerClassificationRuleRepository.findByIdAndOwnerId(ruleId, userId)
                 .orElseThrow(() -> new NotFoundException("Classification rule was not found."));
         apply(rule, userId, request);
@@ -75,6 +75,7 @@ public class LedgerClassificationRuleService {
 
     @Transactional
     public LedgerClassificationRuleResponse deactivateRule(Long userId, Long ruleId) {
+        appUserService.getRequiredUserForWrite(userId);
         LedgerClassificationRule rule = ledgerClassificationRuleRepository.findByIdAndOwnerId(ruleId, userId)
                 .orElseThrow(() -> new NotFoundException("Classification rule was not found."));
         rule.setActive(false);

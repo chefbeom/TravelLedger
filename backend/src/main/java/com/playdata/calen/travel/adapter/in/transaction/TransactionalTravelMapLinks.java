@@ -17,9 +17,9 @@ public class TransactionalTravelMapLinks implements TravelMapLinksUseCase {
         delegate = new TravelMapLinksService(store, runtime, payload, clustering);
     }
     @Override @Transactional public Link create(Long owner, Draft draft) { return delegate.create(owner, draft); }
-    @Override public PublicMap map(String token) { return delegate.map(token); }
-    @Override public Cluster cluster(String token, Long cluster, Integer page, Integer size, Long focus) { return delegate.cluster(token, cluster, page, size, focus); }
-    @Override public Download media(String token, Long media) { return delegate.media(token, media); }
-    @Override public Preview preview(String token) { return delegate.preview(token); }
-    @Override public Download previewMedia(String token, int number) { return delegate.previewMedia(token, number); }
+    @Override @Transactional public PublicMap map(String token) { return delegate.map(token); }
+    @Override @Transactional public Cluster cluster(String token, Long cluster, Integer page, Integer size, Long focus) { return delegate.cluster(token, cluster, page, size, focus); }
+    @Override @Transactional public Download media(String token, Long media) { return delegate.media(token, media); }
+    @Override @Transactional public Preview preview(String token) { return delegate.preview(token); }
+    @Override @Transactional public Download previewMedia(String token, int number) { return delegate.previewMedia(token, number); }
 }

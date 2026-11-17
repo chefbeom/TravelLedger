@@ -53,6 +53,7 @@ class TravelMapLinkRefactoringIntegrationTest {
     @Autowired TravelRouteSegmentRepository routes;
     @Autowired TravelMapShareLinkRepository links;
     @Autowired TravelMapLinksUseCase useCase;
+    @Autowired TravelService facade;
     @Autowired TravelLoginMapPreviewService preview;
     @Autowired TravelMapLinkRuntime runtime;
     @Autowired PlatformTransactionManager transactions;
@@ -164,17 +165,26 @@ class TravelMapLinkRefactoringIntegrationTest {
         verifyNoInteractions(storage, redis, coordinator);
     }
 
-    @Test void createIsWritableReadsAreReadOnlyAndPersistenceAndTokenAdapterRequireAnExistingTransaction() {
+    @Test void createAndLockingReadsUseWritableTransactionsAndAdaptersRequireAnExistingTransaction() {
         var f = fixture();
         assertThatThrownBy(() -> store.active("missing")).isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(() -> runtime.now()).isInstanceOf(IllegalTransactionStateException.class);
         doAnswer(call -> { assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isFalse(); return call.callRealMethod(); })
                 .when(target).save(any(), any(), any(), any(), any());
         var link = create(f);
-        doAnswer(call -> { assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isTrue(); return call.callRealMethod(); })
+        // Locking reads need a write-capable transaction on MySQL-compatible databases.
+        doAnswer(call -> { assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isFalse(); return call.callRealMethod(); })
                 .when(target).active(link.token());
         useCase.map(link.token()); useCase.preview(link.token()); useCase.media(link.token(), f.photo());
+        facade.getTravelMapShare(link.token()); facade.getTravelMapShareLoginPreview(link.token());
         verifyNoInteractions(storage, redis, coordinator);
+    }
+
+    @Test void lockingReadFailsClosedWhenAnOuterTransactionIsReadOnly() {
+        var f = fixture(); var link = create(f);
+        var readOnly = new TransactionTemplate(transactions); readOnly.setReadOnly(true);
+        assertThatThrownBy(() -> readOnly.execute(status -> useCase.preview(link.token())))
+                .isInstanceOf(com.playdata.calen.common.exception.ServiceUnavailableException.class);
     }
 
     Link create(Fixture f) { return useCase.create(f.owner(), new Draft("Synthetic link", List.of(f.plan()), null, null, null)); }

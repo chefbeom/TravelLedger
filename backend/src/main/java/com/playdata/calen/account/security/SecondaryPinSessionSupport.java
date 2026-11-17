@@ -56,6 +56,22 @@ public class SecondaryPinSessionSupport {
         }
     }
 
+    public String sealKakaoLinkVersion(long userId, String version) {
+        if (userId <= 0 || version == null || !version.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("Invalid Kakao link proof.");
+        }
+        return encrypt("kakao-link-v1:" + userId + ":" + version);
+    }
+
+    public String openKakaoLinkVersion(long userId, Object sealed) {
+        if (userId <= 0 || !(sealed instanceof String text) || text.isBlank()) return null;
+        String opened = decrypt(text);
+        String prefix = "kakao-link-v1:" + userId + ":";
+        if (opened == null || !opened.startsWith(prefix)) return null;
+        String version = opened.substring(prefix.length());
+        return version.matches("[0-9a-f]{64}") ? version : null;
+    }
+
     private String encrypt(String plaintext) {
         try {
             byte[] iv = new byte[IV_LENGTH];

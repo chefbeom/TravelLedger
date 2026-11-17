@@ -64,6 +64,22 @@ class DriveServiceTest {
     @Mock
     private ImageThumbnailService imageThumbnailService;
 
+    @Mock
+    private DriveUploadGrantRegistry uploadGrants;
+
+    @Test
+    void uploadInitializationRecordsGrantsBeforeReturningUrls() {
+        var owner = owner();
+        var requests = List.of(DriveDtos.UploadInitRequest.builder().fileOriginName("report.pdf").build());
+        var response = DriveDtos.UploadChunkResponse.builder().objectKey("drive/1/file.pdf")
+                .finalObjectKey("drive/1/file.pdf").presignedUploadUrl("signed-url").build();
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
+        when(driveStorageService.initUpload(1L, requests)).thenReturn(List.of(response));
+        when(driveStorageService.resolveBucket()).thenReturn("drive-bucket");
+        assertThat(newService().initializeUpload(1L, requests)).containsExactly(response);
+        verify(uploadGrants).recordIssued(1L, "drive-bucket", List.of(response));
+    }
+
     @Test
     void completeUploadRejectsObjectKeyOutsideOwnerScopeBeforeStorageLookup() {
         AppUser owner = owner();
@@ -74,7 +90,7 @@ class DriveServiceTest {
                 .finalObjectKey("drive/2/foreign.txt")
                 .build();
 
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
 
         DriveService service = newService();
 
@@ -101,10 +117,11 @@ class DriveServiceTest {
                 .finalObjectKey("drive/1/report.pdf")
                 .build();
 
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
         when(driveStorageService.completeUpload(request)).thenReturn(completed);
         when(driveItemRepository.findByOwner_IdAndStoragePath(1L, "drive/1/report.pdf")).thenReturn(Optional.empty());
         when(driveStorageService.resolveObjectSize("drive/1/report.pdf")).thenReturn(1200L);
+        when(driveStorageService.resolveBucket()).thenReturn("drive-bucket");
         when(driveItemRepository.save(any(DriveItem.class))).thenAnswer(invocation -> {
             DriveItem item = invocation.getArgument(0);
             item.setId(10L);
@@ -127,10 +144,37 @@ class DriveServiceTest {
         assertThat(version.getExtension()).isEqualTo("pdf");
         assertThat(version.getStoredName()).isEqualTo("report-saved.pdf");
         assertThat(version.getStoragePath()).isEqualTo("drive/1/report.pdf");
+        assertThat(version.getStorageBucket()).isEqualTo("drive-bucket");
+        assertThat(version.getItem().getStorageBucket()).isEqualTo("drive-bucket");
         assertThat(version.getContentType()).isEqualTo("application/pdf");
         assertThat(version.getFileSize()).isEqualTo(1200L);
         assertThat(version.getSource()).isEqualTo("UPLOAD");
         assertThat(version.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    void abortUploadRejectsAnyBatchContainingARegisteredFile() {
+        AppUser owner = owner();
+        var request = DriveDtos.UploadAbortRequest.builder()
+                .finalObjectKey("drive/1/completed.pdf")
+                .chunkObjectKeys(List.of("drive/1/pending.pdf")).build();
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
+        when(driveItemRepository.existsByStoragePathIn(List.of("drive/1/completed.pdf", "drive/1/pending.pdf")))
+                .thenReturn(true);
+        assertThatThrownBy(() -> newService().abortUpload(1L, request))
+                .isInstanceOf(BadRequestException.class).hasMessageContaining("이미 등록된 파일");
+        verify(driveStorageService, never()).abortUpload(1L, request);
+    }
+
+    @Test
+    void abortUploadRejectsAnObjectReferencedByAFileVersion() {
+        AppUser owner = owner();
+        var request = DriveDtos.UploadAbortRequest.builder().finalObjectKey("drive/1/old.pdf").build();
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
+        when(driveItemVersionRepository.existsByStoragePathIn(List.of("drive/1/old.pdf"))).thenReturn(true);
+        assertThatThrownBy(() -> newService().abortUpload(1L, request))
+                .isInstanceOf(BadRequestException.class).hasMessageContaining("이미 등록된 파일");
+        verify(driveStorageService, never()).abortUpload(1L, request);
     }
     @Test
     void restoreFileVersionSwapsActiveMetadataAndRecordsRestoreVersion() {
@@ -145,12 +189,14 @@ class DriveServiceTest {
         oldVersion.setExtension("pdf");
         oldVersion.setStoredName("old-report-stored.pdf");
         oldVersion.setStoragePath("drive/1/old-report.pdf");
+        oldVersion.setStorageBucket("older-bucket");
         oldVersion.setContentType("application/pdf");
         oldVersion.setFileSize(500L);
         oldVersion.setSource("UPLOAD");
         oldVersion.setCreatedAt(LocalDateTime.of(2026, 6, 1, 9, 0));
 
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
         when(driveItemRepository.findByIdAndOwner_Id(10L, 1L)).thenReturn(Optional.of(current));
         when(driveItemVersionRepository.findByIdAndItem_IdAndOwner_Id(55L, 10L, 1L)).thenReturn(Optional.of(oldVersion));
         when(driveItemVersionRepository.countByItem_IdAndOwner_Id(10L, 1L)).thenReturn(1L);
@@ -163,6 +209,7 @@ class DriveServiceTest {
         assertThat(current.getOriginalName()).isEqualTo("old-report.pdf");
         assertThat(current.getStoredName()).isEqualTo("old-report-stored.pdf");
         assertThat(current.getStoragePath()).isEqualTo("drive/1/old-report.pdf");
+        assertThat(current.getStorageBucket()).isEqualTo("older-bucket");
         assertThat(current.getFileSize()).isEqualTo(500L);
 
         ArgumentCaptor<DriveItemVersion> versionCaptor = ArgumentCaptor.forClass(DriveItemVersion.class);
@@ -173,6 +220,7 @@ class DriveServiceTest {
         assertThat(restoreVersion.getVersionNumber()).isEqualTo(2);
         assertThat(restoreVersion.getOriginalName()).isEqualTo("old-report.pdf");
         assertThat(restoreVersion.getStoragePath()).isEqualTo("drive/1/old-report.pdf");
+        assertThat(restoreVersion.getStorageBucket()).isEqualTo("older-bucket");
         assertThat(restoreVersion.getSource()).isEqualTo("RESTORE");
     }
     @Test
@@ -287,6 +335,7 @@ class DriveServiceTest {
         file.setParent(lockedFolder);
 
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
         when(driveItemRepository.findByIdAndOwner_Id(3L, 1L)).thenReturn(Optional.of(file));
 
         DriveService service = newService();
@@ -306,6 +355,7 @@ class DriveServiceTest {
         file.setParent(lockedFolder);
 
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
         when(driveItemRepository.findByIdAndOwner_Id(3L, 1L)).thenReturn(Optional.of(file));
 
         DriveService service = newService();
@@ -324,6 +374,7 @@ class DriveServiceTest {
         file.setSourceType(TravelDriveLinkService.SOURCE_TRAVEL_MEDIA);
 
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
         when(driveItemRepository.findByIdAndOwner_Id(5L, 1L)).thenReturn(Optional.of(file));
         when(travelMediaStorageService.loadAsResource("travel/1/photo.jpg"))
                 .thenReturn(new ByteArrayResource("travel".getBytes(StandardCharsets.UTF_8)));
@@ -344,7 +395,7 @@ class DriveServiceTest {
         nestedFile.setParent(folder);
         DriveItem rootFile = item(4L, owner, DriveItemType.FILE, "root.txt", 50L, 30);
 
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(appUserRepository.findActiveForPreferenceUpdate(1L)).thenReturn(Optional.of(owner));
         when(driveItemRepository.findByIdAndOwner_Id(2L, 1L)).thenReturn(Optional.of(folder));
         when(driveItemRepository.findByIdAndOwner_Id(4L, 1L)).thenReturn(Optional.of(rootFile));
         when(driveItemRepository.findAllByOwner_IdAndParent_Id(1L, 2L)).thenReturn(List.of(nestedFile));
@@ -373,7 +424,8 @@ class DriveServiceTest {
                 appUserRepository,
                 driveStorageService,
                 travelMediaStorageService,
-                imageThumbnailService
+                imageThumbnailService,
+                uploadGrants
         );
     }
 

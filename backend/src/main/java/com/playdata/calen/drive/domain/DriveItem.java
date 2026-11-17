@@ -59,6 +59,10 @@ public class DriveItem {
     @Column(length = 600)
     private String storagePath;
 
+    /** Null for legacy or externally managed objects whose original bucket is unknown. */
+    @Column(length = 255)
+    private String storageBucket;
+
     @Column(nullable = false)
     private long fileSize = 0L;
 

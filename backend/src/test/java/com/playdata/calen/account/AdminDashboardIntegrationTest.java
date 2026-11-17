@@ -11,11 +11,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.playdata.calen.account.repository.LoginAuditLogRepository;
+import com.playdata.calen.account.service.LoginAttemptService;
+import com.playdata.calen.account.withdrawal.AuditLogAnonymization;
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -42,6 +46,42 @@ class AdminDashboardIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private LoginAttemptService loginAttempts;
+
+    @Autowired
+    private LoginAuditLogRepository auditLogs;
+
+    @Test
+    void unknownLoginAuditIsAnonymousButIpRateLimitStillWorks() throws Exception {
+        String ip = "198.51.100.219";
+        String unknownId = "unknown-" + UUID.randomUUID();
+        var before = auditLogs.findAll().stream().map(log -> log.getId()).collect(java.util.stream.Collectors.toSet());
+        String payload = objectMapper.writeValueAsString(Map.of(
+                "loginId", unknownId, "password", "incorrect-password", "secondaryPin", "12345678", "rememberDevice", false));
+        try {
+            loginAttempts.clearFailures(ip);
+            for (int index = 0; index < 5; index++) {
+                mockMvc.perform(post("/api/auth/login").header("X-Forwarded-For", ip).header("User-Agent", "test-agent")
+                                .with(csrf()).contentType(MediaType.APPLICATION_JSON).content(payload))
+                        .andExpect(status().isUnauthorized());
+            }
+            mockMvc.perform(post("/api/auth/login").header("X-Forwarded-For", ip).header("User-Agent", "test-agent")
+                            .with(csrf()).contentType(MediaType.APPLICATION_JSON).content(payload))
+                    .andExpect(status().isTooManyRequests());
+            var created = auditLogs.findAll().stream().filter(log -> !before.contains(log.getId())).toList();
+            assertThat(created).hasSize(6).allSatisfy(log -> {
+                assertThat(log.getLoginId()).isEqualTo(AuditLogAnonymization.ANONYMOUS);
+                assertThat(log.getClientIp()).isEqualTo(AuditLogAnonymization.ANONYMOUS);
+                assertThat(log.getUserAgent()).isNull();
+                assertThat(log.getDetail()).isNull();
+                assertThat(log.isSuccess()).isFalse();
+            });
+        } finally {
+            loginAttempts.clearFailures(ip);
+        }
+    }
 
     @Test
     void adminChangesImageConcurrencyThroughTheRealApplicationContext() throws Exception {

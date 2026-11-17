@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import InviteAccessPanel from './InviteAccessPanel.vue'
 import AdminImageAnalysisConcurrency from './AdminImageAnalysisConcurrency.vue'
+import AdminWithdrawalMonitor from './AdminWithdrawalMonitor.vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import {
   archiveAdminSupportInquiry,
@@ -19,6 +20,7 @@ import {
   fetchAdminLoginAuditLogs,
   fetchAdminOpsControl,
   fetchAdminSupportInquiries,
+  promoteAdminUser,
   replyAdminSupportInquiry,
   restoreAdminDataBackup,
   restoreAdminUploadedBackup,
@@ -51,6 +53,7 @@ const state = reactive({
   loading: true,
   loadingLoginLogs: false,
   mutatingUserId: null,
+  promotion: { target: null, secondaryPin: '', acknowledged: false, busy: false, error: '', message: '' },
   unlockingIp: '',
   savingReply: false,
   mutatingInquiryId: null,
@@ -189,6 +192,7 @@ const inviteStatusLabel = {
   PENDING: '사용 가능',
   USED: '사용 완료',
   EXPIRED: '만료',
+  REVOKED: '사용 중지',
 }
 
 const inquiryStatusLabel = {
@@ -304,6 +308,9 @@ const accessModalOptions = computed(() => [
     label: '사용자 상태',
     count: state.users.length,
   },
+  ...(state.registrationPolicy?.withdrawalRecoveryAvailable
+    ? [{ key: 'withdrawal', label: '탈퇴 정리 상태', countLabel: '격리 테스트' }]
+    : []),
 ])
 
 const adminPanelCards = computed(() => [
@@ -513,11 +520,61 @@ function openAccessModal(view = 'invite') {
 }
 
 function closeAccessModal() {
+  if (state.promotion.busy) return
+  resetPromotion()
   state.accessModalOpen = false
 }
 
 function selectAccessModalView(view) {
+  if (state.promotion.busy) return
+  resetPromotion()
   state.accessModalView = accessModalOptions.value.some((option) => option.key === view) ? view : 'invite'
+}
+
+function resetPromotion() {
+  state.promotion.target = null
+  state.promotion.secondaryPin = ''
+  state.promotion.acknowledged = false
+  state.promotion.error = ''
+  state.promotion.message = ''
+}
+
+function openPromotion(user) {
+  if (!user?.active || user.admin || state.promotion.busy) return
+  resetPromotion()
+  state.promotion.target = { id: user.id, displayName: user.displayName, loginId: user.loginId }
+}
+
+function cancelPromotion() {
+  if (!state.promotion.busy) resetPromotion()
+}
+
+async function submitPromotion() {
+  const promotion = state.promotion
+  if (!promotion.target || promotion.busy) return
+  promotion.error = ''
+  if (!promotion.acknowledged) {
+    promotion.error = '관리자 권한의 범위를 확인해 주세요.'
+    return
+  }
+  if (!/^\d{8}$/.test(promotion.secondaryPin)) {
+    promotion.error = '현재 관리자의 2차 비밀번호 숫자 8자리를 입력해 주세요.'
+    return
+  }
+  promotion.busy = true
+  try {
+    const updatedUser = await promoteAdminUser(promotion.target.id, promotion.secondaryPin)
+    state.users = state.users.map((user) => user.id === updatedUser.id ? updatedUser : user)
+    if (state.summary) state.summary.adminUsers = (state.summary.adminUsers ?? 0) + 1
+    const displayName = updatedUser.displayName
+    resetPromotion()
+    promotion.message = `${displayName}님을 관리자로 지정했습니다. 해당 사용자가 다시 로그인하면 권한이 적용됩니다.`
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) promotion.error = error.message
+  } finally {
+    promotion.secondaryPin = ''
+    promotion.busy = false
+  }
 }
 
 function supportTabForInquiry(inquiry) {
@@ -2645,6 +2702,7 @@ onBeforeUnmount(() => {
                 v-for="option in accessModalOptions"
                 :key="option.key"
                 type="button"
+                :disabled="state.promotion.busy"
                 :class="['admin-access-control-card', { 'is-active': state.accessModalView === option.key }]"
                 @click="selectAccessModalView(option.key)"
               >
@@ -2687,7 +2745,10 @@ onBeforeUnmount(() => {
                         </tr>
                         <tr v-for="invite in pagedInvites" :key="invite.id">
                           <td>{{ formatDateTime(invite.createdAt) }}</td>
-                          <td>{{ invite.createdByDisplayName }} ({{ invite.createdByLoginId }})</td>
+                          <td>
+                            <template v-if="invite.createdByLoginId">{{ invite.createdByDisplayName }} ({{ invite.createdByLoginId }})</template>
+                            <template v-else>탈퇴한 사용자</template>
+                          </td>
                           <td>{{ formatDateTime(invite.expiresAt) }}</td>
                           <td>{{ inviteStatusLabel[invite.status] ?? invite.status }}</td>
                           <td>
@@ -2781,6 +2842,8 @@ onBeforeUnmount(() => {
               </div>
             </section>
 
+            <AdminWithdrawalMonitor v-else-if="state.accessModalView === 'withdrawal' && state.registrationPolicy?.withdrawalRecoveryAvailable" />
+
             <section v-else-if="state.accessModalView === 'blocked'" class="admin-access-control-panel">
               <div class="panel__header">
                 <div>
@@ -2830,6 +2893,7 @@ onBeforeUnmount(() => {
               <div class="panel__header">
                 <div>
                   <h3>최근 로그인 기록</h3>
+                  <p class="form-hint">미등록 아이디의 로그인 실패와 탈퇴자의 기록은 식별 정보를 익명화합니다. 별도의 차단 목록에는 IP가 일시적으로 저장되며, 차단은 24시간 유지됩니다.</p>
                 </div>
                 <button class="button button--ghost" type="button" :disabled="state.loadingLoginLogs" @click="loadLoginAuditLogs(state.loginLogPage.page || 0)">
                   {{ state.loadingLoginLogs ? '조회 중...' : '기록 새로고침' }}
@@ -2885,12 +2949,30 @@ onBeforeUnmount(() => {
               </div>
             </section>
 
-            <section v-else-if="state.accessModalView === 'users'" class="admin-access-control-panel">
+            <section v-else-if="state.accessModalView === 'users'" class="admin-access-control-panel admin-access-control-panel--users">
               <div class="panel__header">
                 <div>
                   <h3>사용자 상태</h3>
                 </div>
               </div>
+              <p v-if="state.promotion.message" class="feedback feedback--success" role="status">{{ state.promotion.message }}</p>
+              <form v-if="state.promotion.target" class="support-inquiry-card stack-form" aria-labelledby="admin-promotion-title" @submit.prevent="submitPromotion" @keydown.esc.stop="cancelPromotion">
+                <strong id="admin-promotion-title">{{ state.promotion.target.displayName }} ({{ state.promotion.target.loginId }})님을 관리자로 지정</strong>
+                <p>관리자는 사용자와 서비스 설정, 백업·복원 등 관리 기능에 접근할 수 있습니다. 지정 후 현재 화면에서는 관리자 권한을 회수할 수 없습니다.</p>
+                <label class="field field--inline">
+                  <input v-model="state.promotion.acknowledged" type="checkbox" :disabled="state.promotion.busy" />
+                  <span>대상 사용자와 관리자 권한 범위를 확인했습니다.</span>
+                </label>
+                <label class="field">
+                  <span class="field__label">현재 관리자의 2차 비밀번호</span>
+                  <input v-model.trim="state.promotion.secondaryPin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="숫자 8자리" :disabled="state.promotion.busy" />
+                </label>
+                <p v-if="state.promotion.error" class="feedback feedback--error" role="alert">{{ state.promotion.error }}</p>
+                <div class="panel__actions">
+                  <button class="button button--ghost" type="button" :disabled="state.promotion.busy" @click="cancelPromotion">취소</button>
+                  <button class="button button--primary" type="submit" :disabled="state.promotion.busy">{{ state.promotion.busy ? '지정 중...' : '관리자로 지정' }}</button>
+                </div>
+              </form>
               <div class="sheet-table-wrap">
                 <table class="sheet-table">
                   <thead>
@@ -2917,15 +2999,12 @@ onBeforeUnmount(() => {
                       <td>{{ user.active ? '활성' : '비활성' }}</td>
                       <td>
                         <template v-if="user.admin">-</template>
-                        <button
-                          v-else
-                          class="button button--ghost"
-                          type="button"
-                          :disabled="state.mutatingUserId === user.id"
-                          @click="toggleUserActive(user)"
-                        >
-                          {{ state.mutatingUserId === user.id ? '처리 중...' : user.active ? '비활성화' : '활성화' }}
-                        </button>
+                        <div v-else class="panel__actions">
+                          <button class="button button--ghost" type="button" :disabled="state.mutatingUserId !== null || state.promotion.busy" @click="toggleUserActive(user)">
+                            {{ state.mutatingUserId === user.id ? '처리 중...' : user.active ? '비활성화' : '활성화' }}
+                          </button>
+                          <button v-if="user.active" class="button button--ghost" type="button" :disabled="state.mutatingUserId !== null || state.promotion.busy" @click="openPromotion(user)">관리자 지정</button>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -3199,3 +3278,28 @@ onBeforeUnmount(() => {
     </template>
   </section>
 </template>
+
+<style scoped>
+@media (max-width: 960px) {
+  /* Keep the selected work area reachable even when the navigation has many cards. */
+  .admin-access-control-nav {
+    display: flex;
+    flex: 0 0 auto;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .admin-access-control-card {
+    flex: 0 0 9rem;
+    min-height: 4rem;
+    padding: 0.65rem;
+  }
+
+  .admin-access-control-panel--users {
+    align-content: start;
+    grid-auto-rows: max-content;
+    overflow-y: auto;
+  }
+}
+</style>

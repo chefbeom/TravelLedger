@@ -177,6 +177,7 @@ const calendarPanelDefinitions = [
 
 
 const props = defineProps({
+  focusEntryId: { type: [String, Number], default: null },
   currentUser: {
     type: Object,
     default: null,
@@ -1134,6 +1135,13 @@ const selectedDayEntryPageCount = computed(() =>
 const pagedSelectedDateRows = computed(() => {
   const start = selectedDayEntryPage.value * SELECTED_DAY_ENTRY_PAGE_SIZE
   return groupedSelectedDateEntries.value.slice(start, start + SELECTED_DAY_ENTRY_PAGE_SIZE)
+})
+let positionedCalendarFocusId = ''
+watch(() => [props.focusEntryId, groupedSelectedDateEntries.value], ([id, rows]) => {
+  if (!id) return
+  if (String(id) === positionedCalendarFocusId) return
+  const index = rows.findIndex(row => row.parts.some(part => String(part.id) === String(id)))
+  if (index >= 0) { positionedCalendarFocusId = String(id); selectedDayEntryPage.value = Math.floor(index / SELECTED_DAY_ENTRY_PAGE_SIZE) }
 })
 const selectableDayEntries = computed(() => pagedSelectedDateRows.value.flatMap(row => row.parts).filter(
   (entry) => !entry.hasAdjustmentHistory && !entry.adjustmentType,
@@ -4649,6 +4657,7 @@ defineExpose({
                   type="button"
                   :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'INCOME' }]"
                   :aria-pressed="entryForm.entryType === 'INCOME'"
+                  :disabled="entryForm.editingSplit"
                   @click="entryForm.entryType = 'INCOME'"
                 >
                   수입
@@ -4668,6 +4677,7 @@ defineExpose({
                   type="button"
                   :class="['toggle-chip', { 'toggle-chip--active': entryForm.currencyMode === 'FOREIGN' }]"
                   :aria-pressed="entryForm.currencyMode === 'FOREIGN'"
+                  :disabled="entryForm.editingSplit"
                   @click="entryForm.currencyMode = 'FOREIGN'"
                 >
                   외화
@@ -5307,6 +5317,7 @@ defineExpose({
                   :can-move-to-next-day="!entryDateMax || selectedDate < entryDateMax"
                   :count-label="selectedDateCountLabel"
                   :entries="pagedSelectedDateRows"
+                  :focus-entry-id="focusEntryId"
                   :total-entry-count="groupedSelectedDateEntries.length"
                   :has-memo-column="hasSelectedMemoColumn"
                   :has-foreign-entries="hasSelectedForeignEntries"
@@ -5356,6 +5367,7 @@ defineExpose({
               :can-move-to-next-day="!entryDateMax || selectedDate < entryDateMax"
               :count-label="selectedDateCountLabel"
               :entries="pagedSelectedDateRows"
+              :focus-entry-id="focusEntryId"
               :total-entry-count="groupedSelectedDateEntries.length"
               :has-memo-column="hasSelectedMemoColumn"
               :has-foreign-entries="hasSelectedForeignEntries"

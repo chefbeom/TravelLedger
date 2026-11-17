@@ -13,7 +13,11 @@ public interface AccountInviteRepository extends JpaRepository<AccountInvite, Lo
 
     Optional<AccountInvite> findByTokenHash(String tokenHash);
 
-    long countByUsedAtIsNullAndExpiresAtAfter(java.time.LocalDateTime now);
+    @Query("select invite.createdBy.id from AccountInvite invite where invite.tokenHash = :tokenHash")
+    Optional<Long> findCreatorIdByTokenHash(@Param("tokenHash") String tokenHash);
+
+    @Query("select count(invite) from AccountInvite invite where invite.usedAt is null and invite.revokedAt is null and invite.expiresAt > :now")
+    long countByUsedAtIsNullAndExpiresAtAfter(@Param("now") java.time.LocalDateTime now);
 
     List<AccountInvite> findTop30ByOrderByCreatedAtDescIdDesc();
 

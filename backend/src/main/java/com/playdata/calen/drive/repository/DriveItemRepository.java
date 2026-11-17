@@ -4,6 +4,7 @@ import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.domain.DriveItemType;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -66,6 +67,8 @@ public interface DriveItemRepository extends JpaRepository<DriveItem, Long>, Jpa
     Optional<DriveItem> findByIdAndOwner_Id(Long id, Long ownerId);
 
     Optional<DriveItem> findByOwner_IdAndStoragePath(Long ownerId, String storagePath);
+
+    boolean existsByStoragePathIn(Collection<String> storagePaths);
 
     Optional<DriveItem> findByOwner_IdAndSourceTypeAndSourceReference(Long ownerId, String sourceType, String sourceReference);
 

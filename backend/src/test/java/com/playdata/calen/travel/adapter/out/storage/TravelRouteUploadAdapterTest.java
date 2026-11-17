@@ -6,6 +6,7 @@ import com.playdata.calen.travel.application.port.out.TravelRouteUploadPort.Uplo
 import com.playdata.calen.travel.domain.model.TravelRouteData.GpxFile;
 import com.playdata.calen.travel.domain.model.TravelRouteUploadData.*;
 import com.playdata.calen.travel.service.TravelMediaStorageService;
+import com.playdata.calen.travel.service.TravelUploadGrantRegistry;
 import java.io.IOException;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 class TravelRouteUploadAdapterTest {
     final TravelMediaStorageService storage=mock(TravelMediaStorageService.class);
-    final TravelRouteUploadAdapter adapter=new TravelRouteUploadAdapter(storage);
+    final TravelUploadGrantRegistry grants=mock(TravelUploadGrantRegistry.class);
+    final TravelRouteUploadAdapter adapter=new TravelRouteUploadAdapter(storage,grants);
     @Test void directStoreDoesNotReadInputBeforeLegacyStorageAsksForBytesAndDoesNotCopyThem() throws Exception {
         var input=mock(Upload.class);when(storage.storeRouteGpx(any(),any(),any(),any())).thenReturn(stored());
         assertThat(adapter.store(7L,10L,20L,input)).isEqualTo(new GpxFile("route.gpx","test/route.gpx","xml",3));
@@ -41,6 +43,7 @@ class TravelRouteUploadAdapterTest {
         var old=new TravelMediaStorageService.PresignedRouteGpxUpload("PUT","https://storage.invalid/synthetic","test/key","stored"," route.gpx "," xml ",3);
         when(storage.preparePresignedRouteGpxUploads(7L,10L,20L,List.of(new TravelMediaStorageService.RouteGpxUploadCandidate(" route.gpx "," xml ",3)))).thenReturn(List.of(old));
         var targets=adapter.prepare(7L,10L,20L,List.of(candidate));
+        verify(grants).recordRoutes(7L,10L,20L,targets);
         assertThat(targets).containsExactly(new Target(old.method(),old.uploadUrl(),old.objectKey(),old.storedFileName(),old.originalFileName(),old.contentType(),old.fileSize()));
         var proof=new TravelMediaStorageService.CompletedRouteGpxUpload("test/key","route.gpx","xml",3);
         when(storage.completePresignedRouteGpxUpload(7L,10L,20L,proof)).thenReturn(stored());

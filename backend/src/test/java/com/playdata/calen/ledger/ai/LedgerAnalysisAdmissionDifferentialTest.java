@@ -32,7 +32,7 @@ class LedgerAnalysisAdmissionDifferentialTest {
             var expected = fixture.capture(() -> fixture.old.startResolvedAnalysis(7L, oldPlan));
             var actual = fixture.capture(() -> LedgerAnalysisHistoryMapper.response(new StartLedgerAnalysisService().start(
                     LedgerAnalysisAdmissions.operation(7L, modern, fixture.users, fixture.properties, fixture.metrics,
-                            fixture.distributed ? fixture.leases : null, fixture.rows, fixture.queries, fixture::submit, fixture::failed), Duration.ofMinutes(5))));
+                            fixture.distributed ? fixture.leases : null, fixture.rows::save, fixture.queries, fixture::submit, fixture::failed), Duration.ofMinutes(5))));
             assertThat(actual).as("admission profile %s", profile).isEqualTo(expected);
         }
     }
@@ -52,7 +52,7 @@ class LedgerAnalysisAdmissionDifferentialTest {
         var oldPlan = new LedgerAnalysisAdmissionLegacyOracle.AnalysisPlan(LedgerAiAnalysisMode.PERIOD, LedgerAiAnalysisPeriod.MONTH, null,
                 new LedgerAnalysisAdmissionLegacyOracle.DateRange(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31)), null, "custom");
         var result = new StartLedgerAnalysisService().start(LedgerAnalysisAdmissions.operation(7L, modern(oldPlan), fixture.users,
-                fixture.properties, fixture.metrics, null, fixture.rows, fixture.queries, fixture::submit, fixture::failed), Duration.ofMinutes(5));
+                fixture.properties, fixture.metrics, null, fixture.rows::save, fixture.queries, fixture::submit, fixture::failed), Duration.ofMinutes(5));
         assertThat(result.history().status()).isEqualTo(LedgerAiAnalysisStatus.COMPLETED);
         assertThat(result.history().summary()).isEqualTo("changed while submitting"); assertThat(result.result()).isNull();
     }

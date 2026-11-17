@@ -2,12 +2,14 @@ package com.playdata.calen.account.service;
 
 import com.playdata.calen.account.dto.PublicRegistrationOptionsResponse;
 import com.playdata.calen.account.social.KakaoOAuthProperties;
+import com.playdata.calen.account.withdrawal.IntegrationWithdrawalGateway;
 import jakarta.annotation.PostConstruct;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -23,6 +25,7 @@ public class RegistrationPolicyService {
 
     private final JdbcTemplate jdbcTemplate;
     private final KakaoOAuthProperties kakaoOAuthProperties;
+    private final ObjectProvider<IntegrationWithdrawalGateway> withdrawalGateway;
     private volatile boolean publicRegistrationEnabled;
 
     @PostConstruct
@@ -41,7 +44,7 @@ public class RegistrationPolicyService {
         List<String> socialProviders = kakaoOAuthProperties.isConfigured()
                 ? List.of("KAKAO")
                 : List.of();
-        return new PublicRegistrationOptionsResponse(publicRegistrationEnabled, socialProviders);
+        return new PublicRegistrationOptionsResponse(publicRegistrationEnabled, socialProviders, withdrawalGateway.getIfAvailable() != null);
     }
 
     public boolean isPublicRegistrationEnabled() {

@@ -6,6 +6,7 @@ import com.playdata.calen.travel.domain.TravelBudgetItem;
 import com.playdata.calen.travel.domain.model.TravelBudgetData.Value;
 import com.playdata.calen.travel.repository.TravelBudgetItemRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
+import com.playdata.calen.travel.service.TravelClusterWithdrawalFence;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -17,12 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class JpaTravelBudgetAdapter implements TravelBudgetStore {
     private final TravelPlanRepository plans;
     private final TravelBudgetItemRepository budgets;
+    private final TravelClusterWithdrawalFence withdrawalFence;
 
     @Override public void requireOwnedPlan(Long owner, Long id) {
+        withdrawalFence.requireAvailableOwner(owner);
         plans.findByIdAndOwnerId(id, owner).orElseThrow(() -> new NotFoundException("Travel plan not found."));
     }
 
     @Override public void requireOwnedBudget(Long owner, Long id) {
+        withdrawalFence.requireAvailableOwner(owner);
         budgets.findByIdAndPlanOwnerId(id, owner).orElseThrow(() -> new NotFoundException("Travel budget item not found."));
     }
 

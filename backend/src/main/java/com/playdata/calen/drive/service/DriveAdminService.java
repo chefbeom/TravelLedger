@@ -1,7 +1,12 @@
 package com.playdata.calen.drive.service;
 
 import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.domain.AppUserRole;
 import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.account.repository.EmailVerificationTokenRepository;
+import com.playdata.calen.account.repository.AccountEmailVerificationRepository;
+import com.playdata.calen.account.withdrawal.PendingWithdrawalGuard;
+import com.playdata.calen.account.withdrawal.WithdrawalChallengeRevoker;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.drive.domain.DriveAdminConfig;
@@ -10,12 +15,16 @@ import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveAdminConfigRepository;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 import org.springframework.security.access.AccessDeniedException;
+import com.playdata.calen.account.security.AccountRememberMeTokens;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,19 +37,37 @@ public class DriveAdminService {
     private final DriveShareRepository driveShareRepository;
     private final DriveAdminConfigRepository driveAdminConfigRepository;
     private final DriveStorageService driveStorageService;
+    private final PendingWithdrawalGuard pendingWithdrawals;
+    private final WithdrawalChallengeRevoker withdrawalChallenges;
+    private final EmailVerificationTokenRepository signupTokens;
+    private final AccountEmailVerificationRepository profileTokens;
+    private final AccountRememberMeTokens rememberMeTokens;
+    private final EntityManager entities;
 
     public DriveAdminService(
             AppUserRepository appUserRepository,
             DriveItemRepository driveItemRepository,
             DriveShareRepository driveShareRepository,
             DriveAdminConfigRepository driveAdminConfigRepository,
-            DriveStorageService driveStorageService
+            DriveStorageService driveStorageService,
+            PendingWithdrawalGuard pendingWithdrawals,
+            WithdrawalChallengeRevoker withdrawalChallenges,
+            EmailVerificationTokenRepository signupTokens,
+            AccountEmailVerificationRepository profileTokens,
+            AccountRememberMeTokens rememberMeTokens,
+            EntityManager entities
     ) {
         this.appUserRepository = appUserRepository;
         this.driveItemRepository = driveItemRepository;
         this.driveShareRepository = driveShareRepository;
         this.driveAdminConfigRepository = driveAdminConfigRepository;
         this.driveStorageService = driveStorageService;
+        this.pendingWithdrawals = pendingWithdrawals;
+        this.withdrawalChallenges = withdrawalChallenges;
+        this.signupTokens = signupTokens;
+        this.profileTokens = profileTokens;
+        this.rememberMeTokens = rememberMeTokens;
+        this.entities = entities;
     }
 
     public DriveDtos.AdminDashboardResponse getDashboard(boolean admin) {
@@ -121,9 +148,26 @@ public class DriveAdminService {
     @Transactional
     public DriveDtos.AdminUserResponse updateUserStatus(boolean admin, Long userId, boolean active) {
         ensureAdmin(admin);
-        AppUser user = appUserRepository.findById(userId)
+        AppUser user = appUserRepository.lockForAccountSecurityUpdate(userId)
                 .orElseThrow(() -> new NotFoundException("사용자를 찾지 못했습니다."));
+        entities.refresh(user, LockModeType.PESSIMISTIC_WRITE);
+        if (user.getRole() == AppUserRole.ADMIN) {
+            throw new BadRequestException("관리자 계정의 활성 상태는 변경할 수 없습니다.");
+        }
+        if (active && user.isExpiredEmailSignup()) {
+            throw new BadRequestException("만료된 가입 신청은 다시 활성화할 수 없습니다.");
+        }
+        if (active && pendingWithdrawals.hasPendingWithdrawalForUpdate(userId)) {
+            throw new BadRequestException("탈퇴 처리 중인 계정은 다시 활성화할 수 없습니다.");
+        }
         user.setActive(active);
+        if (!active) {
+            LocalDateTime now = LocalDateTime.now();
+            withdrawalChallenges.revoke(userId, now);
+            signupTokens.invalidateOpenTokens(userId, now);
+            profileTokens.invalidateOpenTokens(userId, now);
+            rememberMeTokens.removeUserTokensById(userId);
+        }
         return toAdminUserResponse(user, driveItemRepository.findAllByOwner_Id(user.getId()));
     }
 

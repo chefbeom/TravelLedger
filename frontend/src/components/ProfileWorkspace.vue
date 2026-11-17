@@ -1,6 +1,7 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
+import WithdrawalSelectionForm from './WithdrawalSelectionForm.vue'
 import {
   changeProfilePassword,
   changeProfileSecondaryPin,
@@ -9,9 +10,14 @@ import {
   deletePrivacyAiAnalysisHistory,
   downloadPrivacyDataExport,
   fetchMySupportInquiries,
+  fetchKakaoLinkStatus,
+  previewAccountWithdrawal,
   removePrivacyPhotoLocationMetadata,
+  requestProfileEmailVerification,
   revokePrivacyPublicDownloadLinks,
   revokePrivacyTravelPublicMediaShares,
+  startAccountWithdrawal,
+  startKakaoAccountLink,
   verifyProfilePrivacyAccess,
   verifyProfileSecondaryPin,
 } from '../lib/api'
@@ -26,6 +32,7 @@ const props = defineProps({
     default: false,
   },
 })
+const emit = defineEmits(['withdrawal-requested'])
 
 const PAGE_SIZE = 5
 const attachmentInput = ref(null)
@@ -87,6 +94,135 @@ const privacy = reactive({
   exporting: false,
 })
 
+const kakaoLink = reactive({ loading: true, configured: false, linked: false, gateVisible: false, busy: false, secondaryPin: '', error: '' })
+const emailVerification = reactive({ gateVisible: false, email: props.currentUser.email || '', secondaryPin: '', busy: false, error: '' })
+const withdrawal = reactive({
+  visible: false, secondaryPin: '', busy: false, error: '', preview: null,
+})
+const kakaoLinkMessages = Object.freeze({
+  connected: '카카오 계정이 연결되었습니다. 기존 아이디·비밀번호 로그인도 그대로 사용할 수 있습니다.',
+  cancelled: '카카오 계정 연결이 취소되었습니다.',
+  conflict: '카카오 계정을 연결하지 못했습니다. 이미 다른 계정에 연결되어 있거나 인증된 이메일이 없는지 확인해 주세요.',
+  'invalid-state': '카카오 연결 요청이 만료되었거나 로그인·보안 정보가 변경되었습니다. 다시 시도해 주세요.',
+  failed: '카카오 계정 연결을 완료하지 못했습니다. 다시 시도해 주세요.',
+  unavailable: '카카오 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+})
+
+onMounted(async () => {
+  const query = window.location.hash.split('?')[1] || ''
+  const result = new URLSearchParams(query).get('kakao-link')
+  if (result && Object.hasOwn(kakaoLinkMessages, result)) {
+    if (result === 'connected') state.successMessage = kakaoLinkMessages[result]
+    else state.errorMessage = kakaoLinkMessages[result]
+    window.history.replaceState(window.history.state, '', '#profile')
+  }
+  try {
+    const status = await fetchKakaoLinkStatus()
+    kakaoLink.configured = Boolean(status?.configured)
+    kakaoLink.linked = Boolean(status?.linked)
+  } catch {
+    kakaoLink.error = '카카오 연결 상태를 확인하지 못했습니다.'
+  } finally {
+    kakaoLink.loading = false
+  }
+})
+
+function closeKakaoLinkGate() {
+  if (kakaoLink.busy) return
+  kakaoLink.gateVisible = false
+  kakaoLink.secondaryPin = ''
+  kakaoLink.error = ''
+}
+
+async function handleKakaoLink() {
+  if (kakaoLink.busy) return
+  if (!/^\d{8}$/.test(kakaoLink.secondaryPin)) {
+    kakaoLink.error = '2차 비밀번호 숫자 8자리를 입력해 주세요.'
+    return
+  }
+  kakaoLink.busy = true
+  kakaoLink.error = ''
+  try {
+    await startKakaoAccountLink(kakaoLink.secondaryPin)
+    kakaoLink.secondaryPin = ''
+    window.location.assign('/api/auth/oauth/kakao/link/authorize')
+  } catch (error) {
+    kakaoLink.error = error.message
+    kakaoLink.busy = false
+    kakaoLink.secondaryPin = ''
+  }
+}
+
+function closeEmailVerificationGate() {
+  if (emailVerification.busy) return
+  emailVerification.gateVisible = false
+  emailVerification.secondaryPin = ''
+  emailVerification.error = ''
+}
+
+async function handleEmailVerification() {
+  if (emailVerification.busy) return
+  if (!/^\d{8}$/.test(emailVerification.secondaryPin)) {
+    emailVerification.error = '2차 비밀번호 숫자 8자리를 입력해 주세요.'
+    return
+  }
+  emailVerification.busy = true
+  emailVerification.error = ''
+  try {
+    const result = await requestProfileEmailVerification(emailVerification.email.trim(), emailVerification.secondaryPin)
+    state.successMessage = result?.message || '인증 메일을 보냈습니다. 이메일의 링크를 확인해 주세요.'
+    emailVerification.gateVisible = false
+    emailVerification.secondaryPin = ''
+  } catch (error) {
+    emailVerification.error = error.message
+    emailVerification.secondaryPin = ''
+  } finally {
+    emailVerification.busy = false
+  }
+}
+
+function closeWithdrawalPreview() {
+  if (withdrawal.busy) return
+  withdrawal.visible = false
+  withdrawal.secondaryPin = ''
+  withdrawal.error = ''
+  withdrawal.preview = null
+}
+
+async function handleWithdrawalPreview() {
+  if (withdrawal.busy) return
+  if (!/^\d{8}$/.test(withdrawal.secondaryPin)) {
+    withdrawal.error = '2차 비밀번호 숫자 8자리를 입력해 주세요.'
+    return
+  }
+  withdrawal.busy = true
+  withdrawal.error = ''
+  withdrawal.preview = null
+  try {
+    withdrawal.preview = await previewAccountWithdrawal(withdrawal.secondaryPin)
+  } catch (error) {
+    withdrawal.error = error.message
+  } finally {
+    withdrawal.secondaryPin = ''
+    withdrawal.busy = false
+  }
+}
+
+async function handleWithdrawalSubmit(payload) {
+  if (withdrawal.busy || withdrawal.preview?.withdrawalAvailable !== true) return
+  withdrawal.busy = true
+  withdrawal.error = ''
+  try {
+    const result = await startAccountWithdrawal(payload)
+    if (result?.accepted !== true) throw new Error('요청 결과를 확인할 수 없습니다. 다시 로그인 여부를 확인해 주세요.')
+    emit('withdrawal-requested')
+  } catch (error) {
+    withdrawal.error = error?.message || '탈퇴 요청을 확인할 수 없습니다. 다시 로그인 여부를 확인해 주세요.'
+  } finally {
+    withdrawal.busy = false
+  }
+}
+
 const statusLabel = {
   PENDING: '답변 대기',
   ANSWERED: '답변 완료',
@@ -131,6 +267,7 @@ const privacyActions = [
 ]
 
 const pageCount = computed(() => Math.max(state.pageInfo.totalPages || 0, 1))
+const localLoginEnabled = computed(() => props.currentUser.localLoginEnabled !== false)
 const securityModeLabel = computed(() => (security.mode === 'password' ? '비밀번호' : '2차 PIN'))
 const securitySaveLabel = computed(() => (security.mode === 'password' ? '비밀번호 변경' : '2차 PIN 변경'))
 const isPrivacyBusy = computed(() => Boolean(privacy.busyAction || privacy.exporting || privacy.verifying))
@@ -405,7 +542,7 @@ async function handlePrivacyAccessVerify() {
   resetPrivacyMessages()
 
   try {
-    if (!privacy.accessPassword.trim()) {
+    if (localLoginEnabled.value && !privacy.accessPassword.trim()) {
       throw new Error('현재 로그인 비밀번호를 입력해 주세요.')
     }
     if (!/^\d{8}$/.test(privacy.accessSecondaryPin.trim())) {
@@ -434,7 +571,9 @@ async function runPrivacyAction(action) {
   }
   if (!privacy.verified) {
     privacy.modalVisible = true
-    privacy.errorMessage = '개인정보 관리 작업을 실행하려면 현재 비밀번호와 2차 PIN 검증이 필요합니다.'
+    privacy.errorMessage = localLoginEnabled.value
+      ? '개인정보 관리 작업을 실행하려면 현재 비밀번호와 2차 PIN 검증이 필요합니다.'
+      : '개인정보 관리 작업을 실행하려면 2차 PIN 검증이 필요합니다.'
     return
   }
 
@@ -540,7 +679,7 @@ async function handlePrivacyExport() {
       </div>
       <div class="summary-grid profile-summary-grid">
         <article class="summary-card">
-          <span>로그인 ID</span>
+          <span>{{ localLoginEnabled ? '로그인 ID' : '공유용 ID' }}</span>
           <strong>{{ currentUser.loginId }}</strong>
         </article>
         <article class="summary-card">
@@ -548,13 +687,26 @@ async function handlePrivacyExport() {
           <strong>{{ currentUser.displayName }}</strong>
         </article>
         <article class="summary-card">
+          <span>이메일</span>
+          <strong>{{ currentUser.email || '등록되지 않음' }}</strong>
+          <small v-if="currentUser.email">{{ currentUser.emailVerified ? '인증 완료' : '인증 필요' }}</small>
+        </article>
+        <article class="summary-card">
           <span>권한</span>
           <strong>{{ currentUser.admin ? '관리자' : '사용자' }}</strong>
         </article>
       </div>
       <div class="profile-security-actions">
-        <button class="button button--ghost" type="button" @click="openSecurityGate('password')">비밀번호 변경</button>
+        <button v-if="localLoginEnabled" class="button button--ghost" type="button" @click="openSecurityGate('password')">비밀번호 변경</button>
         <button class="button button--ghost" type="button" @click="openSecurityGate('secondary-pin')">2차 PIN 변경</button>
+        <button class="button button--ghost" type="button" @click="emailVerification.gateVisible = true">이메일 등록·변경</button>
+      </div>
+      <div class="profile-security-actions" aria-live="polite">
+        <span v-if="kakaoLink.loading">카카오 연결 상태 확인 중...</span>
+        <span v-else-if="kakaoLink.linked">카카오 계정 연결됨</span>
+        <span v-else-if="!kakaoLink.configured">카카오 연결을 사용할 수 없습니다.</span>
+        <button v-else class="button button--ghost" type="button" @click="kakaoLink.gateVisible = true">카카오 계정 연결</button>
+        <span v-if="kakaoLink.error && !kakaoLink.gateVisible" class="feedback feedback--error">{{ kakaoLink.error }}</span>
       </div>
     </section>
 
@@ -594,6 +746,10 @@ async function handlePrivacyExport() {
       <div class="privacy-management-card" data-testid="privacy-management-card">
         <strong>민감 데이터 정리 및 접근 제어</strong>
         <button class="button button--ghost" type="button" :disabled="isPrivacyBusy" @click="openPrivacyManagementModal">관리 열기</button>
+      </div>
+      <div class="privacy-management-card">
+        <div><strong>회원 탈퇴 안내</strong><p>자료 처리 방침과 공유 항목의 이전 대상을 확인합니다.</p></div>
+        <button class="button button--ghost" type="button" @click="withdrawal.visible = true">탈퇴 내용 확인</button>
       </div>
     </section>
 
@@ -699,6 +855,107 @@ async function handlePrivacyExport() {
         </div>
       </section>
     </section>
+    <div v-if="withdrawal.visible" class="travel-modal" @keydown.esc="closeWithdrawalPreview">
+      <div class="travel-modal__dialog profile-security-modal" role="dialog" aria-modal="true" aria-labelledby="withdrawal-preview-title">
+        <div class="travel-modal__header"><h2 id="withdrawal-preview-title">회원 탈퇴 사전 확인</h2>
+          <button class="button button--ghost" type="button" :disabled="withdrawal.busy" @click="closeWithdrawalPreview">닫기</button>
+        </div>
+        <div class="travel-modal__body stack-form">
+          <p v-if="withdrawal.preview?.withdrawalAvailable" role="status">격리 테스트 환경입니다. 탈퇴 요청 접수는 전체 자료 삭제 완료를 뜻하지 않습니다.</p>
+          <p v-else role="status">회원 탈퇴 기능을 준비하고 있습니다. 현재는 탈퇴를 신청하거나 데이터를 삭제할 수 없습니다.</p>
+          <ul>
+            <li>기능이 준비되면 탈퇴 승인 직후 운영 서비스의 개인 데이터 삭제 절차를 시작할 예정입니다.</li>
+            <li>공유 가족 앨범과 그곳에 내가 올린 공유 사진은 활성 소유자에게 이전해 보존하도록 준비합니다. 다른 멤버가 올린 사진도 보존합니다.</li>
+            <li>다른 멤버가 있는 가계부·여행 공유 그룹도 활성 멤버에게 이전하도록 준비합니다. 상대방이 이미 가져간 거래는 상대방의 독립 기록으로 남습니다.</li>
+            <li>공유 중인 여행 계획과 사진은 선택한 공유 멤버에게 이전하도록 준비합니다. 이전 기능이 완성되기 전에는 해당 계획이 있는 계정의 탈퇴를 진행하지 않습니다.</li>
+            <li>다른 사람의 여행에 올린 사진·영수증은 그 여행에 보존하고, 업로더 표시는 현재 여행 소유자로 변경할 예정입니다.</li>
+            <li>공유 사진을 보존하면 파일의 기존 저장 경로에 탈퇴 전 내부 숫자 식별자가 남을 수 있습니다.</li>
+            <li>공개만 된 여행은 먼저 이전받을 회원에게 공유해야 합니다. 기존 공개 전시·커뮤니티 공개와 공개 지도 링크는 탈퇴 시 해제하며, 이전받은 회원이 공개 여부를 다시 정할 수 있습니다.</li>
+            <li v-if="currentUser.admin">관리자가 탈퇴하려면 다른 활성 관리자가 있어야 합니다. 마지막 관리자라면 관리자 화면의 접근 및 사용자 관리에서 먼저 다른 사용자를 관리자로 지정해 주세요.</li>
+            <li>로그인과 관리자 감사 기록에서 탈퇴자의 아이디·IP·접속 정보는 익명화하고, 행위 유형과 시각만 남기는 방향으로 준비합니다.</li>
+            <li>전체 백업은 최대 30일 이내 폐기를 목표로 하며, 자동 폐기와 복원 시 탈퇴 반영은 아직 적용되지 않았습니다.</li>
+            <li>개인정보가 불필요해지면 파기하고, 다른 법령에 따라 보존이 필요한 경우 별도로 관리해야 합니다. 적용 대상과 기간은 검토 중입니다. <a href="https://www.law.go.kr/lsLinkProc.do?joNo=002100&amp;lsClsCd=L&amp;lsNm=%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4+%EB%B3%B4%ED%98%B8%EB%B2%95&amp;mode=11" target="_blank" rel="noopener noreferrer">개인정보 보호법 제21조</a></li>
+          </ul>
+          <form class="stack-form" @submit.prevent="handleWithdrawalPreview">
+            <label class="field"><span class="field__label">2차 비밀번호</span>
+              <input v-model.trim="withdrawal.secondaryPin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="8" :disabled="withdrawal.busy" />
+            </label>
+            <p v-if="withdrawal.error && !withdrawal.preview" class="feedback feedback--error" role="alert">{{ withdrawal.error }}</p>
+            <button class="button button--primary" type="submit" :disabled="withdrawal.busy">{{ withdrawal.busy ? '확인 중...' : '공유 항목 확인' }}</button>
+          </form>
+          <div v-if="withdrawal.preview" aria-live="polite">
+            <strong>소유권 이전이 필요한 가족 앨범</strong>
+            <p v-if="!Array.isArray(withdrawal.preview.requiredFamilyTransfers)">가족 앨범 정보를 확인할 수 없습니다. 잠시 후 다시 확인해 주세요.</p>
+            <p v-else-if="!withdrawal.preview.requiredFamilyTransfers.length">이전이 필요한 가족 앨범이 없습니다.</p>
+            <ul v-else>
+              <li v-for="category in withdrawal.preview.requiredFamilyTransfers" :key="category.categoryId">
+                {{ category.categoryName }} — {{ Array.isArray(category.eligibleMembers) && category.eligibleMembers.length ? category.eligibleMembers.map(member => member.displayName).join(', ') : '이전할 활성 멤버가 없습니다.' }}
+              </li>
+            </ul>
+            <strong>소유권 이전이 필요한 가계부·여행 공유 그룹</strong>
+            <p v-if="!Array.isArray(withdrawal.preview.requiredShareGroupTransfers)">공유 그룹 정보를 확인할 수 없습니다. 잠시 후 다시 확인해 주세요.</p>
+            <p v-else-if="!withdrawal.preview.requiredShareGroupTransfers.length">이전이 필요한 공유 그룹이 없습니다.</p>
+            <ul v-else>
+              <li v-for="group in withdrawal.preview.requiredShareGroupTransfers" :key="group.groupId">
+                {{ group.groupName }} — {{ Array.isArray(group.members) && group.members.length ? group.members.map(member => member.eligible ? member.displayName : `${member.displayName} (${member.unavailableReason})`).join(', ') : '이전할 멤버가 없어 별도 확인이 필요합니다.' }}
+              </li>
+            </ul>
+            <strong>소유권 이전이 필요한 여행 계획과 사진</strong>
+            <p v-if="!Array.isArray(withdrawal.preview.requiredTravelPlanTransfers)">공유 여행 정보를 확인할 수 없습니다. 잠시 후 다시 확인해 주세요.</p>
+            <p v-else-if="!withdrawal.preview.requiredTravelPlanTransfers.length">이전이 필요한 공유 여행 계획이 없습니다.</p>
+            <ul v-else>
+              <li v-for="plan in withdrawal.preview.requiredTravelPlanTransfers" :key="plan.planId">
+                {{ plan.planName }}{{ plan.publiclyShared ? ' (공개 중)' : '' }} — {{ Array.isArray(plan.members) && plan.members.length ? plan.members.map(member => member.eligible ? member.displayName : `${member.displayName} (${member.unavailableReason})`).join(', ') : plan.publiclyShared ? '먼저 이전받을 회원에게 이 여행을 공유해 주세요.' : '이전할 멤버가 없어 별도 확인이 필요합니다.' }}
+              </li>
+            </ul>
+            <p v-if="!Number.isInteger(withdrawal.preview.foreignTravelMedia?.planCount) || !Number.isInteger(withdrawal.preview.foreignTravelMedia?.mediaCount) || withdrawal.preview.foreignTravelMedia.planCount < 0 || withdrawal.preview.foreignTravelMedia.mediaCount < 0">
+              다른 회원의 여행에 남을 자료 수를 확인할 수 없습니다. 잠시 후 다시 확인해 주세요.
+            </p>
+            <p v-else-if="withdrawal.preview.foreignTravelMedia.mediaCount">
+              다른 회원의 여행 {{ withdrawal.preview.foreignTravelMedia.planCount }}개에 내가 올린 사진·영수증
+              {{ withdrawal.preview.foreignTravelMedia.mediaCount }}개가 있습니다. 해당 자료는 현재 여행에 보존할 예정입니다.
+            </p>
+            <p v-else>다른 회원의 여행에 보존할 내 사진·영수증이 없습니다.</p>
+            <p>사전 확인과 대상 선택만으로는 소유권이 변경되거나 계정이 탈퇴되지 않습니다.</p>
+            <WithdrawalSelectionForm :preview="withdrawal.preview" :busy="withdrawal.busy" :error="withdrawal.error" @submit="handleWithdrawalSubmit" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-if="emailVerification.gateVisible" class="travel-modal" @keydown.esc="closeEmailVerificationGate">
+      <div class="travel-modal__dialog profile-security-modal" role="dialog" aria-modal="true" aria-labelledby="profile-email-title">
+        <div class="travel-modal__header"><h2 id="profile-email-title">이메일 등록·변경</h2>
+          <button class="button button--ghost" type="button" :disabled="emailVerification.busy" @click="closeEmailVerificationGate">닫기</button>
+        </div>
+        <form class="travel-modal__body stack-form" @submit.prevent="handleEmailVerification">
+          <p>새 주소의 인증 링크를 열기 전까지 기존 이메일은 변경되지 않습니다.</p>
+          <label class="field"><span class="field__label">이메일 주소</span>
+            <input v-model.trim="emailVerification.email" type="email" autocomplete="email" required :disabled="emailVerification.busy" />
+          </label>
+          <label class="field"><span class="field__label">2차 비밀번호</span>
+            <input v-model.trim="emailVerification.secondaryPin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="8" :disabled="emailVerification.busy" />
+          </label>
+          <p v-if="emailVerification.error" class="feedback feedback--error" role="alert">{{ emailVerification.error }}</p>
+          <button class="button button--primary" type="submit" :disabled="emailVerification.busy">{{ emailVerification.busy ? '전송 중...' : '인증 메일 보내기' }}</button>
+        </form>
+      </div>
+    </div>
+    <div v-if="kakaoLink.gateVisible" class="travel-modal" @keydown.esc="closeKakaoLinkGate">
+      <div class="travel-modal__dialog profile-security-modal" role="dialog" aria-modal="true" aria-labelledby="kakao-link-title">
+        <div class="travel-modal__header">
+          <h2 id="kakao-link-title">카카오 계정 연결</h2>
+          <button class="button button--ghost" type="button" :disabled="kakaoLink.busy" @click="closeKakaoLinkGate">닫기</button>
+        </div>
+        <form class="travel-modal__body stack-form" @submit.prevent="handleKakaoLink">
+          <p>기존 계정과 데이터는 유지되며, 기존 아이디·비밀번호 로그인도 계속 사용할 수 있습니다.</p>
+          <label class="field"><span class="field__label">2차 비밀번호</span>
+            <input v-model.trim="kakaoLink.secondaryPin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="8" :disabled="kakaoLink.busy" />
+          </label>
+          <p v-if="kakaoLink.error" class="feedback feedback--error" role="alert">{{ kakaoLink.error }}</p>
+          <button class="button button--primary" type="submit" :disabled="kakaoLink.busy">{{ kakaoLink.busy ? '연결 준비 중...' : '카카오 인증 계속' }}</button>
+        </form>
+      </div>
+    </div>
     <div v-if="privacy.modalVisible" class="travel-modal" @keydown.esc="closePrivacyManagementModal">
       <div class="travel-modal__dialog profile-privacy-modal" data-testid="privacy-management-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-management-title">
         <div class="travel-modal__header">
@@ -717,7 +974,7 @@ async function handlePrivacyExport() {
               <strong>검증 필요</strong>
             </div>
             <div class="profile-privacy-verification__grid">
-              <label class="field">
+              <label v-if="localLoginEnabled" class="field">
                 <span class="field__label">현재 로그인 비밀번호</span>
                 <input v-model="privacy.accessPassword" type="password" autocomplete="current-password" :disabled="privacy.verifying" placeholder="현재 비밀번호" />
               </label>

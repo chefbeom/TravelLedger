@@ -133,8 +133,13 @@ class LedgerAiJobPersistenceTest {
         when(imageRemote.analyze(any(), anyString(), any())).thenReturn(
                 new LedgerImageData.ImageExtraction(true, null, "AUTO", "fixture receipt",
                         null, List.of(), Map.of()));
+        var imageWriterFactory = new ProxyFactory(new com.playdata.calen.ledger.ocr.LedgerImageAnalysisHistoryWriter(users, images));
+        imageWriterFactory.setProxyTargetClass(true);
+        imageWriterFactory.addAdvice(new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
+        var imageWriter = (com.playdata.calen.ledger.ocr.LedgerImageAnalysisHistoryWriter) imageWriterFactory.getProxy();
         imageService = new LedgerOcrService(userService, new LedgerOcrProperties(), properties, imageRemote,
-                images, groups, details, entries, mapper, finalizer, mock(StoreLedgerImageInputUseCase.class));
+                images, imageWriter, groups, details, new com.playdata.calen.ledger.ocr.LedgerOcrCategoryWriteFence(userService),
+                entries, mapper, finalizer, mock(StoreLedgerImageInputUseCase.class));
         imageExecutor = new CapturingImageExecutor();
         ReflectionTestUtils.setField(imageService, "ledgerOcrTaskExecutor", imageExecutor);
 
@@ -154,8 +159,12 @@ class LedgerAiJobPersistenceTest {
         var worker = new com.playdata.calen.ledger.adapter.in.ai.LedgerAnalysisJobExecution(datasets,
                 new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerAnalysisWorkStore(histories), formats,
                 analysisRemote, finalizer, new com.playdata.calen.ledger.adapter.out.observability.LedgerAnalysisWorkTelemetry(metrics));
+        var analysisWriterFactory = new ProxyFactory(new LedgerAiAnalysisHistoryWriter(users, histories));
+        analysisWriterFactory.setProxyTargetClass(true);
+        analysisWriterFactory.addAdvice(new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
+        var analysisWriter = (LedgerAiAnalysisHistoryWriter) analysisWriterFactory.getProxy();
         analysisService = new LedgerAiAnalysisService(userService,
-                datasets, histories,
+                datasets, histories, analysisWriter,
                 new com.playdata.calen.ledger.adapter.in.ai.LedgerAnalysisHistories(
                         new com.playdata.calen.ledger.adapter.out.persistence.LedgerAnalysisHistoryQueryAdapter(userService, histories),
                         new com.playdata.calen.ledger.adapter.out.serialization.LedgerAnalysisHistoryJsonAdapter(codec)), properties,
@@ -785,7 +794,11 @@ class LedgerAiJobPersistenceTest {
     private LedgerAiExcelJobService excelService(LedgerAiExcelImportService importer,List<Runnable> tasks) {
         var leases = mock(WorkLeaseService.class); var lease = mock(WorkLeaseService.Lease.class);
         when(leases.tryAcquire(anyString(),any())).thenReturn(lease); when(lease.isValid()).thenReturn(true);
-        return new LedgerAiExcelJobService(importer,excel,leases,new ObjectMapper(),tasks::add,finalizer);
+        var writerFactory = new ProxyFactory(new com.playdata.calen.ledger.service.LedgerAiExcelJobWriter(users, excel));
+        writerFactory.setProxyTargetClass(true);
+        writerFactory.addAdvice(new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
+        var writer = (com.playdata.calen.ledger.service.LedgerAiExcelJobWriter) writerFactory.getProxy();
+        return new LedgerAiExcelJobService(importer,excel,writer,leases,new ObjectMapper(),tasks::add,finalizer);
     }
 
     @Test void workbookUseCaseSuspendsAnOuterTransactionWithoutTheLegacyImporter() {
@@ -829,7 +842,7 @@ class LedgerAiJobPersistenceTest {
             return new LedgerImageStorageData.StoredImage("fixture/direct-input",storedAt);
         });
         var useCase=new com.playdata.calen.ledger.adapter.in.image.NonTransactionalLedgerImageInputStore(storage,
-                new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerImageInputReferenceAdapter(images));
+                imageInputReference());
         var factory=new ProxyFactory(useCase); factory.setProxyTargetClass(true);
         factory.addAdvice(new TransactionInterceptor(transactionManager,new AnnotationTransactionAttributeSource()));
         var proxy=(StoreLedgerImageInputUseCase)factory.getProxy();
@@ -853,7 +866,7 @@ class LedgerAiJobPersistenceTest {
             return new LedgerImageStorageData.StoredImage("fixture/cancelled-input",cancelledAt);
         });
         var useCase=new com.playdata.calen.ledger.application.service.StoreLedgerImageInputService(storage,
-                new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerImageInputReferenceAdapter(images));
+                imageInputReference());
         assertThat(useCase.store(owner.getId(),id,new com.playdata.calen.ledger.adapter.in.image.MultipartLedgerImageContent(image()))).isTrue();
         var result=images.findById(id).orElseThrow(); assertThat(result.getVersion()).isEqualTo(version+2);
         assertThat(result.getStatus().name()).isEqualTo("CANCELLED"); assertThat(result.getCancelledAt()).isEqualTo(cancelledAt);
@@ -867,7 +880,7 @@ class LedgerAiJobPersistenceTest {
         var storage=mock(LedgerImageStoragePort.class); when(storage.supportsStorage()).thenReturn(true);
         when(storage.store(any(),any(),any())).thenReturn(new LedgerImageStorageData.StoredImage("fixture/wrong-owner-input",LocalDateTime.now()));
         var useCase=new com.playdata.calen.ledger.application.service.StoreLedgerImageInputService(storage,
-                new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerImageInputReferenceAdapter(images));
+                imageInputReference());
         assertThatThrownBy(() -> useCase.store(owner.getId()+100000,id,new com.playdata.calen.ledger.adapter.in.image.MultipartLedgerImageContent(image())))
                 .isInstanceOf(NotFoundException.class);
         var result=images.findById(id).orElseThrow(); assertThat(result.getVersion()).isEqualTo(version);
@@ -968,7 +981,14 @@ class LedgerAiJobPersistenceTest {
         ReflectionTestUtils.setField(imageService,"imageStorageService",storage);
         ReflectionTestUtils.setField(imageService,"imageInputWriter",
                 new com.playdata.calen.ledger.application.service.StoreLedgerImageInputService(storage,
-                        new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerImageInputReferenceAdapter(images)));
+                        imageInputReference()));
+    }
+
+    private com.playdata.calen.ledger.application.port.out.LedgerImageInputReferencePort imageInputReference() {
+        var factory = new ProxyFactory(new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerImageInputReferenceAdapter(images, users));
+        factory.setProxyTargetClass(true);
+        factory.addAdvice(new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
+        return (com.playdata.calen.ledger.application.port.out.LedgerImageInputReferencePort) factory.getProxy();
     }
 
     private Result remoteAnalysis() {

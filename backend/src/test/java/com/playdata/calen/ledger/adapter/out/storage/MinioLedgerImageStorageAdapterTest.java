@@ -15,6 +15,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class MinioLedgerImageStorageAdapterTest {
     private final MinioClient client=mock(MinioClient.class);
@@ -47,8 +48,9 @@ class MinioLedgerImageStorageAdapterTest {
         });
         var result=adapter.store(7L,11L,new MultipartLedgerImageContent(file));
         assertThat(result.objectKey()).startsWith("ledger-image-analysis/7/11/").endsWith(".jpg").doesNotContain("private","receipt");
+        assertThat(result.bucket()).isEqualTo("cloud-bucket");
         assertThat(result.storedAt()).isBetween(before,LocalDateTime.now()); assertThat(stream.closes).isEqualTo(1);
-        verify(file,never()).getBytes(); verify(file).getInputStream();
+        verify(file,never()).getBytes(); verify(file).getInputStream(); verify(client,never()).getObject(any());
     }
     @ParameterizedTest @CsvSource(value={"photo.JPEG,.jpeg","no-extension,.bin","file.,.bin","NULL,.bin","picture.abc_def,.abcdef","file.abcdefghijklm,.bin","archive.tar.gz,.gz"},nullValues="NULL")
     void extensionsKeepExistingNormalizationAndOwnerJobNamespacing(String name,String extension) throws Exception {
@@ -61,6 +63,71 @@ class MinioLedgerImageStorageAdapterTest {
         properties.setBucket_cloud("  "); var stream=new TrackedStream();
         adapter.store(7L,11L,new MultipartLedgerImageContent(file("receipt.png",null,stream)));
         verify(client).putObject(argThat(args -> args.bucket().equals("work-bucket"))); assertThat(adapter.resolveBucket()).isEqualTo("work-bucket");
+    }
+    @Test void optionalVerifiedMarkerAndImmutableVersionAreCapturedWithTheStoredImage() throws Exception {
+        String storageId = "fixture_storage_id_1234";
+        ReflectionTestUtils.setField(adapter, "imageStorageId", storageId);
+        var marker = new ByteArrayInputStream((storageId + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        when(client.getObject(any())).thenReturn(new GetObjectResponse(new okhttp3.Headers.Builder().build(),
+                "cloud-bucket", "fixture", ".calen-ledger-storage-id", marker));
+        ObjectWriteResponse response=mock(ObjectWriteResponse.class); when(response.versionId()).thenReturn("immutable-version");
+        when(response.etag()).thenReturn("opaque-etag-2");
+        when(client.putObject(any())).thenReturn(response);
+        var stored=adapter.store(7L,11L,new MultipartLedgerImageContent(file("receipt.jpg",null,new TrackedStream())));
+        assertThat(stored.bucket()).isEqualTo("cloud-bucket");
+        assertThat(stored.storageId()).isEqualTo(storageId);
+        assertThat(stored.versionId()).isEqualTo("immutable-version");
+        assertThat(stored.etag()).isEqualTo("opaque-etag-2");
+        assertThat(stored.toString()).doesNotContain(storageId, "immutable-version", "opaque-etag-2", stored.objectKey());
+        verify(client).getObject(argThat(args -> args.bucket().equals("cloud-bucket") && args.object().equals(".calen-ledger-storage-id")));
+    }
+    @Test void missingOrMismatchedOptionalMarkerDoesNotBreakTheImageUploadOrAssertAnIdentity() throws Exception {
+        ReflectionTestUtils.setField(adapter, "imageStorageId", "fixture_storage_id_1234");
+        when(client.getObject(any())).thenThrow(new IOException("private storage detail"));
+        ObjectWriteResponse response=mock(ObjectWriteResponse.class); when(response.versionId()).thenReturn("immutable-version");
+        when(client.putObject(any())).thenReturn(response);
+        var stored=adapter.store(7L,11L,new MultipartLedgerImageContent(file("receipt.jpg",null,new TrackedStream())));
+        assertThat(stored.storageId()).isNull();
+        assertThat(stored.versionId()).isEqualTo("immutable-version");
+        assertThat(stored.etag()).isNull();
+        verify(response, never()).etag();
+        verify(client).putObject(any());
+    }
+    @ParameterizedTest @ValueSource(strings={"", " ", "\"quoted\"", "line\nbreak", "가", "unsafe/value"})
+    void unsafeOrUnsupportedProviderEtagsAreNotStored(String etag) throws Exception {
+        ReflectionTestUtils.setField(adapter, "imageStorageId", "fixture_storage_id_1234");
+        var marker = new ByteArrayInputStream("fixture_storage_id_1234\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        when(client.getObject(any())).thenReturn(new GetObjectResponse(new okhttp3.Headers.Builder().build(),
+                "cloud-bucket", "fixture", ".calen-ledger-storage-id", marker));
+        var response=mock(ObjectWriteResponse.class); when(response.etag()).thenReturn(etag);
+        when(client.putObject(any())).thenReturn(response);
+        assertThat(adapter.store(7L,11L,new MultipartLedgerImageContent(file("receipt.jpg",null,new TrackedStream()))).etag()).isNull();
+        verify(client).putObject(any());
+    }
+    @Test void oversizedEtagDoesNotBreakImageUpload() throws Exception {
+        ReflectionTestUtils.setField(adapter, "imageStorageId", "fixture_storage_id_1234");
+        var marker = new ByteArrayInputStream("fixture_storage_id_1234\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        when(client.getObject(any())).thenReturn(new GetObjectResponse(new okhttp3.Headers.Builder().build(),
+                "cloud-bucket", "fixture", ".calen-ledger-storage-id", marker));
+        var response=mock(ObjectWriteResponse.class); when(response.etag()).thenReturn("a".repeat(129));
+        when(client.putObject(any())).thenReturn(response);
+        assertThat(adapter.store(7L,11L,new MultipartLedgerImageContent(file("receipt.jpg",null,new TrackedStream()))).etag()).isNull();
+    }
+    @Test void maximumLengthSupportedEtagIsPreservedExactly() throws Exception {
+        ReflectionTestUtils.setField(adapter, "imageStorageId", "fixture_storage_id_1234");
+        var marker = new ByteArrayInputStream("fixture_storage_id_1234\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        when(client.getObject(any())).thenReturn(new GetObjectResponse(new okhttp3.Headers.Builder().build(),
+                "cloud-bucket", "fixture", ".calen-ledger-storage-id", marker));
+        var response=mock(ObjectWriteResponse.class); when(response.etag()).thenReturn("a".repeat(128));
+        when(client.putObject(any())).thenReturn(response);
+        assertThat(adapter.store(7L,11L,new MultipartLedgerImageContent(file("receipt.jpg",null,new TrackedStream()))).etag()).isEqualTo("a".repeat(128));
+    }
+    @Test void oversizedProviderVersionIsNotRecordedAsDeletionProvenance() throws Exception {
+        ObjectWriteResponse response=mock(ObjectWriteResponse.class); when(response.versionId()).thenReturn("x".repeat(513));
+        when(client.putObject(any())).thenReturn(response);
+        var stored=adapter.store(7L,11L,new MultipartLedgerImageContent(file("receipt.jpg",null,new TrackedStream())));
+        assertThat(stored.versionId()).isNull();
+        verify(client).putObject(any());
     }
     @Test void missingConfigurationFailsBeforeInputValidationAndDoesNotContactMinio() {
         properties.setEndpoint(null); assertThat(adapter.supportsStorage()).isFalse();
@@ -119,6 +186,15 @@ class MinioLedgerImageStorageAdapterTest {
         when(client.getObject(any())).thenReturn(new GetObjectResponse(new okhttp3.Headers.Builder().build(),"cloud-bucket","fixture","stored-key",new TrackedStream()));
         var result=adapter.load("stored-key",null,null);
         assertThat(result.fileName()).isEqualTo("ocr-image"); assertThat(result.contentType()).isEqualTo("application/octet-stream");
+    }
+    @Test void compensationDeletesFromTheOriginalBucketEvenAfterDefaultChanges() throws Exception {
+        properties.setBucket_cloud("new-bucket");
+        adapter.deleteFromBucket("old-bucket", "stored-key");
+        verify(client).removeObject(argThat(args -> args.bucket().equals("old-bucket") && args.object().equals("stored-key")));
+    }
+    @Test void explicitBucketCompensationNeverFallsBackToTheDefaultWhenMissing() {
+        assertThatThrownBy(() -> adapter.deleteFromBucket(" ", "stored-key")).isInstanceOf(BadRequestException.class);
+        verifyNoInteractions(client);
     }
     @Test void downloadReadFailureStillClosesTheResponseAndHidesTheRawCause() throws Exception {
         var closed=new java.util.concurrent.atomic.AtomicBoolean();

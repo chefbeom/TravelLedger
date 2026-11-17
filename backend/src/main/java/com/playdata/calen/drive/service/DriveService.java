@@ -67,6 +67,7 @@ public class DriveService {
     private final DriveStorageService driveStorageService;
     private final TravelMediaStorageService travelMediaStorageService;
     private final ImageThumbnailService imageThumbnailService;
+    private final DriveUploadGrantRegistry uploadGrants;
 
     public DriveService(
             DriveItemRepository driveItemRepository,
@@ -76,7 +77,8 @@ public class DriveService {
             AppUserRepository appUserRepository,
             DriveStorageService driveStorageService,
             TravelMediaStorageService travelMediaStorageService,
-            ImageThumbnailService imageThumbnailService
+            ImageThumbnailService imageThumbnailService,
+            DriveUploadGrantRegistry uploadGrants
     ) {
         this.driveItemRepository = driveItemRepository;
         this.driveItemVersionRepository = driveItemVersionRepository;
@@ -86,16 +88,39 @@ public class DriveService {
         this.driveStorageService = driveStorageService;
         this.travelMediaStorageService = travelMediaStorageService;
         this.imageThumbnailService = imageThumbnailService;
+        this.uploadGrants = uploadGrants;
+    }
+
+    @Transactional
+    public List<DriveDtos.UploadChunkResponse> initializeUpload(Long userId, List<DriveDtos.UploadInitRequest> requests) {
+        getOwnerForWrite(userId);
+        var responses = driveStorageService.initUpload(userId, requests);
+        uploadGrants.recordIssued(userId, driveStorageService.resolveBucket(), responses);
+        return responses;
     }
 
     @Transactional
     public DriveDtos.UploadCompleteResponse completeUpload(Long userId, DriveDtos.UploadCompleteRequest request) {
-        AppUser owner = getOwner(userId);
+        AppUser owner = getOwnerForWrite(userId);
         ensureUploadObjectKeyOwnedBy(owner.getId(), request);
         DriveDtos.UploadCompleteResponse completed = driveStorageService.completeUpload(request);
         return driveItemRepository.findByOwner_IdAndStoragePath(owner.getId(), completed.finalObjectKey())
                 .map(this::toCompleteResponse)
                 .orElseGet(() -> saveUploadedItem(owner, request, completed));
+    }
+
+    @Transactional
+    public DriveDtos.ActionResponse abortUpload(Long userId, DriveDtos.UploadAbortRequest request) {
+        getOwnerForWrite(userId);
+        List<String> targets = DriveStorageService.abortTargets(request);
+        // All keys are checked before any deletion. A completed file or version may
+        // also be shared, so an upload cancellation must not remove it.
+        driveStorageService.ensureObjectKeysOwnedBy(userId, targets);
+        if (!targets.isEmpty() && (driveItemRepository.existsByStoragePathIn(targets)
+                || driveItemVersionRepository.existsByStoragePathIn(targets))) {
+            throw new BadRequestException("이미 등록된 파일은 업로드 취소로 삭제할 수 없습니다.");
+        }
+        return driveStorageService.abortUpload(userId, request);
     }
 
     private void ensureUploadObjectKeyOwnedBy(Long ownerId, DriveDtos.UploadCompleteRequest request) {
@@ -261,7 +286,7 @@ public class DriveService {
 
     @Transactional
     public DriveDtos.FileItemResponse createFolder(Long userId, DriveDtos.FolderRequest request) {
-        AppUser owner = getOwner(userId);
+        AppUser owner = getOwnerForWrite(userId);
         if (request == null || !StringUtils.hasText(request.folderName())) {
             throw new BadRequestException("폴더 이름을 입력해 주세요.");
         }
@@ -282,6 +307,7 @@ public class DriveService {
 
     @Transactional
     public DriveDtos.ActionResponse moveToTrash(Long userId, Long fileId) {
+        getOwnerForWrite(userId);
         DriveItem item = getOwnedItem(userId, fileId);
         ensureUnlockedTree(item);
         markRecursivelyTrashed(item);
@@ -290,12 +316,14 @@ public class DriveService {
 
     @Transactional
     public DriveDtos.ActionResponse restoreFromTrash(Long userId, Long fileId) {
+        getOwnerForWrite(userId);
         restoreRecursively(getOwnedItem(userId, fileId));
         return DriveDtos.ActionResponse.builder().action("restore").affectedCount(1).build();
     }
 
     @Transactional
     public DriveDtos.ActionResponse deletePermanently(Long userId, Long fileId) {
+        getOwnerForWrite(userId);
         DriveItem item = getOwnedItem(userId, fileId);
         ensureUnlockedTree(item);
         List<DriveItem> descendants = collectDescendants(item);
@@ -308,7 +336,7 @@ public class DriveService {
 
     @Transactional
     public DriveDtos.ActionResponse clearTrash(Long userId) {
-        List<DriveItem> trashItems = driveItemRepository.findAllByOwner_IdAndTrashedTrueOrderByDeletedAtDesc(getOwner(userId).getId());
+        List<DriveItem> trashItems = driveItemRepository.findAllByOwner_IdAndTrashedTrueOrderByDeletedAtDesc(getOwnerForWrite(userId).getId());
         List<DriveItem> targets = new ArrayList<>();
         for (DriveItem item : trashItems) {
             ensureUnlockedTree(item);
@@ -325,6 +353,7 @@ public class DriveService {
 
     @Transactional
     public DriveDtos.ActionResponse moveToFolder(Long userId, Long fileId, Long targetParentId) {
+        getOwnerForWrite(userId);
         DriveItem item = getOwnedItem(userId, fileId);
         ensureUnlockedTree(item);
         DriveItem targetParent = resolveParentFolder(userId, targetParentId);
@@ -336,6 +365,7 @@ public class DriveService {
 
     @Transactional
     public DriveDtos.FileItemResponse renameItem(Long userId, Long fileId, String nextName) {
+        getOwnerForWrite(userId);
         DriveItem item = getOwnedItem(userId, fileId);
         ensureUnlocked(item);
         if (!StringUtils.hasText(nextName)) {
@@ -347,6 +377,7 @@ public class DriveService {
 
     @Transactional
     public DriveDtos.FileItemResponse setItemLocked(Long userId, Long fileId, boolean locked) {
+        getOwnerForWrite(userId);
         DriveItem item = getOwnedItem(userId, fileId);
         if (item.isTrashed()) {
             throw new BadRequestException("Items in trash cannot be locked or unlocked.");
@@ -386,6 +417,7 @@ public class DriveService {
 
     @Transactional
     public DriveFilePayload downloadFile(Long userId, Long fileId) {
+        getOwnerForWrite(userId);
         DriveItem item = getOwnedFile(userId, fileId);
         item.setLastAccessedAt(LocalDateTime.now());
         return createFilePayload(item);
@@ -404,7 +436,7 @@ public class DriveService {
             throw new BadRequestException("Select at least one drive item to download.");
         }
 
-        AppUser owner = getOwner(userId);
+        AppUser owner = getOwnerForWrite(userId);
         List<DriveItem> roots = fileIds.stream()
                 .filter(Objects::nonNull)
                 .distinct()
@@ -444,6 +476,7 @@ public class DriveService {
 
     @Transactional
     public String getDownloadUrl(Long userId, Long fileId) {
+        getOwnerForWrite(userId);
         DriveItem item = getOwnedFile(userId, fileId);
         item.setLastAccessedAt(LocalDateTime.now());
         if (isTravelLinkedFile(item)) {
@@ -469,6 +502,7 @@ public class DriveService {
 
     @Transactional
     public DriveDtos.FileItemResponse restoreFileVersion(Long userId, Long fileId, Long versionId) {
+        getOwnerForWrite(userId);
         DriveItem item = getOwnedFile(userId, fileId);
         ensureUnlocked(item);
         DriveItemVersion version = driveItemVersionRepository.findByIdAndItem_IdAndOwner_Id(
@@ -482,6 +516,7 @@ public class DriveService {
         item.setExtension(version.getExtension());
         item.setStoredName(version.getStoredName());
         item.setStoragePath(version.getStoragePath());
+        item.setStorageBucket(version.getStorageBucket());
         item.setFileSize(version.getFileSize());
         recordFileVersion(item, "RESTORE");
         return toItemResponse(item);
@@ -508,6 +543,11 @@ public class DriveService {
     public AppUser getOwner(Long userId) {
         return appUserRepository.findById(userId)
                 .filter(AppUser::isActive)
+                .orElseThrow(() -> new NotFoundException("사용자 정보를 찾지 못했습니다."));
+    }
+
+    private AppUser getOwnerForWrite(Long userId) {
+        return appUserRepository.findActiveForPreferenceUpdate(userId)
                 .orElseThrow(() -> new NotFoundException("사용자 정보를 찾지 못했습니다."));
     }
 
@@ -585,6 +625,7 @@ public class DriveService {
         item.setExtension(completed.fileFormat());
         item.setStoredName(completed.fileSaveName());
         item.setStoragePath(completed.finalObjectKey());
+        item.setStorageBucket(driveStorageService.resolveBucket());
         item.setFileSize(driveStorageService.resolveObjectSize(completed.finalObjectKey()));
         DriveItem savedItem = driveItemRepository.save(item);
         recordFileVersion(savedItem, "UPLOAD");
@@ -604,6 +645,7 @@ public class DriveService {
         version.setExtension(item.getExtension());
         version.setStoredName(item.getStoredName());
         version.setStoragePath(item.getStoragePath());
+        version.setStorageBucket(item.getStorageBucket());
         version.setContentType(resolveContentType(item.getExtension()));
         version.setFileSize(item.getFileSize());
         version.setSource(source);

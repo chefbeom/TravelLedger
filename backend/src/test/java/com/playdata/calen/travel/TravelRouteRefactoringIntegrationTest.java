@@ -57,6 +57,7 @@ class TravelRouteRefactoringIntegrationTest {
     @Autowired MockMvc mvc;
     @MockitoBean RedisCacheService redis;
     @MockitoBean TravelMediaStorageService storage;
+    @MockitoBean TravelUploadGrantRegistry grants;
     @MockitoBean TravelDriveLinkService drive;
     @MockitoBean TravelClusterRefreshCoordinator coordinator;
     record Fixture(long owner,long plan) {}
@@ -162,11 +163,24 @@ class TravelRouteRefactoringIntegrationTest {
         assertThatThrownBy(()->store.ownedPlan(7L,10L)).isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(()->store.delete(20L)).isInstanceOf(IllegalTransactionStateException.class);
     }
-    @Test void gpxHttpPresignCompleteAndAbortKeepJsonTransactionModesAndCacheTiming() throws Exception {
+    @Test void legacyPresignAndAbortUseWritableTransactions() {
+        var f = fixture(); long id = create(f);
+        when(storage.supportsPresignedUpload()).thenReturn(true);
+        when(storage.preparePresignedRouteGpxUploads(eq(f.owner()), eq(f.plan()), eq(id), anyList())).thenAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isFalse();
+            return List.of();
+        });
+        legacy.prepareRouteGpxUpload(f.owner(), id,
+                new TravelRouteGpxUploadPrepareRequest(List.of(new TravelRouteGpxUploadFileRequest("r.gpx", "xml", 1))));
+        doAnswer(call -> { assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isFalse(); return null; })
+                .when(storage).abortPresignedRouteGpxUploads(eq(f.owner()), eq(f.plan()), eq(id), anyList());
+        legacy.abortRouteGpxUpload(f.owner(), id, new TravelRouteGpxUploadAbortRequest(List.of("some-key")));
+    }
+    @Test void gpxHttpPresignCompleteAndAbortKeepJsonAndUseWritableOwnerLockTransactions() throws Exception {
         var f=fixture();long id=create(f);metadata(id);clearInvocations(redis,drive,storage);
         when(storage.supportsPresignedUpload()).thenReturn(true);
         when(storage.preparePresignedRouteGpxUploads(eq(f.owner()),eq(f.plan()),eq(id),anyList())).thenAnswer(call->{
-            assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isTrue();
+            assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isFalse();
             return List.of(new TravelMediaStorageService.PresignedRouteGpxUpload("PUT","https://storage.invalid/synthetic","test/new","stored","new.gpx","xml",1));
         });
         mvc.perform(post("/api/travel/routes/{id}/gpx-files/presign",id).with(user(principal(f))).with(csrf())
@@ -184,7 +198,7 @@ class TravelRouteRefactoringIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.gpxFileNames[0]").value("new.gpx"))
                 .andExpect(jsonPath("$.points[0].latitude").value(37.1));
         verifyEviction(f,2);clearInvocations(redis);
-        doAnswer(call->{assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isTrue();return null;})
+        doAnswer(call->{assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isFalse();return null;})
                 .when(storage).abortPresignedRouteGpxUploads(eq(f.owner()),eq(f.plan()),eq(id),anyList());
         mvc.perform(post("/api/travel/routes/{id}/gpx-files/abort",id).with(user(principal(f))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"objectKeys\":[\"test/aborted\"]}")).andExpect(status().isOk());

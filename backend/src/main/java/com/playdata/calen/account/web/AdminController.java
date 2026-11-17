@@ -16,6 +16,7 @@ import com.playdata.calen.account.dto.SupportInquiryResponse;
 import com.playdata.calen.account.dto.SupportInquiryStatusUpdateRequest;
 import com.playdata.calen.account.dto.AdminUserActiveRequest;
 import com.playdata.calen.account.dto.AdminUserSummaryResponse;
+import com.playdata.calen.account.dto.ProfileSecondaryPinVerifyRequest;
 import com.playdata.calen.account.dto.AdminBackupFileResponse;
 import com.playdata.calen.account.dto.AdminRestoreBackupRequest;
 import com.playdata.calen.account.security.AppUserPrincipal;
@@ -285,6 +286,17 @@ public class AdminController {
         AdminUserSummaryResponse response = adminService.updateUserActive(currentUser.userId(), userId, request.active());
         recordAdminAction(currentUser, httpRequest, "USER_ACTIVE_UPDATE:userId=" + userId + ",active=" + request.active());
         return response;
+    }
+
+    @PostMapping("/users/{userId}/administrator")
+    public AdminUserSummaryResponse promoteUser(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @PathVariable Long userId,
+            @Valid @RequestBody ProfileSecondaryPinVerifyRequest request
+    ) {
+        return adminService.promoteUser(currentUser.userId(), userId, request.secondaryPin(),
+                resolveClientIp(httpRequest), httpRequest.getHeader("User-Agent"));
     }
 
     @DeleteMapping("/blocked-ips")

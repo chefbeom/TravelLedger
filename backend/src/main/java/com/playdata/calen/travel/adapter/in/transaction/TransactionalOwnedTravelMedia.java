@@ -20,6 +20,7 @@ public class TransactionalOwnedTravelMedia implements ManageOwnedTravelMediaUseC
     }
 
     @Override
+    @Transactional
     public Prepared prepare(Long owner, Long record, TravelRecordType type, List<Candidate> files) {
         return delegate.prepare(owner, record, type, files);
     }

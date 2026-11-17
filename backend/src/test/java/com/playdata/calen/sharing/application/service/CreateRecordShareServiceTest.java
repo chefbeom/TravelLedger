@@ -38,6 +38,7 @@ class CreateRecordShareServiceTest {
         var result = service.create(1L, command(null, "  함께 쓴 식비  ", List.of(2L, 2L)));
         assertThat(result).containsExactly(receipt());
         var order = inOrder(participants, sources, requests);
+        order.verify(participants).lockActiveActors(1L, List.of(2L, 2L));
         order.verify(participants).requireActiveActor(1L);
         order.verify(participants).requireGroupAccess(5L, 1L);
         order.verify(sources).lockOwnedSource(1L, RecordShareKind.LEDGER, 100L, null);

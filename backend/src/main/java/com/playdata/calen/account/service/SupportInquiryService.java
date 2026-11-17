@@ -17,6 +17,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -56,7 +58,7 @@ public class SupportInquiryService {
 
     @Transactional
     public SupportInquiryResponse createInquiry(Long userId, String titleRaw, String contentRaw, MultipartFile attachment) {
-        AppUser sender = appUserService.getRequiredUser(userId);
+        AppUser sender = appUserService.getRequiredUserForWrite(userId);
         validateDailyInquiryLimit(userId);
         String title = normalizeTitle(titleRaw);
         String content = normalizeContent(contentRaw);
@@ -71,8 +73,21 @@ public class SupportInquiryService {
 
         SupportInquiryStorageService.StoredSupportAttachment storedAttachment = supportInquiryStorageService.store(userId, attachment);
         if (storedAttachment != null) {
+            // The file is created before the inquiry row commits. Rollback must not
+            // leave that freshly created upload behind when cleanup is possible.
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                String storedPath = storedAttachment.storagePath();
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override public void afterCompletion(int status) {
+                        // Unknown commit outcome must not risk deleting a file that was committed.
+                        if (status == STATUS_ROLLED_BACK) supportInquiryStorageService.deleteQuietly(storedPath);
+                    }
+                });
+            }
             inquiry.setAttachmentOriginalFileName(storedAttachment.originalFileName());
             inquiry.setAttachmentStoragePath(storedAttachment.storagePath());
+            inquiry.setAttachmentStorageId(storedAttachment.storageId());
+            inquiry.setAttachmentSha256(storedAttachment.sha256());
             inquiry.setAttachmentContentType(storedAttachment.contentType());
             inquiry.setAttachmentSize(storedAttachment.size());
         }
@@ -82,7 +97,7 @@ public class SupportInquiryService {
 
     @Transactional
     public SupportInquiryResponse reply(Long adminUserId, Long inquiryId, String replyContentRaw) {
-        AppUser adminUser = appUserService.getRequiredUser(adminUserId);
+        AppUser adminUser = appUserService.getRequiredUserForWrite(adminUserId);
         String replyContent = normalizeContent(replyContentRaw);
 
         SupportInquiry inquiry = supportInquiryRepository.findById(inquiryId)

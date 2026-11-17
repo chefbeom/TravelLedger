@@ -40,12 +40,14 @@ public class TravelDriveLinkService {
     private final DriveItemRepository driveItemRepository;
     private final DriveItemVersionRepository driveItemVersionRepository;
     private final DriveDownloadLinkRepository driveDownloadLinkRepository;
+    private final TravelClusterWithdrawalFence withdrawalFence;
 
     @Transactional
     public void linkMediaAsset(TravelMediaAsset asset) {
         if (asset == null || asset.getId() == null || asset.getPlan() == null || asset.getPlan().getOwner() == null) {
             return;
         }
+        if (!withdrawalFence.lockAvailableOwner(asset.getPlan().getOwner().getId())) return;
         if (!hasLinkableStoragePath(asset.getStoragePath())) {
             return;
         }
@@ -76,6 +78,7 @@ public class TravelDriveLinkService {
         if (asset == null || asset.getId() == null || asset.getPlan() == null || asset.getPlan().getOwner() == null) {
             return;
         }
+        if (!withdrawalFence.lockAvailableOwner(asset.getPlan().getOwner().getId())) return;
         removeSourceItems(asset.getPlan().getOwner().getId(), SOURCE_TRAVEL_MEDIA, String.valueOf(asset.getId()));
     }
 
@@ -92,6 +95,7 @@ public class TravelDriveLinkService {
         if (routeSegment == null || routeSegment.getId() == null || routeSegment.getPlan() == null || routeSegment.getPlan().getOwner() == null) {
             return;
         }
+        if (!withdrawalFence.lockAvailableOwner(routeSegment.getPlan().getOwner().getId())) return;
         removeRouteGpxLinks(routeSegment);
 
         List<TravelLinkedFile> linkableFiles = files == null ? List.of() : files.stream()
@@ -126,6 +130,7 @@ public class TravelDriveLinkService {
         if (routeSegment == null || routeSegment.getId() == null || routeSegment.getPlan() == null || routeSegment.getPlan().getOwner() == null) {
             return;
         }
+        if (!withdrawalFence.lockAvailableOwner(routeSegment.getPlan().getOwner().getId())) return;
         removeSourceItems(routeSegment.getPlan().getOwner().getId(), SOURCE_TRAVEL_GPX, String.valueOf(routeSegment.getId()));
     }
 
@@ -134,6 +139,7 @@ public class TravelDriveLinkService {
         if (plan == null || plan.getId() == null || plan.getOwner() == null) {
             return;
         }
+        if (!withdrawalFence.lockAvailableOwner(plan.getOwner().getId())) return;
         driveItemRepository.findByOwner_IdAndSourceTypeAndSourceReference(
                         plan.getOwner().getId(),
                         SOURCE_TRAVEL_PLAN,
@@ -147,6 +153,7 @@ public class TravelDriveLinkService {
         if (plan == null || plan.getId() == null || plan.getOwner() == null) {
             return;
         }
+        if (!withdrawalFence.lockAvailableOwner(plan.getOwner().getId())) return;
         resolvePlanFolder(plan);
     }
 

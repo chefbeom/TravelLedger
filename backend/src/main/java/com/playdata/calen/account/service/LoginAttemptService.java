@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.scheduling.annotation.Scheduled;
 
 @Service
 public class LoginAttemptService {
@@ -215,6 +216,12 @@ public class LoginAttemptService {
             boolean windowExpired = state.windowStartedAt().plus(FAILURE_WINDOW).isBefore(now);
             return lockExpired && windowExpired;
         });
+    }
+
+    /** Expired in-memory IP counters should not remain indefinitely while the service is idle. */
+    @Scheduled(fixedDelay = 60000, initialDelay = 60000)
+    void evictExpiredMemory() {
+        pruneExpiredEntries(Instant.now(clock));
     }
 
     private String keyForIp(String clientIp) {

@@ -72,7 +72,7 @@ public class TravelLoginMapPreviewService {
     }
 
     @Transactional
-    public AdminLoginMapPreviewResponse updateAdminSettings(AdminLoginMapPreviewUpdateRequest request) {
+    public synchronized AdminLoginMapPreviewResponse updateAdminSettings(AdminLoginMapPreviewUpdateRequest request) {
         String nextToken = request.clearShareLink() ? null : shareToken;
         String suppliedLink = request.shareLinkOrToken() == null ? "" : request.shareLinkOrToken().trim();
         if (!suppliedLink.isEmpty()) {
@@ -111,6 +111,14 @@ public class TravelLoginMapPreviewService {
         shareToken = nextToken;
         enabled = request.enabled();
         return getAdminSettings();
+    }
+
+    /** Called only after the transaction that removed this share has committed. */
+    public synchronized void forgetRemovedShare(String removedToken) {
+        if (removedToken != null && removedToken.equals(shareToken)) {
+            shareToken = null;
+            enabled = false;
+        }
     }
 
     public TravelLoginMapPreviewResponse getPublicPreview() {

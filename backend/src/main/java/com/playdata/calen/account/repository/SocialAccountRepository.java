@@ -3,6 +3,7 @@ package com.playdata.calen.account.repository;
 import com.playdata.calen.account.domain.SocialAccount;
 import com.playdata.calen.account.domain.SocialLoginProvider;
 import java.util.Optional;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,4 +23,12 @@ public interface SocialAccountRepository extends JpaRepository<SocialAccount, Lo
     );
 
     boolean existsByProviderAndProviderUserId(SocialLoginProvider provider, String providerUserId);
+
+    boolean existsByUserIdAndProvider(Long userId, SocialLoginProvider provider);
+
+    boolean existsByUserIdAndProviderAndProviderUserId(Long userId, SocialLoginProvider provider, String providerUserId);
+
+    boolean existsByUserId(Long userId);
+
+    List<SocialAccount> findAllByUserIdAndProvider(Long userId, SocialLoginProvider provider);
 }

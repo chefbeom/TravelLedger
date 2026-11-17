@@ -20,6 +20,9 @@ public interface DriveDownloadLinkRepository extends JpaRepository<DriveDownload
 
     Optional<DriveDownloadLink> findByIdAndOwner_Id(Long id, Long ownerId);
 
+    @Query("select link.owner.id from DriveDownloadLink link where link.token = :token")
+    Optional<Long> findOwnerIdByToken(@Param("token") String token);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<DriveDownloadLink> findByToken(String token);
 

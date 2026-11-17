@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.playdata.calen.travel.application.port.in.RefreshTravelPhotoClustersUseCase;
+import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.travel.domain.model.TravelPhotoClusterData.Snapshot;
 import com.playdata.calen.travel.service.*;
 import java.util.List;
@@ -17,7 +18,8 @@ class OwnedTravelMapClustersTest {
     final TravelClusterRefreshCoordinator coordinator = mock(TravelClusterRefreshCoordinator.class);
     final RefreshTravelPhotoClustersUseCase projection = mock(RefreshTravelPhotoClustersUseCase.class);
     final TravelMyMapPhotoClusterSnapshotService snapshots = mock(TravelMyMapPhotoClusterSnapshotService.class);
-    final OwnedTravelMapClusters clusters = new OwnedTravelMapClusters(providers, projection, snapshots);
+    final TravelClusterWithdrawalFence fence = mock(TravelClusterWithdrawalFence.class);
+    final OwnedTravelMapClusters clusters = new OwnedTravelMapClusters(providers, projection, snapshots, fence);
     final TravelMyMapPhotoClusterSnapshot empty = new TravelMyMapPhotoClusterSnapshot(0, 0, List.of(), List.of(), List.of());
 
     @Test void absentCoordinatorHasNoGenerationWhilePresentCoordinatorWaitsForCurrentGeneration() {
@@ -42,6 +44,7 @@ class OwnedTravelMapClustersTest {
         var order = inOrder(snapshots, projection);
         order.verify(snapshots).get(7L, 19L); order.verify(projection).stored(7L);
         order.verify(snapshots).save(7L, 19L, new TravelMyMapPhotoClusterSnapshot(4, 2, List.of(), List.of(), List.of()));
+        verify(fence).requireAvailableOwner(7L);
         verifyNoMoreInteractions(projection); verifyNoInteractions(providers);
     }
 
@@ -49,6 +52,13 @@ class OwnedTravelMapClustersTest {
         when(projection.stored(7L)).thenReturn(Snapshot.empty());
         clusters.getOrBuild(7L, null);
         verify(snapshots).save(7L, empty); verifyNoInteractions(providers);
+    }
+
+    @Test void aWithdrawnOwnerCannotRepopulateASnapshotFromAnOldProjection() {
+        when(projection.stored(7L)).thenReturn(new Snapshot(1, 1, List.of(), List.of()));
+        doThrow(new NotFoundException("withdrawn")).when(fence).requireAvailableOwner(7L);
+        assertThatThrownBy(() -> clusters.getOrBuild(7L, 19L)).isInstanceOf(NotFoundException.class);
+        verify(snapshots, never()).save(any(), anyLong(), any());
     }
 
     @Test void currentGenerationWithNoRowsCachesEmptyAndDoesNotTriggerAnotherRefresh() {

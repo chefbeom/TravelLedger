@@ -1,6 +1,7 @@
 package com.playdata.calen.travel.adapter.out.persistence;
 
 import com.playdata.calen.common.exception.NotFoundException;
+import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.travel.adapter.support.TravelRouteMapper;
 import com.playdata.calen.travel.application.port.out.*;
 import com.playdata.calen.travel.domain.TravelRouteSegment;
@@ -15,15 +16,18 @@ import org.springframework.transaction.annotation.*;
 @RequiredArgsConstructor
 @Transactional(propagation=Propagation.MANDATORY)
 public class JpaTravelRouteAdapter implements TravelRouteStore {
+    private final AppUserService users;
     private final TravelPlanRepository plans;
     private final TravelRouteSegmentRepository routes;
     private final TravelRoutePayloadPort payload;
     private final TravelDriveLinkService drive;
     @Override public Plan ownedPlan(Long owner,Long id) {
+        requireOwnerForWrite(owner,"Travel plan not found.");
         var plan=plans.findByIdAndOwnerId(id,owner).orElseThrow(()->new NotFoundException("Travel plan not found."));
         return new Plan(plan.getId(),plan.getName(),plan.getColorHex());
     }
     @Override public Access ownedRoute(Long owner,Long id) {
+        requireOwnerForWrite(owner,"Travel route not found.");
         var route=routes.findByIdAndPlanOwnerId(id,owner).orElseThrow(()->new NotFoundException("Travel route not found."));
         var plan=route.getPlan();return new Access(route.getId(),new Plan(plan.getId(),plan.getName(),plan.getColorHex()));
     }
@@ -45,6 +49,10 @@ public class JpaTravelRouteAdapter implements TravelRouteStore {
         route.setGpxFilesJson(payload.encodeFiles(files));
         drive.replaceRouteGpxLinks(route,files.stream().map(file->new TravelDriveLinkService.TravelLinkedFile(
                 file.originalFileName(),file.storagePath(),file.contentType(),file.fileSize())).toList());
+    }
+    private void requireOwnerForWrite(Long owner, String unavailable) {
+        try { users.getRequiredUserForWrite(owner); }
+        catch (NotFoundException missingOwner) { throw new NotFoundException(unavailable); }
     }
     private void apply(TravelRouteSegment route,Value v) {
         route.setRouteDate(v.routeDate());route.setTitle(v.title());route.setTransportMode(v.transportMode());

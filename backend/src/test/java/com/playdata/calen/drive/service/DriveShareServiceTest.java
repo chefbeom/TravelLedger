@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import com.playdata.calen.drive.domain.DriveSharePermission;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,12 @@ class DriveShareServiceTest {
     @Mock
     private DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService;
 
+    @Mock
+    private DriveShareParticipantFence participantFence;
+
+    @Mock
+    private EntityManager entities;
+
     @Test
     void shareFilesStoresRequestedViewPermission() {
         AppUser owner = user(1L, "owner");
@@ -69,6 +77,7 @@ class DriveShareServiceTest {
 
         DriveDtos.ActionResponse response = service.shareFiles(1L, List.of(7L), "friend", "view");
 
+        verify(participantFence).lockForCreation(1L, 2L);
         ArgumentCaptor<DriveShare> shareCaptor = ArgumentCaptor.forClass(DriveShare.class);
         verify(driveShareRepository).save(shareCaptor.capture());
         assertThat(shareCaptor.getValue().getPermission()).isEqualTo(DriveSharePermission.VIEW);
@@ -76,9 +85,28 @@ class DriveShareServiceTest {
     }
 
     @Test
+    void multiFileShareLocksItemsInAscendingOrder() {
+        AppUser owner = user(1L, "owner"), recipient = user(2L, "friend");
+        DriveItem first = file(7L), second = file(8L);
+        first.setOwner(owner); second.setOwner(owner);
+        when(driveService.getOwner(1L)).thenReturn(owner);
+        when(appUserRepository.findByLoginId("friend")).thenReturn(Optional.of(recipient));
+        when(driveService.getOwnedFile(1L, 7L)).thenReturn(first);
+        when(driveService.getOwnedFile(1L, 8L)).thenReturn(second);
+        when(driveShareRepository.save(any(DriveShare.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(newService().shareFiles(1L, List.of(8L, 7L), "friend", "view").affectedCount()).isEqualTo(2);
+
+        var ordered = inOrder(driveService);
+        ordered.verify(driveService).getOwnedFile(1L, 7L);
+        ordered.verify(driveService).getOwnedFile(1L, 8L);
+    }
+
+    @Test
     void cancelShareRejectsLockedFileBeforeChangingRecipients() {
         AppUser recipient = user(2L, "friend");
         DriveItem lockedFile = file(7L);
+        lockedFile.setOwner(user(1L, "owner"));
         lockedFile.setLockedFile(true);
 
         when(appUserRepository.findByLoginId("friend")).thenReturn(Optional.of(recipient));
@@ -99,6 +127,7 @@ class DriveShareServiceTest {
     @Test
     void cancelAllSharesRejectsLockedFileBeforeDeletingShares() {
         DriveItem lockedFile = file(7L);
+        lockedFile.setOwner(user(1L, "owner"));
         lockedFile.setLockedFile(true);
 
         when(driveService.getOwnedFile(1L, 7L)).thenReturn(lockedFile);
@@ -212,6 +241,7 @@ class DriveShareServiceTest {
         trashedFile.markTrashed();
         DriveShare share = share(trashedFile, user(1L, "owner"), user(2L, "friend"));
 
+        when(appUserRepository.findById(2L)).thenReturn(Optional.of(user(2L, "friend")));
         when(driveShareRepository.findByItem_IdAndRecipient_Id(7L, 2L)).thenReturn(Optional.of(share));
 
         DriveShareService service = newService();
@@ -223,6 +253,23 @@ class DriveShareServiceTest {
         verify(driveStorageService, never()).copyObject("drive/locked.txt", "drive/2/locked.txt");
     }
 
+    @Test
+    void savedSharedCopyRecordsTheDestinationBucket() {
+        AppUser owner = user(1L, "owner"), recipient = user(2L, "friend");
+        DriveItem source = file(7L);
+        DriveShare share = share(source, owner, recipient);
+        when(appUserRepository.findById(2L)).thenReturn(Optional.of(recipient));
+        when(driveShareRepository.findByItem_IdAndRecipient_Id(7L, 2L)).thenReturn(Optional.of(share));
+        when(driveStorageService.resolveBucket()).thenReturn("copy-bucket");
+        when(driveItemRepository.save(any(DriveItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        newService().saveSharedFileToDrive(2L, 7L, null);
+        var copied = ArgumentCaptor.forClass(DriveItem.class);
+        verify(driveItemRepository).save(copied.capture());
+        assertThat(copied.getValue().getStoragePath()).isEqualTo("drive/2/locked.txt");
+        assertThat(copied.getValue().getStorageBucket()).isEqualTo("copy-bucket");
+        assertThat(copied.getValue().getOwner().getId()).isEqualTo(2L);
+    }
+
     private DriveShareService newService() {
         return new DriveShareService(
                 driveShareRepository,
@@ -231,7 +278,9 @@ class DriveShareServiceTest {
                 driveStorageService,
                 driveService,
                 imageThumbnailService,
-                driveDownloadLinkAccessLogService
+                driveDownloadLinkAccessLogService,
+                participantFence,
+                entities
         );
     }
 

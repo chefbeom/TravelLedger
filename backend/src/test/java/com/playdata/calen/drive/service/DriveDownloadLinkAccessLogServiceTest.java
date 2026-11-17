@@ -51,7 +51,7 @@ class DriveDownloadLinkAccessLogServiceTest {
     }
 
     @Test
-    void recordDirectShareAccessUsesSyntheticFingerprintAndScopedStatus() {
+    void recordDirectShareAccessDoesNotStoreRecipientOrClientIdentifiers() {
         DriveDownloadLinkAccessLogService service = new DriveDownloadLinkAccessLogService(driveDownloadLinkAccessLogRepository);
 
         service.recordDirectShareAccess(
@@ -71,9 +71,10 @@ class DriveDownloadLinkAccessLogServiceTest {
         assertThat(log.getItemId()).isEqualTo(11L);
         assertThat(log.getOwnerId()).isEqualTo(1L);
         assertThat(log.getStatus()).isEqualTo("shared_permission_denied");
-        assertThat(log.getTokenFingerprint()).hasSize(64);
-        assertThat(log.getTokenFingerprint()).doesNotContain("31");
-        assertThat(log.getClientAddress()).isEqualTo("198.51.100.7");
+        assertThat(log.getTokenFingerprint()).isEqualTo(DriveDownloadLinkAccessLogService.ANONYMOUS_DIRECT_SHARE_FINGERPRINT);
+        assertThat(log.getClientAddress()).isNull();
+        assertThat(log.getUserAgent()).isNull();
+        assertThat(log.isDirectShareAnonymized()).isTrue();
     }
 
     @Test

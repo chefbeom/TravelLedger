@@ -352,13 +352,31 @@ watch(
 )
 
 watch(
-  () => props.recordFocusRequest?.token,
-  (token) => {
+  () => [props.recordFocusRequest?.token, travelSummaryLoaded.value],
+  ([token, summaryLoaded]) => {
     const normalizedToken = String(token || '')
     if (!normalizedToken || normalizedToken === appliedRecordFocusToken.value) {
       return
     }
+    const request = props.recordFocusRequest
+    if (request?.sourceType && !summaryLoaded) return
     appliedRecordFocusToken.value = normalizedToken
+    if (request?.sourceType === 'memory') {
+      openPhotoEditor({ planId: request.planId, recordId: request.recordId, recordType: 'MEMORY' })
+      emit('record-focus-consumed', { token })
+      return
+    }
+    if (request?.sourceType === 'route') {
+      openRoutes({ planId: request.planId, routeId: request.routeId, routeDate: request.routeDate })
+      emit('record-focus-consumed', { token })
+      return
+    }
+    if (request?.sourceType === 'plan') {
+      currentPlanId.value = String(request.planId)
+      openTravelManager()
+      emit('record-focus-consumed', { token })
+      return
+    }
     openFinanceEditor()
   },
   { immediate: true },
@@ -476,7 +494,7 @@ onMounted(loadTravelSummary)
         :workflow-mode="workflowMode"
         :workflow-start-step="workflowStartStep"
         :initial-plan-id="currentPlanId"
-        :external-record-focus-request="hubRecordFocusRequest || recordFocusRequest"
+        :external-record-focus-request="hubRecordFocusRequest || (!recordFocusRequest?.sourceType || recordFocusRequest.sourceType === 'ledger' ? recordFocusRequest : null)"
         :external-memory-focus-request="hubPlaceFocusRequest"
         :external-photo-focus-request="hubPhotoFocusRequest"
         :external-route-focus-request="hubRouteFocusRequest"

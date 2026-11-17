@@ -121,7 +121,7 @@ class TravelServiceCacheTest {
         var ownedStore=new com.playdata.calen.travel.adapter.out.persistence.JpaTravelMediaAdapter(appUserService,
                 mock(com.playdata.calen.account.repository.AppUserRepository.class),travelExpenseRecordRepository,travelMediaAssetRepository,travelDriveLinkService);
         ReflectionTestUtils.setField(service,"ownedMedia",new com.playdata.calen.travel.application.service.ManageOwnedTravelMediaService(
-                ownedStore,new com.playdata.calen.travel.adapter.out.storage.TravelMediaStorageAdapter(travelMediaStorageService),
+                ownedStore,new com.playdata.calen.travel.adapter.out.storage.TravelMediaStorageAdapter(travelMediaStorageService, mock(TravelUploadGrantRegistry.class)),
                 new com.playdata.calen.travel.adapter.out.cache.OwnedTravelMediaCache(300L),
                 new com.playdata.calen.travel.adapter.out.cache.TravelSummaryCache(redisCacheService),
                 mock(com.playdata.calen.travel.application.port.out.TravelClusterRefreshPort.class)));
@@ -182,7 +182,7 @@ class TravelServiceCacheTest {
         var ownedStore=new com.playdata.calen.travel.adapter.out.persistence.JpaTravelMediaAdapter(appUserService,
                 mock(com.playdata.calen.account.repository.AppUserRepository.class),travelExpenseRecordRepository,travelMediaAssetRepository,travelDriveLinkService);
         ReflectionTestUtils.setField(service,"ownedMedia",new com.playdata.calen.travel.application.service.ManageOwnedTravelMediaService(
-                ownedStore,new com.playdata.calen.travel.adapter.out.storage.TravelMediaStorageAdapter(travelMediaStorageService),
+                ownedStore,new com.playdata.calen.travel.adapter.out.storage.TravelMediaStorageAdapter(travelMediaStorageService, mock(TravelUploadGrantRegistry.class)),
                 new com.playdata.calen.travel.adapter.out.cache.OwnedTravelMediaCache(300L),
                 new com.playdata.calen.travel.adapter.out.cache.TravelSummaryCache(redisCacheService),
                 mock(com.playdata.calen.travel.application.port.out.TravelClusterRefreshPort.class)));

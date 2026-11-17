@@ -13,10 +13,7 @@ defineProps({
 
 const emit = defineEmits(['complete', 'go-login', 'restart'])
 const form = reactive({
-  loginId: '',
   displayName: '',
-  password: '',
-  passwordConfirmation: '',
   secondaryPin: '',
   rememberDevice: true,
 })
@@ -45,9 +42,7 @@ function submit() {
   if (validationMessage.value) return
   // Identity is taken from the verified server session, never from form fields.
   emit('complete', {
-    loginId: form.loginId.trim(),
     displayName: form.displayName.trim(),
-    password: form.password,
     secondaryPin: form.secondaryPin,
     rememberDevice: form.rememberDevice,
   })
@@ -73,7 +68,7 @@ async function cancel() {
       <span class="auth-copy__badge">카카오 회원가입</span>
       <h1>카카오 인증 후 가입을 마무리하세요.</h1>
       <p>인증된 이메일과 닉네임을 확인하고 TravelLedger에서 사용할 보안 정보를 정해 주세요. 별도 인증 메일은 보내지 않습니다.</p>
-      <p class="auth-copy__hint">기존 계정과 자동 병합하지 않습니다. 서비스용 비밀번호와 2차 비밀번호는 기존 로그인·개인정보 보호 기능에 사용됩니다.</p>
+      <p class="auth-copy__hint">기존 계정과 자동 병합하지 않습니다. 로그인은 카카오로 진행하며, 2차 비밀번호는 개인정보 보호와 중요한 작업에 사용됩니다.</p>
     </div>
 
     <article class="auth-card">
@@ -86,14 +81,11 @@ async function cancel() {
         </dl>
         <p class="form-hint">카카오 인증 후 10분 이내에 가입을 완료해 주세요. 아래 정보는 서비스에서 사용할 계정 정보입니다.</p>
         <form class="stack-form" @submit.prevent="submit">
-          <label class="field"><span class="field__label">로그인 ID</span><input v-model="form.loginId" type="text" autocomplete="username" maxlength="60" :disabled="submitting || leaving" required /></label>
           <label class="field"><span class="field__label">표시 이름</span><input v-model="form.displayName" type="text" autocomplete="name" maxlength="80" :disabled="submitting || leaving" required /></label>
-          <label class="field"><span class="field__label">비밀번호</span><input v-model="form.password" type="password" autocomplete="new-password" minlength="8" :disabled="submitting || leaving" required /></label>
-          <label class="field"><span class="field__label">비밀번호 확인</span><input v-model="form.passwordConfirmation" type="password" autocomplete="new-password" minlength="8" :disabled="submitting || leaving" required /></label>
           <PinPadInput
             v-model="form.secondaryPin"
             label="2차 비밀번호"
-            hint="개인정보 보호와 일반 로그인에 사용할 숫자 8자리를 설정해 주세요."
+            hint="개인정보 보호와 중요한 작업에 사용할 숫자 8자리를 설정해 주세요."
             :disabled="submitting || leaving"
           />
           <label class="checkbox-row">

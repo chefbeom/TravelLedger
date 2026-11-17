@@ -83,14 +83,27 @@ class PublicRegistrationIntegrationTest {
         String verificationToken = emailVerificationSender.lastVerificationUrl
                 .substring(emailVerificationSender.lastVerificationUrl.indexOf("#verify-email/") + "#verify-email/".length());
         mockMvc.perform(post("/api/auth/email-verification/verify")
+                        .with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("token", verificationToken))))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/auth/email-verification/verify")
+                        .with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("token", verificationToken, "secondaryPin", "00000000"))))
+                .andExpect(status().isBadRequest());
+        assertThat(appUserRepository.findByLoginId("public-user").orElseThrow().isActive()).isFalse();
+        mockMvc.perform(post("/api/auth/email-verification/verify")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("token", verificationToken))))
+                        .content(objectMapper.writeValueAsString(Map.of("token", verificationToken, "secondaryPin", "23456789"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.verified").value(true));
         assertThat(appUserRepository.findByLoginId("public-user").orElseThrow().getRole())
                 .isEqualTo(AppUserRole.USER);
         assertThat(appUserRepository.findByLoginId("public-user").orElseThrow().isActive()).isTrue();
+        mockMvc.perform(post("/api/auth/email-verification/verify")
+                        .with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("token", verificationToken, "secondaryPin", "23456789"))))
+                .andExpect(status().isBadRequest());
 
         mockMvc.perform(put("/api/admin/registration-policy")
                         .session(adminSession)

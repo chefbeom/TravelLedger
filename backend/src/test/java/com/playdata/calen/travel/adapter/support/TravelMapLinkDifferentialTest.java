@@ -34,7 +34,9 @@ class TravelMapLinkDifferentialTest {
             var payload = new TravelRoutePayloadAdapter(json, mock(DataSource.class), storage);
             var oracle = new TravelMapLinkLegacyOracle(links, plans, records, media, routes, json, policy, payload);
             var modern = new TravelMapLinksService(new JpaTravelMapLinkAdapter(mock(AppUserService.class), mock(AppUserRepository.class),
-                    links, plans, records, media, routes, json), mock(TravelMapLinkRuntimePort.class), payload, policy);
+                    links, plans, records, media, routes, json,
+                    mock(com.playdata.calen.travel.service.TravelPublicAccessWithdrawalFence.class),
+                    mock(jakarta.persistence.EntityManager.class)), mock(TravelMapLinkRuntimePort.class), payload, policy);
             var account = new AppUser(); account.setId(7L); account.setLoginId("synthetic-owner"); account.setDisplayName("Synthetic owner");
             var foreign = new AppUser(); foreign.setId(8L);
             var p1 = plan(10L, account); var p2 = plan(11L, account); var p3 = plan(12L, foreign);

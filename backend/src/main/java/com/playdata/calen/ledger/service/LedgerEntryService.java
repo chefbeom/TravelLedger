@@ -34,6 +34,7 @@ import com.playdata.calen.ledger.dto.LedgerEntrySearchSummaryResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.dto.LedgerSplitPaymentRequest;
+import com.playdata.calen.ledger.dto.LedgerSplitPaymentUpdateRequest;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryChangeHistoryRepository;
@@ -740,6 +741,81 @@ public class LedgerEntryService {
             throw new BadRequestException("금액은 0보다 크고 소수 둘째 자리 이하여야 합니다.");
         }
         return amount;
+    }
+
+    public record SplitPaymentGroup(String revision, List<LedgerEntryResponse> parts) { }
+
+    @Transactional(readOnly = true)
+    public SplitPaymentGroup getSplitPayment(Long userId, String groupId) {
+        List<LedgerEntry> entries = splitGroup(userId, groupId);
+        validateSplitEditable(entries);
+        return new SplitPaymentGroup(splitRevision(entries), entries.stream().map(this::toResponse).toList());
+    }
+
+    private List<LedgerEntry> splitGroup(Long userId, String groupId) {
+        List<LedgerEntry> entries = ledgerEntryRepository.findAllByOwnerIdAndSplitPaymentGroupIdOrderBySplitPaymentIndexAsc(userId, groupId);
+        if (entries.isEmpty()) throw new NotFoundException("분할 결제를 찾을 수 없습니다.");
+        return entries;
+    }
+
+    private String splitRevision(List<LedgerEntry> entries) {
+        try {
+            var state = entries.stream().map(entry -> java.util.Arrays.asList(toSnapshot(entry), entry.isHasAdjustmentHistory(), entry.getAdjustmentType())).toList();
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(objectMapper.writeValueAsBytes(state)));
+        } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("분할 결제 상태를 확인할 수 없습니다.", exception);
+        }
+    }
+
+    private void validateSplitEditable(List<LedgerEntry> entries) {
+        if (entries.size() < 2 || entries.size() > 10) throw new BadRequestException("완전한 분할 결제 묶음만 수정할 수 있습니다.");
+        LedgerEntry first = entries.get(0);
+        for (int index = 0; index < entries.size(); index++) {
+            LedgerEntry entry = entries.get(index);
+            if (entry.getDeletedAt() != null) throw new BadRequestException("삭제된 결제수단이 있어 묶음 수정이 불가능합니다.");
+            requireOrdinaryEditableEntry(entry);
+            if (!Objects.equals(entry.getSplitPaymentCount(), entries.size()) || !Objects.equals(entry.getSplitPaymentIndex(), index + 1)
+                    || !Objects.equals(entry.getEntryDate(), first.getEntryDate()) || !Objects.equals(entry.getEntryTime(), first.getEntryTime())
+                    || !Objects.equals(entry.getTitle(), first.getTitle()) || !Objects.equals(entry.getMemo(), first.getMemo())
+                    || entry.getEntryType() != EntryType.EXPENSE || !Objects.equals(entry.getCategoryGroup().getId(), first.getCategoryGroup().getId())
+                    || !Objects.equals(entry.getCategoryDetail() == null ? null : entry.getCategoryDetail().getId(), first.getCategoryDetail() == null ? null : first.getCategoryDetail().getId())
+                    || !Objects.equals(entry.getTravelPlanId(), first.getTravelPlanId()) || entry.getTravelRecordId() != null
+                    || entry.getForeignAmount() != null || entry.getExchangeRateToKrw() != null
+                    || (entry.getForeignCurrencyCode() != null && !entry.getForeignCurrencyCode().isBlank() && !"KRW".equalsIgnoreCase(entry.getForeignCurrencyCode()))) {
+                throw new BadRequestException("결제수단별 내용이 다르거나 누락되어 묶음으로 수정할 수 없습니다. 각 수단을 확인해 주세요.");
+            }
+        }
+    }
+
+    @Transactional
+    public List<LedgerEntryResponse> updateSplitPayment(Long userId, String groupId, LedgerSplitPaymentUpdateRequest update) {
+        AppUser owner = appUserService.getRequiredUserForWrite(userId);
+        List<LedgerEntry> entries = splitGroup(userId, groupId);
+        if (!splitRevision(entries).equals(update.revision())) throw new BadRequestException("다른 곳에서 거래가 변경되었습니다. 다시 열어 확인해 주세요.");
+        validateSplitEditable(entries);
+        LedgerSplitPaymentRequest request = update.payment();
+        LedgerEntryRequest base = request.entry();
+        if (!groupId.equals(request.requestId().toString()) || request.parts().size() != entries.size()
+                || base.entryType() != EntryType.EXPENSE || base.travelRecordId() != null
+                || (base.foreignCurrencyCode() != null && !base.foreignCurrencyCode().isBlank() && !"KRW".equalsIgnoreCase(base.foreignCurrencyCode()))
+                || base.foreignAmount() != null || base.exchangeRateToKrw() != null || base.installmentInterestType() != null
+                || (base.installmentMonths() != null && base.installmentMonths() != 0)) {
+            throw new BadRequestException("기존 결제수단 수를 유지하고 원화 지출로 수정해 주세요.");
+        }
+        BigDecimal sum = request.parts().stream().map(part -> splitMoney(part.amount())).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (splitMoney(base.amount()).compareTo(sum) != 0) throw new BadRequestException("결제수단별 금액 합계가 전체 금액과 일치해야 합니다.");
+        List<LedgerEntrySnapshot> before = entries.stream().map(this::toSnapshot).toList();
+        String fingerprint = splitRequestHash(request);
+        for (int index = 0; index < entries.size(); index++) {
+            var part = request.parts().get(index);
+            var partial = new LedgerEntryRequest(base.entryDate(), base.entryTime(), base.title(), base.memo(), part.amount(), null, null, null,
+                    EntryType.EXPENSE, base.categoryGroupId(), base.categoryDetailId(), part.paymentMethodId(), base.travelPlanId(), null,
+                    part.installmentMonths(), part.installmentInterestType());
+            applyRequest(userId, entries.get(index), partial);
+            entries.get(index).setSplitPaymentRequestHash(fingerprint);
+        }
+        recordChangeHistory(owner, LedgerEntryChangeAction.UPDATE, before, entries.stream().map(this::toSnapshot).toList(), "분할 결제 수정");
+        return entries.stream().map(this::toResponse).toList();
     }
 
     private String splitRequestHash(LedgerSplitPaymentRequest request) {

@@ -132,15 +132,7 @@ public class DriveStorageService {
         if (ownerId == null || ownerId <= 0) {
             throw new BadRequestException("Upload owner is invalid.");
         }
-        List<String> targets = new ArrayList<>();
-        if (request != null) {
-            if (StringUtils.hasText(request.finalObjectKey())) {
-                targets.add(request.finalObjectKey());
-            }
-            if (request.chunkObjectKeys() != null) {
-                targets.addAll(request.chunkObjectKeys().stream().filter(StringUtils::hasText).toList());
-            }
-        }
+        List<String> targets = abortTargets(request);
         ensureObjectKeysOwnedBy(ownerId, targets);
         ensureStorageConfigured();
         deleteObjects(targets);
@@ -150,7 +142,20 @@ public class DriveStorageService {
                 .build();
     }
 
-    private void ensureObjectKeysOwnedBy(Long ownerId, List<String> objectKeys) {
+    static List<String> abortTargets(DriveDtos.UploadAbortRequest request) {
+        List<String> targets = new ArrayList<>();
+        if (request != null) {
+            if (StringUtils.hasText(request.finalObjectKey())) {
+                targets.add(request.finalObjectKey());
+            }
+            if (request.chunkObjectKeys() != null) {
+                targets.addAll(request.chunkObjectKeys().stream().filter(StringUtils::hasText).toList());
+            }
+        }
+        return targets;
+    }
+
+    void ensureObjectKeysOwnedBy(Long ownerId, List<String> objectKeys) {
         String expectedPrefix = "drive/" + ownerId + "/";
         boolean hasForeignObject = objectKeys.stream()
                 .anyMatch(objectKey -> !objectKey.startsWith(expectedPrefix));

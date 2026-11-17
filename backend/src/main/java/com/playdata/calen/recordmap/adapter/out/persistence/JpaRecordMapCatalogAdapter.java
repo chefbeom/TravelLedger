@@ -21,7 +21,7 @@ public class JpaRecordMapCatalogAdapter implements RecordMapCatalogPort {
     private final PlaceVisitRepository visits;
     private final TravelExpenseRecordRepository travelRecords;
 
-    @Override public void requireActiveOwner(Long owner) { users.getRequiredUser(owner); }
+    @Override public void requireActiveOwner(Long owner) { users.getRequiredUserForWrite(owner); }
 
     @Override public void requireOwnedPlace(Long owner, Long id) {
         places.findByIdAndOwnerId(id, owner).orElseThrow(RecordMapShareService::unavailable);

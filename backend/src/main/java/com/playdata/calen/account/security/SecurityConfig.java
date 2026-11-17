@@ -1,6 +1,7 @@
 package com.playdata.calen.account.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.playdata.calen.account.repository.AppUserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,15 +27,15 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.rememberme.CookieTheftException;
 import org.springframework.security.web.authentication.rememberme.InvalidCookieException;
-import org.springframework.security.web.authentication.rememberme.JdbcTokenRepositoryImpl;
 import org.springframework.security.web.authentication.rememberme.PersistentTokenBasedRememberMeServices;
-import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
+import org.springframework.security.web.authentication.rememberme.RememberMeAuthenticationFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -57,6 +58,7 @@ public class SecurityConfig {
             PersistentTokenBasedRememberMeServices rememberMeServices,
             SecurityContextRepository securityContextRepository,
             CsrfTokenRepository csrfTokenRepository,
+            AppUserRepository users,
             @Value("${spring.h2.console.enabled:false}") boolean h2ConsoleEnabled
     ) throws Exception {
         CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
@@ -86,7 +88,11 @@ public class SecurityConfig {
                             "/api/travel/public/login-map-preview",
                             "/api/auth/register",
                             "/api/auth/email-verification/verify",
+                            "/api/auth/email-verification/verify-profile",
                             "/api/auth/email-verification/resend",
+                            "/api/auth/withdrawal-recovery/request",
+                            "/api/auth/withdrawal-recovery/preview",
+                            "/api/auth/withdrawal-recovery/start",
                             "/api/auth/oauth/kakao/start",
                             "/api/auth/oauth/kakao/callback",
                             "/api/auth/oauth/kakao/complete",
@@ -119,6 +125,7 @@ public class SecurityConfig {
                         })
                 )
                 .cors(Customizer.withDefaults())
+                .addFilterAfter(new ActiveAccountFilter(users, rememberMeServices, objectMapper), RememberMeAuthenticationFilter.class)
                 .addFilterAfter(csrfCookieFilter(), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -167,35 +174,59 @@ public class SecurityConfig {
     }
 
     @Bean
-    public PersistentTokenRepository persistentTokenRepository(DataSource dataSource, JdbcTemplate jdbcTemplate) {
+    public AccountRememberMeTokens persistentTokenRepository(DataSource dataSource, JdbcTemplate jdbcTemplate) {
         jdbcTemplate.execute("""
                 create table if not exists persistent_logins (
                     username varchar(64) not null,
                     series varchar(64) primary key,
                     token varchar(64) not null,
-                    last_used timestamp not null
+                    last_used timestamp not null,
+                    user_id bigint null
                 )
                 """);
 
-        JdbcTokenRepositoryImpl repository = new JdbcTokenRepositoryImpl();
-        repository.setDataSource(dataSource);
-        return repository;
+        return new BoundRememberMeTokenRepository(dataSource, jdbcTemplate);
     }
 
     @Bean
     public PersistentTokenBasedRememberMeServices rememberMeServices(
-            UserDetailsService userDetailsService,
-            PersistentTokenRepository persistentTokenRepository,
+            AppUserDetailsService userDetailsService,
+            AccountRememberMeTokens persistentTokenRepository,
             @Value("${app.security.remember-me-key:}") String rememberMeKey,
             @Value("${app.security.remember-me-token-validity-seconds:2592000}") int tokenValiditySeconds,
             @Value("${app.security.remember-me-secure-cookie:true}") boolean rememberMeSecureCookie
     ) {
         String resolvedRememberMeKey = SecuritySecretSupport.resolve(rememberMeKey, "remember-me");
+        UserDetailsService rememberMeUsers = name -> {
+            if (!persistentTokenRepository.isBoundSchemaAvailable()) {
+                return userDetailsService.loadUserByUsername(name);
+            }
+            var id = BoundRememberMeTokenRepository.parseBoundUsername(name);
+            if (id.isEmpty()) throw new UsernameNotFoundException("사용자 계정을 찾을 수 없습니다.");
+            return userDetailsService.loadActiveById(id.getAsLong());
+        };
         PersistentTokenBasedRememberMeServices services = new PersistentTokenBasedRememberMeServices(
                 resolvedRememberMeKey,
-                userDetailsService,
+                rememberMeUsers,
                 persistentTokenRepository
         ) {
+            @Override
+            public Authentication autoLogin(HttpServletRequest request, HttpServletResponse response) {
+                // This public startup request does not need authentication. Consuming the
+                // rotating remember-me token here races with /auth/me in other tabs or clients.
+                String path = request.getRequestURI().substring(request.getContextPath().length());
+                if ("GET".equals(request.getMethod()) && "/api/auth/registration-options".equals(path)) return null;
+                return super.autoLogin(request, response);
+            }
+
+            @Override
+            public void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
+                cancelCookie(request, response);
+                if (authentication != null && authentication.getPrincipal() instanceof AppUserPrincipal principal) {
+                    persistentTokenRepository.removeUserTokensById(principal.userId());
+                }
+            }
+
             @Override
             protected UserDetails processAutoLoginCookie(
                     String[] cookieTokens,

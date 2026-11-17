@@ -195,6 +195,50 @@ export function fetchCurrentUser() {
   return request('/auth/me')
 }
 
+export function fetchKakaoLinkStatus() {
+  return request('/auth/oauth/kakao/link', { cache: 'no-store' })
+}
+
+export function startKakaoAccountLink(secondaryPin) {
+  return request('/auth/oauth/kakao/link/start', {
+    method: 'POST',
+    body: JSON.stringify({ secondaryPin }),
+  })
+}
+
+export function requestProfileEmailVerification(email, secondaryPin) {
+  return request('/auth/profile/email-verification', {
+    method: 'POST',
+    body: JSON.stringify({ email, secondaryPin }),
+  })
+}
+
+export function previewAccountWithdrawal(secondaryPin) {
+  return request('/privacy/withdrawal/preview', {
+    method: 'POST',
+    body: JSON.stringify({ secondaryPin }),
+  })
+}
+
+export function startAccountWithdrawal(payload) {
+  return request('/privacy/withdrawal', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function requestKakaoWithdrawalRecovery(email) {
+  return request('/auth/withdrawal-recovery/request', { method: 'POST', body: JSON.stringify({ email }) })
+}
+
+export function previewKakaoWithdrawalRecovery(token, secondaryPin) {
+  return request('/auth/withdrawal-recovery/preview', { method: 'POST', body: JSON.stringify({ token, secondaryPin }) })
+}
+
+export function startKakaoWithdrawalRecovery(token, withdrawal) {
+  return request('/auth/withdrawal-recovery/start', { method: 'POST', body: JSON.stringify({ token, withdrawal }) })
+}
+
 export function login(payload) {
   return request('/auth/login', {
     method: 'POST',
@@ -217,6 +261,20 @@ export function createInvite(payload) {
 
 export function fetchAdminDashboard() {
   return request('/admin/dashboard')
+}
+
+export function fetchAdminWithdrawalMonitor(page = 0) {
+  return request(`/admin/withdrawal-monitor?page=${encodeURIComponent(page)}`)
+}
+
+export function fetchAdminWithdrawalTasks(requestId, page = 0) {
+  return request(`/admin/withdrawal-monitor/${encodeURIComponent(requestId)}/tasks?page=${encodeURIComponent(page)}`)
+}
+
+export function retryAdminWithdrawalTask(requestId, taskId, secondaryPin) {
+  return request(`/admin/withdrawal-monitor/${encodeURIComponent(requestId)}/tasks/${encodeURIComponent(taskId)}/retry`, {
+    method: 'POST', body: JSON.stringify({ secondaryPin }),
+  })
 }
 
 export function fetchAdminRegistrationPolicy() {
@@ -358,6 +416,13 @@ export function updateAdminUserActive(userId, active) {
   return request(`/admin/users/${userId}/active`, {
     method: 'PATCH',
     body: JSON.stringify({ active }),
+  })
+}
+
+export function promoteAdminUser(userId, secondaryPin) {
+  return request(`/admin/users/${encodeURIComponent(userId)}/administrator`, {
+    method: 'POST',
+    body: JSON.stringify({ secondaryPin }),
   })
 }
 
@@ -528,6 +593,57 @@ export function fetchEntries(from, to) {
   return request(buildUrl('/entries', { from, to }).replace(API_BASE, ''))
 }
 
+export function fetchCalendarSummary(source, params) {
+  return request(buildUrl(`/integrated-calendar/summary/${encodeURIComponent(source)}`, params).replace(API_BASE, ''), { cache: 'no-store' })
+}
+
+export function fetchCalendarEvents(date) {
+  return request(buildUrl('/integrated-calendar/events', { from: date, to: date }).replace(API_BASE, ''), { cache: 'no-store' })
+}
+
+export function fetchCalendarPlaceSource(placeId, visitId) {
+  return request(buildUrl(`/integrated-calendar/day/place-source/${encodeURIComponent(placeId)}`, { visitId }).replace(API_BASE, ''), { cache: 'no-store' })
+}
+export function fetchCalendarMapOptions(page = 0) { return request(buildUrl('/integrated-calendar/shared-map/options', { page }).replace(API_BASE, ''), { cache: 'no-store' }) }
+export function addCalendarMapLink(token) { return request('/integrated-calendar/shared-map/links', { method: 'POST', body: JSON.stringify({ token }) }) }
+export function setCalendarMapSelection(id, selected) { return request(`/integrated-calendar/shared-map/selections/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ selected }) }) }
+export function fetchCalendarMapSummary(id, from, to) { return request(buildUrl(`/integrated-calendar/shared-map/${encodeURIComponent(id)}/summary`, { from, to }).replace(API_BASE, ''), { cache: 'no-store' }) }
+export function fetchCalendarMapDay(id, date) { return request(buildUrl(`/integrated-calendar/shared-map/${encodeURIComponent(id)}/day`, { date }).replace(API_BASE, ''), { cache: 'no-store' }) }
+export function fetchCalendarMapView(id, view, params) { return request(buildUrl(`/integrated-calendar/shared-map/${encodeURIComponent(id)}/${view}`, params).replace(API_BASE, ''), { cache: 'no-store' }) }
+export function fetchCalendarSharedPlace(id, placeId, params) { return request(buildUrl(`/integrated-calendar/shared-map/${encodeURIComponent(id)}/place-source/${encodeURIComponent(placeId)}`, params).replace(API_BASE, ''), { cache: 'no-store' }) }
+
+export function fetchCalendarDay(source, date, filters = {}) {
+  return request(buildUrl(`/integrated-calendar/day/${encodeURIComponent(source)}`, { date, ...filters }).replace(API_BASE, ''), { cache: 'no-store' })
+}
+
+export function fetchCalendarUndated(params = {}) {
+  return request(buildUrl('/integrated-calendar/undated', params).replace(API_BASE, ''), { cache: 'no-store' })
+}
+
+export function fetchCalendarSharedOptions(type, page = 0) {
+  return request(buildUrl(`/integrated-calendar/shared/options/${encodeURIComponent(type)}`, { page }).replace(API_BASE, ''), { cache: 'no-store' })
+}
+
+export function setCalendarSharedSelection(type, id, selected) {
+  return request(`/integrated-calendar/shared/selections/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ selected }) })
+}
+
+export function fetchCalendarSharedSummary(type, id, params) {
+  return request(buildUrl(`/integrated-calendar/shared/summary/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, params).replace(API_BASE, ''), { cache: 'no-store' })
+}
+
+export function fetchCalendarSharedDay(type, id, date) {
+  return request(buildUrl(`/integrated-calendar/shared/day/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, { date }).replace(API_BASE, ''), { cache: 'no-store' })
+}
+
+export function saveCalendarEvent(id, draft) {
+  return request(`/integrated-calendar/events${id ? `/${encodeURIComponent(id)}` : ''}`, { method: id ? 'PUT' : 'POST', body: JSON.stringify(draft) })
+}
+
+export function deleteCalendarEvent(id, version) {
+  return request(buildUrl(`/integrated-calendar/events/${encodeURIComponent(id)}`, { version }).replace(API_BASE, ''), { method: 'DELETE' })
+}
+
 export function fetchEntrySearchPage(params) {
   return request(buildUrl('/entries/search', params).replace(API_BASE, ''))
 }
@@ -634,6 +750,14 @@ export function createLedgerAdjustment(entryId, payload) {
 
 export function createSplitLedgerPayment(payload) {
   return request('/entries/split-payments', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function fetchSplitLedgerPayment(groupId) {
+  return request(`/entries/split-payments/${encodeURIComponent(groupId)}`)
+}
+
+export function updateSplitLedgerPayment(groupId, payload) {
+  return request(`/entries/split-payments/${encodeURIComponent(groupId)}`, { method: 'PUT', body: JSON.stringify(payload) })
 }
 
 export function fetchLedgerAdjustments(entryId) {

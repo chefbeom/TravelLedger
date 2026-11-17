@@ -58,7 +58,6 @@ class PaymentMethodDisplayOrderServiceTest {
 
     @Test
     void reorderRejectsAnIdFromAnotherCatalog() {
-        owner();
         PaymentMethod card = payment(10L, "카드", 0);
         when(paymentMethodRepository.findAllByOwnerIdOrderByDisplayOrderAscIdAsc(USER_ID))
                 .thenReturn(List.of(card));

@@ -3,6 +3,7 @@ package com.playdata.calen.travel.adapter.out.storage;
 import com.playdata.calen.travel.application.port.out.TravelMediaStoragePort;
 import com.playdata.calen.travel.domain.model.TravelMediaData.*;
 import com.playdata.calen.travel.service.TravelMediaStorageService;
+import com.playdata.calen.travel.service.TravelUploadGrantRegistry;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TravelMediaStorageAdapter implements TravelMediaStoragePort {
     private final TravelMediaStorageService storage;
+    private final TravelUploadGrantRegistry grants;
     @Override
     public boolean supportsPresigned() {
         return storage.supportsPresignedUpload();
@@ -24,7 +26,7 @@ public class TravelMediaStorageAdapter implements TravelMediaStoragePort {
                         .map(thumbnail -> new TravelMediaStorageService.PreparedThumbnailUploadCandidate(
                                 thumbnail.variant(), thumbnail.contentType(), thumbnail.fileSize()))
                         .toList())).toList();
-        return storage.preparePresignedUploads(owner, plan, record, candidates).stream()
+        var targets = storage.preparePresignedUploads(owner, plan, record, candidates).stream()
                 .map(file -> new Target(file.method(), file.uploadUrl(), file.objectKey(), file.storedFileName(),
                         file.originalFileName(), file.contentType(), file.fileSize(),
                         (file.thumbnails() == null ? List.<TravelMediaStorageService.PresignedThumbnailUpload>of() : file.thumbnails()).stream()
@@ -32,6 +34,8 @@ public class TravelMediaStorageAdapter implements TravelMediaStoragePort {
                                         thumbnail.objectKey(), thumbnail.contentType(), thumbnail.fileSize()))
                                 .toList()))
                 .toList();
+        grants.recordMedia(owner, plan, record, targets);
+        return targets;
     }
 
     @Override

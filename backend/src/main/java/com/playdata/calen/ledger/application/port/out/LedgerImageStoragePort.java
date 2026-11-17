@@ -10,6 +10,11 @@ public interface LedgerImageStoragePort {
     StoredImageContent load(String objectKey, String fileName, String contentType);
     void delete(String objectKey);
 
+    /** For compensating the immediately preceding upload, never silently use a different bucket. */
+    default void deleteFromBucket(String bucket, String objectKey) {
+        throw new UnsupportedOperationException("Bucket-specific image deletion is not supported.");
+    }
+
     /** Streaming boundary only: the output adapter opens/closes the stream, never the use case. */
     interface Upload {
         String fileName();

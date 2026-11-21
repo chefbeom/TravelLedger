@@ -16846,9 +16846,14 @@ body:has(.travel-map--fullscreen) {
   padding: clamp(16px, 3vw, 36px);
 }
 
+/* The fixed display controls otherwise overlap the expanded dialog's close button. */
+.app-shell:has(.admin-ops-modal) > .theme-switcher {
+  visibility: hidden;
+}
+
 .admin-ops-modal__dialog {
-  width: min(1180px, calc(100vw - 48px));
-  max-height: min(88vh, 900px);
+  width: min(110rem, calc(100vw - 3rem));
+  max-height: calc(100dvh - 2rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -17251,6 +17256,28 @@ body:has(.travel-map--fullscreen) {
   font-weight: 800;
 }
 
+.admin-ai-routing__matrix-wrap { min-width: 0; overflow-x: auto; }
+.admin-ai-routing__mobile-cards { display: none; }
+.admin-ai-routing__matrix { width: 100%; min-width: 38rem; border-collapse: separate; border-spacing: .4rem; table-layout: fixed; }
+.admin-ai-routing__matrix th, .admin-ai-routing__matrix td { min-width: 0; padding: .5rem; text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
+.admin-ai-routing__matrix thead th { border: 1px solid var(--line); background: var(--surface-soft); }
+.admin-ai-routing__matrix thead th:first-child, .admin-ai-routing__matrix thead th:nth-child(2) { width: 12rem; }
+.admin-ai-routing__matrix thead th strong, .admin-ai-routing__matrix thead th small, .admin-ai-routing__connection strong, .admin-ai-routing__connection small { display: block; }
+.admin-ai-routing__matrix thead th small, .admin-ai-routing__connection small { margin-top: .3rem; color: var(--text-soft); font-weight: 400; }
+.admin-ai-routing__matrix tbody tr { background: var(--surface); }
+.admin-ai-routing__connection { border-inline: 2px solid var(--brand); }
+.admin-ai-routing__connection button { margin-top: .4rem; }
+.admin-ai-routing__choice { width: 100%; min-height: 2.75rem; padding: .5rem; cursor: pointer; border: 1px solid var(--line); border-radius: .5rem; }
+.admin-ai-routing__choice:focus-visible { outline: .2rem solid var(--brand); outline-offset: .15rem; }
+html body .app-shell.app-shell.app-shell .admin-ops-modal__dialog .admin-ai-routing__choice[aria-pressed='true'] {
+  border-color: #18744c !important;
+  background: #18744c !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  font-weight: 800;
+  box-shadow: 0 0 0 2px #75c89d;
+}
+
 .admin-ai-routing__feature-row {
   display: grid;
   grid-template-columns: minmax(170px, 0.72fr) minmax(100px, 0.35fr) minmax(0, 1.5fr);
@@ -17389,6 +17416,14 @@ body:has(.travel-map--fullscreen) {
   .admin-ai-routing__line {
     grid-template-columns: minmax(14px, 1fr) auto;
   }
+}
+
+@media (max-width: 620px) {
+  .admin-ai-routing__matrix { display: none; }
+  .admin-ai-routing__mobile-cards { display: grid; gap: .75rem; }
+  .admin-ai-routing__mobile-card { display: grid; gap: .6rem; padding: .75rem; background: var(--surface); border: 1px solid var(--line); }
+  .admin-ai-routing__connection { padding: .5rem; }
+  .admin-ai-routing__mobile-choices { display: grid; gap: .5rem; }
 }
 
 @media (max-width: 620px) {

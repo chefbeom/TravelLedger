@@ -12,6 +12,11 @@ public record AdminAiServerProfileSecretUpdateRequest(
         String openAiApiKey,
         Boolean clearOpenAiApiKey,
         String ollamaApiKey,
-        Boolean clearOllamaApiKey
+        Boolean clearOllamaApiKey,
+        Boolean enforceProviderUrlAllowlist,
+        String allowedProviderHosts,
+        Long connectTimeoutSeconds,
+        Long readTimeoutSeconds,
+        Boolean enabled
 ) {
 }

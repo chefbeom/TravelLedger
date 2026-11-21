@@ -1271,6 +1271,13 @@ function candidateAiPresetForFeature(feature) {
   return candidateAiControlPresets.value.find((preset) => preset.key === key) || null
 }
 
+function appliedAiPresetKey(feature) {
+  const ai = state.opsControl?.ai
+  if (ai?.routingConfigured) return String(ai.featureConnections?.[feature] || '')
+  const signature = aiFeatureConfigSignature(feature)
+  return candidateAiControlPresets.value.find(preset => aiServerPresetSignature(preset) === signature)?.key || ''
+}
+
 function addAiCandidateServer() {
   const key = state.aiCandidateServerPickerKey
   if (!key) {
@@ -1578,7 +1585,9 @@ async function handleSaveAiControl() {
     if (!pendingPreset) {
       throw new Error('서버 프로필 저장에 실패했습니다.')
     }
-    await saveAdminAiServerProfile({
+    // Keep the same identifier even if a response is lost and saving is retried.
+    state.aiControlPresetKey = pendingPreset.key
+    const savedProfile = await saveAdminAiServerProfile({
       presetKey: pendingPreset.key,
       provider: state.aiControlForm.provider,
       clearLmStudioApiKey: Boolean(state.aiControlForm.clearLmStudioApiKey),
@@ -1587,10 +1596,36 @@ async function handleSaveAiControl() {
       lmStudioApiKey: state.aiControlForm.lmStudioApiKey?.trim() || undefined,
       openAiApiKey: state.aiControlForm.openAiApiKey?.trim() || undefined,
       ollamaApiKey: state.aiControlForm.ollamaApiKey?.trim() || undefined,
+      enforceProviderUrlAllowlist: Boolean(state.aiControlForm.enforceProviderUrlAllowlist),
+      allowedProviderHosts: state.aiControlForm.allowedProviderHosts?.trim() || '',
+      connectTimeoutSeconds: Number(state.aiControlForm.connectTimeoutSeconds),
+      readTimeoutSeconds: Number(state.aiControlForm.readTimeoutSeconds),
+      enabled: Boolean(state.aiControlForm.enabled),
+    })
+    if (typeof savedProfile?.credentialConfigured !== 'boolean') throw new Error('서버에서 API 키 저장 상태를 확인할 수 없습니다. 다시 조회해 주세요.')
+    const provider = state.aiControlForm.provider
+    if (provider === 'openai') state.aiControlForm.openAiApiKeyConfigured = savedProfile.credentialConfigured
+    if (provider === 'lmstudio') state.aiControlForm.lmStudioApiKeyConfigured = savedProfile.credentialConfigured
+    if (provider === 'ollama') state.aiControlForm.ollamaApiKeyConfigured = savedProfile.credentialConfigured
+    for (const field of ['apiKey', 'lmStudioApiKey', 'openAiApiKey', 'ollamaApiKey']) state.aiControlForm[field] = ''
+    for (const field of ['clearApiKey', 'clearLmStudioApiKey', 'clearOpenAiApiKey', 'clearOllamaApiKey']) state.aiControlForm[field] = false
+    Object.assign(state.aiControlForm, {
+      enforceProviderUrlAllowlist: savedProfile.enforceProviderUrlAllowlist,
+      allowedProviderHosts: savedProfile.allowedProviderHosts,
+      connectTimeoutSeconds: savedProfile.connectTimeoutSeconds,
+      readTimeoutSeconds: savedProfile.readTimeoutSeconds,
+      enabled: savedProfile.enabled,
+    })
+    if (state.opsControl?.ai) Object.assign(state.opsControl.ai, {
+      enforceProviderUrlAllowlist: savedProfile.enforceProviderUrlAllowlist,
+      allowedProviderHosts: savedProfile.allowedProviderHosts,
+      connectTimeoutSeconds: savedProfile.connectTimeoutSeconds,
+      readTimeoutSeconds: savedProfile.readTimeoutSeconds,
+      enabled: savedProfile.enabled,
     })
     state.aiControlPreserveCurrentSecret = false
     rememberAiControlPreset()
-    state.opsControlMessage = '서버 프로필을 저장했습니다. 후보 등록과 기능 연결을 저장하면 실제 분석 서버가 변경됩니다.'
+    state.opsControlMessage = '서버 프로필과 공통 보안 설정을 저장했습니다. 후보 등록과 기능 연결을 저장하면 실제 분석 서버가 변경됩니다.'
   } catch (error) {
     if (!handleAdminAccessRequired(error)) {
       state.opsControlError = error.message || 'AI 설정을 저장하지 못했습니다.'
@@ -2279,29 +2314,28 @@ onBeforeUnmount(() => {
                 <div class="admin-ai-routing__board-header">
                   <div>
                     <h4 id="feature-routing-title">AI 기능별 서버 연결</h4>
-                    <p>각 기능에서 사용할 후보 서버 하나를 선택하세요.</p>
+                  <p>각 기능의 행에서 사용할 서버를 선택하세요. 한 서버를 여러 기능에 연결할 수 있습니다.</p>
                   </div>
                   <span>{{ candidateAiControlPresets.length }}/{{ AI_CONTROL_CANDIDATE_LIMIT }} 후보</span>
                 </div>
-                <article v-for="feature in ['ledger', 'image', 'excel']" :key="feature" class="admin-ai-routing__feature-row" :class="{ 'is-connected': candidateAiPresetForFeature(feature) }">
-                  <div class="admin-ai-routing__feature-node">
-                    <span>{{ feature === 'image' ? 'IMAGE / OCR' : feature === 'excel' ? 'EXCEL IMPORT' : 'LEDGER AI' }}</span>
-                    <strong>{{ aiFeatureLabel(feature) }}</strong>
-                    <small>{{ aiFeatureConfigFor(feature)?.model || '현재 연결 없음' }}</small>
+                <div class="admin-ai-routing__matrix-wrap">
+                  <table class="admin-ai-routing__matrix" :style="{ minWidth: `${Math.max(38, 24 + candidateAiControlPresets.length * 10)}rem` }">
+                    <thead><tr><th scope="col">기능</th><th scope="col">연결 상태</th><th v-for="preset in candidateAiControlPresets" :key="preset.key" scope="col"><strong>{{ preset.title || preset.model || 'AI 서버' }}</strong><small>{{ currentAiProviderLabel(preset.provider) }} · {{ preset.model || 'auto' }}</small></th></tr></thead>
+                    <tbody><tr v-for="feature in ['ledger', 'image', 'excel']" :key="feature">
+                      <th scope="row"><div class="admin-ai-routing__feature-node"><span>{{ feature === 'image' ? 'IMAGE / OCR' : feature === 'excel' ? 'EXCEL IMPORT' : 'LEDGER AI' }}</span><strong>{{ aiFeatureLabel(feature) }}</strong></div></th>
+                      <td class="admin-ai-routing__connection"><strong>{{ candidateAiPresetForFeature(feature)?.title || candidateAiPresetForFeature(feature)?.model || '연결 없음' }}</strong><small>{{ state.aiFeatureConnections[feature] !== appliedAiPresetKey(feature) ? '변경 대기 · 저장 필요' : state.aiFeatureConnections[feature] ? '현재 적용' : '선택된 후보 없음' }}</small><button v-if="state.aiFeatureConnections[feature]" type="button" class="button button--ghost" @click="clearAiFeatureConnection(feature)">연결 해제</button></td>
+                      <td v-for="preset in candidateAiControlPresets" :key="preset.key"><button type="button" class="admin-ai-routing__choice" :aria-label="`${aiFeatureLabel(feature)}: ${preset.title || preset.model || 'AI 서버'}`" :aria-pressed="state.aiFeatureConnections[feature] === preset.key" @click="connectAiFeatureToCandidate(feature, preset.key)">{{ state.aiFeatureConnections[feature] === preset.key ? '✓ 선택됨' : '연결하기' }}</button></td>
+                    </tr></tbody>
+                  </table>
+                  <div class="admin-ai-routing__mobile-cards">
+                    <article v-for="feature in ['ledger', 'image', 'excel']" :key="feature" class="admin-ai-routing__mobile-card">
+                      <strong>{{ aiFeatureLabel(feature) }}</strong>
+                      <div class="admin-ai-routing__connection"><strong>{{ candidateAiPresetForFeature(feature)?.title || candidateAiPresetForFeature(feature)?.model || '연결 없음' }}</strong><small>{{ state.aiFeatureConnections[feature] !== appliedAiPresetKey(feature) ? '변경 대기 · 저장 필요' : state.aiFeatureConnections[feature] ? '현재 적용' : '선택된 후보 없음' }}</small><button v-if="state.aiFeatureConnections[feature]" type="button" class="button button--ghost" @click="clearAiFeatureConnection(feature)">연결 해제</button></div>
+                      <div class="admin-ai-routing__mobile-choices"><button v-for="preset in candidateAiControlPresets" :key="preset.key" type="button" class="admin-ai-routing__choice" :aria-label="`${aiFeatureLabel(feature)}: ${preset.title || preset.model || 'AI 서버'}`" :aria-pressed="state.aiFeatureConnections[feature] === preset.key" @click="connectAiFeatureToCandidate(feature, preset.key)">{{ preset.title || preset.model || 'AI 서버' }} · {{ state.aiFeatureConnections[feature] === preset.key ? '✓ 선택됨' : '연결하기' }}</button></div>
+                    </article>
                   </div>
-                  <div class="admin-ai-routing__line" aria-hidden="true">
-                    <i></i>
-                    <b>{{ candidateAiPresetForFeature(feature) ? '연결됨' : '선택 필요' }}</b>
-                  </div>
-                  <div class="admin-ai-routing__server-options">
-                    <button v-for="preset in candidateAiControlPresets" :key="preset.key" type="button" class="admin-ai-routing__server-node" :class="{ 'is-selected': state.aiFeatureConnections[feature] === preset.key }" @click="connectAiFeatureToCandidate(feature, preset.key)">
-                      <strong>{{ preset.title || preset.model || 'AI 서버' }}</strong>
-                      <span>{{ currentAiProviderLabel(preset.provider) }} · {{ preset.model || 'auto' }}</span>
-                    </button>
-                    <button v-if="state.aiFeatureConnections[feature]" type="button" class="button button--ghost admin-ai-routing__clear" @click="clearAiFeatureConnection(feature)">연결 해제</button>
-                    <span v-else-if="!candidateAiControlPresets.length" class="admin-ai-routing__no-candidate">후보 서버를 먼저 추가하세요.</span>
-                  </div>
-                </article>
+                  <p v-if="!candidateAiControlPresets.length" class="admin-ai-routing__no-candidate">후보 서버를 먼저 추가하세요.</p>
+                </div>
               </section>
 
               <details class="admin-ai-routing__registry">
@@ -2347,6 +2381,7 @@ onBeforeUnmount(() => {
                 <p class="admin-ai-profile-note">
                   서버 프로필을 저장해도 실제 분석 서버는 변경되지 않습니다. 후보 서버 등록 후 기능 연결을 저장하세요.
                 </p>
+                <p class="admin-ai-profile-note">허용 호스트와 연결·응답 제한 시간은 모든 AI 서버에 공통 적용되며 서버 저장 시 함께 반영됩니다.</p>
                 <div v-if="state.aiServerWizardStep === 1" class="admin-ai-field-grid">
                   <label class="field admin-ai-field-grid__wide">
                     <span class="field__label">서버 이름</span>

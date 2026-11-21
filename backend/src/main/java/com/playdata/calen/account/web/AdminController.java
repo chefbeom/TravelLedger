@@ -7,6 +7,7 @@ import com.playdata.calen.account.dto.AdminLoginAuditPageResponse;
 import com.playdata.calen.account.dto.AdminAiControlUpdateRequest;
 import com.playdata.calen.account.dto.AdminAiRoutingUpdateRequest;
 import com.playdata.calen.account.dto.AdminAiServerProfileSecretUpdateRequest;
+import com.playdata.calen.account.dto.AdminAiServerProfileSaveResponse;
 import com.playdata.calen.account.dto.AdminOpsControlResponse;
 import com.playdata.calen.account.dto.AdminRegistrationPolicyUpdateRequest;
 import com.playdata.calen.account.dto.PublicRegistrationOptionsResponse;
@@ -177,12 +178,12 @@ public class AdminController {
     }
 
     @PatchMapping("/ops-control/ai/preset")
-    public AdminOpsControlResponse updateAiServerProfileSecret(
+    public AdminAiServerProfileSaveResponse updateAiServerProfileSecret(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             HttpServletRequest httpRequest,
             @RequestBody AdminAiServerProfileSecretUpdateRequest request
     ) {
-        AdminOpsControlResponse response = adminOpsControlService.updateAiServerProfileSecret(request);
+        AdminAiServerProfileSaveResponse response = adminOpsControlService.updateAiServerProfileSecret(request);
         recordAdminAction(currentUser, httpRequest, "AI_CONTROL_PRESET_SECRET_UPDATE");
         return response;
     }

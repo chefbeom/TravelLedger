@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.dto.AdminAiControlResponse;
 import com.playdata.calen.account.dto.AdminAiRoutingUpdateRequest;
 import com.playdata.calen.account.dto.AdminAiServerProfileSecretUpdateRequest;
+import com.playdata.calen.account.dto.AdminAiServerProfileSaveResponse;
 import com.playdata.calen.account.dto.AdminAiServerCandidateRequest;
 import com.playdata.calen.account.dto.AdminAiServerCandidateResponse;
 import com.playdata.calen.account.dto.AdminAiFeatureConfigResponse;
@@ -39,6 +40,8 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.RestClient;
 
 @Service
@@ -194,7 +197,7 @@ public class AdminOpsControlService {
      * same server can legitimately be registered with different API credentials.
      */
     @Transactional
-    public AdminOpsControlResponse updateAiServerProfileSecret(AdminAiServerProfileSecretUpdateRequest request) {
+    public AdminAiServerProfileSaveResponse updateAiServerProfileSecret(AdminAiServerProfileSecretUpdateRequest request) {
         if (request == null) {
             throw new BadRequestException("AI server profile request is empty.");
         }
@@ -203,6 +206,12 @@ public class AdminOpsControlService {
             throw new BadRequestException("AI server profile key is required.");
         }
         LedgerAiProvider provider = normalizeFeatureProvider(request.provider());
+        String hosts = request.allowedProviderHosts() == null ? aiProperties.getAllowedProviderHosts() : request.allowedProviderHosts().trim();
+        if (hosts != null && hosts.length() > 4000) throw new BadRequestException("허용 호스트는 4000자 이내로 입력해 주세요.");
+        boolean enforce = request.enforceProviderUrlAllowlist() == null ? aiProperties.isEnforceProviderUrlAllowlist() : request.enforceProviderUrlAllowlist();
+        boolean enabled = request.enabled() == null ? aiProperties.isEnabled() : request.enabled();
+        Duration connect = request.connectTimeoutSeconds() == null ? aiProperties.getConnectTimeout() : seconds(request.connectTimeoutSeconds(), "연결 제한 시간");
+        Duration read = request.readTimeoutSeconds() == null ? aiProperties.getReadTimeout() : seconds(request.readTimeoutSeconds(), "응답 제한 시간");
         String secret = switch (provider) {
             case OPENAI -> request.openAiApiKey();
             case LMSTUDIO -> request.lmStudioApiKey();
@@ -221,8 +230,29 @@ public class AdminOpsControlService {
         } else if (hasText(secret)) {
             persistEncryptedSetting(settingKey, secret.trim());
         }
+        if (request.allowedProviderHosts() != null) persistSetting("ai.allowed-provider-hosts", hosts);
+        if (request.enforceProviderUrlAllowlist() != null) persistSetting("ai.enforce-provider-url-allowlist", Boolean.toString(enforce));
+        if (request.connectTimeoutSeconds() != null) persistSetting("ai.connect-timeout-seconds", Long.toString(connect.toSeconds()));
+        if (request.readTimeoutSeconds() != null) persistSetting("ai.read-timeout-seconds", Long.toString(read.toSeconds()));
+        if (request.enabled() != null) persistSetting("ai.enabled", Boolean.toString(enabled));
+        boolean configured = readPresetSecret(presetKey, featureSecretType(provider)).filter(this::hasText).isPresent();
+        if (hasText(secret) && !Boolean.TRUE.equals(clearSecret) && !configured) {
+            throw new IllegalStateException("AI server credential could not be verified after saving.");
+        }
+        Runnable applySharedSettings = () -> {
+            if (request.allowedProviderHosts() != null) aiProperties.setAllowedProviderHosts(hosts);
+            if (request.enforceProviderUrlAllowlist() != null) aiProperties.setEnforceProviderUrlAllowlist(enforce);
+            if (request.connectTimeoutSeconds() != null) aiProperties.setConnectTimeout(connect);
+            if (request.readTimeoutSeconds() != null) aiProperties.setReadTimeout(read);
+            if (request.enabled() != null) aiProperties.setEnabled(enabled);
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { applySharedSettings.run(); }
+            });
+        } else applySharedSettings.run();
         persistenceMessage = "AI server profile saved.";
-        return getSnapshot();
+        return new AdminAiServerProfileSaveResponse(configured, enforce, hosts, connect.toSeconds(), read.toSeconds(), enabled);
     }
 
     private List<AdminAiServerCandidateRequest> normalizeRoutingCandidates(List<AdminAiServerCandidateRequest> requested) {

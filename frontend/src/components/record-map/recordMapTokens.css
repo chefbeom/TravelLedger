@@ -1,0 +1,38 @@
+/* Design tokens for the record-map screens. Scoped to the hub/workspace roots so no other screen is affected.
+   CSS variables inherit through the DOM, so the sidebar and <dialog> children can use them too. */
+.record-map-hub,
+.record-map-workspace {
+  --rm-surface: var(--surface-elevated, #faf8f2);
+  --rm-panel: var(--panel-bg, #f4f1e8);
+  --rm-line: var(--line, #a3b18a);
+  --rm-text: var(--text);
+  --rm-text-soft: var(--text-soft);
+  --rm-accent: var(--brand-strong, #3a5a40);
+  --rm-accent-contrast: #ffffff;
+  --rm-accent-soft: rgba(88, 129, 87, 0.16);
+  --rm-visited: #2e6b3f;
+  --rm-visited-soft: #dde4d9;
+  --rm-wanted: #8a5a12;
+  --rm-wanted-soft: #efe5d2;
+  --rm-search-badge: #2f6aa8;
+  --rm-danger-text: #a3402c;
+  --rm-focus: var(--focus-ring, #588157);
+  --rm-shadow: 0 6px 22px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='toss'] :is(.record-map-hub, .record-map-workspace) {
+  --rm-surface: var(--dark-card, #20292c);
+  --rm-panel: var(--panel-bg, #1d2427);
+  --rm-line: var(--line, #4a595d);
+  --rm-accent: #9bd3a3;
+  --rm-accent-contrast: #0f1517;
+  --rm-accent-soft: rgba(155, 211, 163, 0.16);
+  --rm-visited: #86c79b;
+  --rm-visited-soft: #364c44;
+  --rm-wanted: #e0b25a;
+  --rm-wanted-soft: #4a4736;
+  --rm-search-badge: #2f6aa8;
+  --rm-danger-text: #e88776;
+  --rm-focus: #9bd3a3;
+  --rm-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+}

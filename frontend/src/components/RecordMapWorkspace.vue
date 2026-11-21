@@ -1,8 +1,10 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import './record-map/recordMapTokens.css'
 import { recordMapApi as api } from '../lib/recordMapApi'
 import { fetchCalendarPlaceSource, fetchCalendarMapView, fetchCalendarSharedPlace } from '../lib/api'
 import { buildRecordMapData } from '../lib/recordMap'
+import { buildFirstPhotoIndex, buildLocationMarkers, formatPlaceMeta, mergePlacesById, placeIdFromMapItem, sortDiaryVisits } from '../lib/recordMapView'
 import { locationSuggestions, normalizeLocationResults, relatedLocationQueries } from '../lib/recordMapLocationSearch'
 import { extractPhotoMetadata } from '../lib/photoMetadata'
 import { photosHaveDistantLocations } from '../lib/recordMapPhotoLocation'
@@ -25,9 +27,14 @@ const compact = ref(window.matchMedia('(max-width: 760px)').matches), sidebarOpe
 const searchMode = ref('saved'), searchText = ref(''), locationResults = ref([]), locationLoading = ref(false), locationMessage = ref(''), foundLocation = ref(null)
 const locationHistory = ref([]), lastLocationQuery = ref('')
 const frameRef = ref(null), frameHeight = ref(620), listLoading = ref(false)
-const mapActionsAnchor = ref(null)
+const mapActionsAnchor = ref(null), addMenu = ref(null)
 const sidebarActionsAnchor = ref(null)
-const actionsTarget = computed(() => compact.value && sidebarOpen.value ? sidebarActionsAnchor.value || mapActionsAnchor.value : mapActionsAnchor.value)
+const actionsTarget = computed(() => sidebarOpen.value ? sidebarActionsAnchor.value || mapActionsAnchor.value : mapActionsAnchor.value)
+const rootClass = computed(() => ({
+  'record-map-workspace--readonly': readOnly.value,
+  'record-map-workspace--embedded': Boolean(props.calendarGrantId),
+  'record-map-workspace--shared': Boolean(props.token) && !props.calendarGrantId,
+}))
 const selectedPlaceId = ref(null), selectedPhotoId = ref(null), selectedMarkerId = ref(null)
 const mapRef = ref(null), focusTarget = ref(null), fitKey = ref(0)
 const modal = ref(''), dirty = ref(false), photoInput = ref(null)
@@ -42,22 +49,31 @@ const shareCollectionId = ref(''), shareList = ref([]), includeVisits = ref(fals
 let requestSequence = 0, listSequence = 0, locationSequence = 0, detailSequence = 0, focusSequence = 0, metadataSequence = 0
 let searchTimer = null, locationAbort = null, frameObserver = null
 
-const allPlaces = computed(() => [...new Map([...snapshot.value.places, ...listSnapshot.value.places].map(p => [p.id, p])).values()])
+const allPlaces = computed(() => mergePlacesById(snapshot.value.places, listSnapshot.value.places))
 const selectedPlace = computed(() => allPlaces.value.find(p => p.id === selectedPlaceId.value) || null)
 const mapSnapshot = computed(() => {
   const extra = selectedPlace.value && !snapshot.value.places.some(p => p.id === selectedPlaceId.value)
   return extra ? { ...snapshot.value, places: [...snapshot.value.places, selectedPlace.value], visits: [...snapshot.value.visits, ...listSnapshot.value.visits.filter(v => v.placeId === selectedPlaceId.value)] } : snapshot.value
 })
-const data = computed(() => {
-  const result = buildRecordMapData(mapSnapshot.value)
-  if (searchMode.value === 'location') result.markers.push(...locationResults.value.map((location, index) => ({ ...location,
-    title: location.name, placeName: location.name, recordMap: true, recordMapLocation: true, searchResultNumber: index + 1,
-    searchResultFocused: foundLocation.value?.id === location.id,
-    planName: '검색 후보 · 저장 전', planColorHex: '#357CCB' })))
-  return result
+// Base map data only depends on the saved places/visits; search candidates are layered on top without mutating it.
+const baseMapData = computed(() => buildRecordMapData(mapSnapshot.value))
+const locationMarkers = computed(() => searchMode.value === 'location' ? buildLocationMarkers(locationResults.value, foundLocation.value?.id ?? null) : [])
+const data = computed(() => locationMarkers.value.length
+  ? { ...baseMapData.value, markers: [...baseMapData.value.markers, ...locationMarkers.value] }
+  : baseMapData.value)
+const firstPhotoIndex = computed(() => buildFirstPhotoIndex(listSnapshot.value.visits, snapshot.value.visits))
+function thumbnailFor(id) {
+  const photoUrl = firstPhotoIndex.value.get(id)
+  return photoUrl ? buildThumbnailUrl(photoUrl, 'mini') : ''
+}
+const listPlaces = computed(() => listSnapshot.value.places.map(p => ({ ...p, thumbnail: thumbnailFor(p.id) })))
+const diaryVisits = computed(() => sortDiaryVisits(listSnapshot.value.visits))
+const chosenLocationLabel = computed(() => {
+  const lat = placeForm.latitude, lng = placeForm.longitude
+  if (lat === '' || lng === '' || lat == null || lng == null || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return '아직 위치를 선택하지 않았습니다.'
+  return `선택한 위치 · ${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`
 })
-const listPlaces = computed(() => listSnapshot.value.places.map(p => ({ ...p, thumbnail: thumbnail(p.id) })))
-const diaryVisits = computed(() => listSnapshot.value.visits.filter(v => v.date).sort((a,b) => (b.date+(b.time||'')).localeCompare(a.date+(a.time||''))))
+const selectedPlaceCollections = computed(() => (snapshot.value.collections || []).filter(c => selectedPlace.value?.collectionIds?.includes(c.id)))
 const suggestions = computed(() => searchMode.value === 'location' && searchText.value.trim() !== lastLocationQuery.value
   ? locationSuggestions(searchText.value, locationHistory.value) : [])
 const relatedQueries = computed(() => searchMode.value === 'location' ? relatedLocationQueries(searchText.value) : [])
@@ -113,10 +129,6 @@ async function loadList() {
     error.value = e.message
     if (readOnly.value && [401,403,404].includes(e.status)) clearSharedData()
   } finally { if (sequence === listSequence) listLoading.value = false }
-}
-function thumbnail(id) {
-  const photo = [...listSnapshot.value.visits, ...snapshot.value.visits].find(v => v.placeId === id && v.photos?.length)?.photos[0]
-  return photo ? buildThumbnailUrl(photo.photoUrl, 'mini') : ''
 }
 function updateSearch(text) {
   searchText.value = text; clearTimeout(searchTimer)
@@ -366,7 +378,7 @@ function deletePhoto(photo) {
 }
 function selectPlace(item) {
   if (item?.recordMapLocation) { focusLocation(item); return }
-  const id = item?.recordMapPlaceId ?? item?.placeId ?? Number(String(item?.id || item?.clusterId || '').split(':').at(-1))
+  const id = placeIdFromMapItem(item)
   if (!allPlaces.value.some(p => p.id === Number(id))) return
   if (selectedPlaceId.value !== Number(id)) { detailVisits.value = []; detailSequence++ }
   selectedPlaceId.value = Number(id)
@@ -478,21 +490,32 @@ async function copyShare() {
   try { await navigator.clipboard.writeText(shareUrl.value); feedback.value = '공유 주소를 복사했습니다.' } catch { error.value = '주소를 선택해 직접 복사해 주세요.' }
 }
 
+function closeAddMenu(event) {
+  const menu = addMenu.value
+  if (!menu?.open) return
+  event?.stopPropagation()
+  menu.open = false
+  menu.querySelector('summary')?.focus()
+}
+function closeAddMenuOutside(event) { if (addMenu.value && !addMenu.value.contains(event.target)) addMenu.value.open = false }
+function onAddMenuToggle() {
+  document.removeEventListener('pointerdown', closeAddMenuOutside, true)
+  if (addMenu.value?.open) document.addEventListener('pointerdown', closeAddMenuOutside, true)
+}
 function leaveGuard(event) { if (dirty.value) { event.preventDefault(); event.returnValue = '' } }
 window.addEventListener('beforeunload', leaveGuard)
 onBeforeUnmount(() => {
   requestSequence++; listSequence++; locationSequence++; detailSequence++; metadataSequence++
   clearTimeout(searchTimer); locationAbort?.abort(); frameObserver?.disconnect(); window.removeEventListener('resize', refreshFrame)
   window.removeEventListener('beforeunload', leaveGuard)
+  document.removeEventListener('pointerdown', closeAddMenuOutside, true)
   window.dispatchEvent(new CustomEvent('calen-route-leave-guard', { detail: { active: false } }))
 })
 </script>
 
 <template>
-  <div class="workspace-stack record-map-workspace">
-    <header class="panel record-map-header">
-      <div><h2>{{ readOnly ? (snapshot.title || '공유 지도') : '내 장소' }}</h2><span v-if="readOnly" class="record-map-note">공유된 자료 · 읽기 전용</span></div>
-      <Teleport :to="actionsTarget || 'body'" :disabled="!actionsTarget"><div v-if="!readOnly" class="record-map-add-actions"><button class="button button--primary record-map-add-primary" @click="beginPlace()" :disabled="busy">＋ 장소 추가</button><details class="record-map-add"><summary class="button">더보기</summary><div class="record-map-add__menu" @click="$event.target.closest('button') && ($event.currentTarget.closest('details').open = false)">
+  <div class="workspace-stack record-map-workspace" :class="rootClass">
+    <Teleport :to="actionsTarget || 'body'" :disabled="!actionsTarget"><div v-if="!readOnly" class="record-map-add-actions"><button class="button button--primary record-map-add-primary" @click="beginPlace()" :disabled="busy">＋ 장소 추가</button><details ref="addMenu" class="record-map-add" @toggle="onAddMenuToggle" @keydown.esc="closeAddMenu"><summary class="button">더보기</summary><div class="record-map-add__menu" @click="$event.target.closest('button') && ($event.currentTarget.closest('details').open = false)">
         <button class="button" @click="photoInput.click()" :disabled="busy">사진으로 기록</button>
         <button class="button" @click="beginVisit()" :disabled="busy">방문 기록 남기기</button>
         <button class="button" @click="beginCollections">카테고리·모음 관리</button>
@@ -500,6 +523,8 @@ onBeforeUnmount(() => {
         <button class="button" :disabled="!snapshot.collections.length" @click="beginShare">모음 공유</button>
         <input ref="photoInput" type="file" accept="image/*" multiple hidden @change="photoPicked" />
       </div></details></div></Teleport>
+    <header v-if="readOnly" class="panel record-map-header">
+      <div><h2>{{ snapshot.title || '공유 지도' }}</h2><span class="record-map-note">공유된 자료 · 읽기 전용</span></div>
     </header>
     <p v-if="error" class="feedback feedback--error" role="alert">{{ error }}</p>
     <p v-if="feedback" class="feedback feedback--success" role="status">{{ feedback }}</p>
@@ -529,24 +554,37 @@ onBeforeUnmount(() => {
           <p v-if="feedback" class="feedback feedback--success" role="status">{{ feedback }}</p>
           <form v-if="modal === 'place'" class="record-map-form" @submit.prevent="savePlace" @input="dirty = true">
             <p v-if="metadataLoading" role="status">사진의 촬영 날짜·위치를 읽는 중입니다. 직접 입력한 값은 유지됩니다.</p>
-            <label class="field">장소 이름<input v-model="placeForm.name" required maxlength="160" placeholder="예: 성수동 A식당" /></label>
-            <p class="record-map-note">검색하거나 지도를 눌러 위치를 선택하세요. 위치는 저장할 때 필요합니다.</p>
-            <TravelMapPanel :markers="[]" :zoom-animation="false" :location-search="api.searchLocations" :selected-point="placeForm.latitude !== '' && placeForm.longitude !== '' ? { latitude: Number(placeForm.latitude), longitude: Number(placeForm.longitude) } : null" initial-map-size="compact" @pick-location="pickPoint" />
-            <button type="button" class="button" :disabled="gpsLoading" @click="useGps">{{ gpsLoading ? '위치 확인 중' : '현재 위치 사용' }}</button>
-            <label class="field">장소 설명 · 선택<textarea v-model="placeForm.memo" maxlength="2000" rows="2" /></label>
-            <fieldset><legend>카테고리 · 여러 개 선택 가능</legend><label v-for="c in snapshot.collections" :key="c.id" class="checkbox-row"><input v-model="placeForm.collectionIds" type="checkbox" :value="c.id" /><span>{{ c.name }}</span></label><p v-if="!snapshot.collections.length">카테고리 없이 저장할 수 있습니다.</p><div class="record-map-category-create"><input v-model="inlineCategoryName" maxlength="100" aria-label="새 카테고리 이름" placeholder="새 카테고리 이름" /><button type="button" class="button" :disabled="busy" @click="addInlineCategory">추가</button></div><small>새 카테고리는 추가 즉시 저장됩니다.</small></fieldset>
-            <label class="checkbox-row"><input v-model="placeForm.visited" type="checkbox" /><span>이미 방문한 곳으로 표시</span></label>
-            <label class="field">사진 · 선택<input type="file" accept="image/*" multiple @change="visitFilesPicked" /></label>
-            <span class="record-map-note">선택한 사진 {{ photosPending.length }}장 · 모두 이 장소에 첨부됩니다. 방문 날짜는 선택 사항입니다. 한 장당 15MB, 최대 20장</span>
-            <label class="checkbox-row"><input v-model="placeForm.recordNow" type="checkbox" /><span>방문 날짜와 이야기도 기록</span></label>
-            <div v-if="placeForm.recordNow" class="record-map-form">
-              <div class="record-map-form-grid"><label class="field">방문 날짜<input v-model="visitForm.date" type="date" required /></label><label class="field">시간 · 선택<input v-model="visitForm.time" type="time" /></label></div>
-              <label class="field">방문 제목<input v-model="visitForm.title" maxlength="160" :placeholder="placeForm.name || '방문 제목'" /></label>
-              <label class="field">이날의 이야기<textarea v-model="visitForm.memo" maxlength="4000" rows="4" /></label>
-            </div>
+            <section class="record-map-form__section">
+              <h3>기본 정보</h3>
+              <label class="field">장소 이름<input v-model="placeForm.name" required maxlength="160" placeholder="예: 성수동 A식당" /></label>
+              <label class="field">장소 설명 · 선택<textarea v-model="placeForm.memo" maxlength="2000" rows="2" /></label>
+            </section>
+            <section class="record-map-form__section">
+              <h3>위치</h3>
+              <p class="record-map-note">검색하거나 지도를 눌러 위치를 선택하세요. 위치는 저장할 때 필요합니다.</p>
+              <TravelMapPanel :markers="[]" :zoom-animation="false" :location-search="api.searchLocations" :selected-point="placeForm.latitude !== '' && placeForm.longitude !== '' ? { latitude: Number(placeForm.latitude), longitude: Number(placeForm.longitude) } : null" initial-map-size="compact" @pick-location="pickPoint" />
+              <button type="button" class="button" :disabled="gpsLoading" @click="useGps">{{ gpsLoading ? '위치 확인 중' : '현재 위치 사용' }}</button>
+              <p class="record-map-note record-map-coordinates" role="status">{{ chosenLocationLabel }}</p>
+            </section>
+            <section class="record-map-form__section">
+              <h3>카테고리</h3>
+              <fieldset><legend>카테고리 · 여러 개 선택 가능</legend><label v-for="c in snapshot.collections" :key="c.id" class="checkbox-row"><input v-model="placeForm.collectionIds" type="checkbox" :value="c.id" /><span>{{ c.name }}</span></label><p v-if="!snapshot.collections.length">카테고리 없이 저장할 수 있습니다.</p><div class="record-map-category-create"><input v-model="inlineCategoryName" maxlength="100" aria-label="새 카테고리 이름" placeholder="새 카테고리 이름" /><button type="button" class="button" :disabled="busy" @click="addInlineCategory">추가</button></div><small>새 카테고리는 추가 즉시 저장됩니다.</small></fieldset>
+            </section>
+            <section class="record-map-form__section">
+              <h3>사진과 방문 기록</h3>
+              <label class="checkbox-row"><input v-model="placeForm.visited" type="checkbox" /><span>이미 방문한 곳으로 표시</span></label>
+              <label class="field">사진 · 선택<input type="file" accept="image/*" multiple @change="visitFilesPicked" /></label>
+              <span class="record-map-note">선택한 사진 {{ photosPending.length }}장 · 모두 이 장소에 첨부됩니다. 방문 날짜는 선택 사항입니다. 한 장당 15MB, 최대 20장</span>
+              <label class="checkbox-row"><input v-model="placeForm.recordNow" type="checkbox" /><span>방문 날짜와 이야기도 기록</span></label>
+              <div v-if="placeForm.recordNow" class="record-map-form">
+                <div class="record-map-form-grid"><label class="field">방문 날짜<input v-model="visitForm.date" type="date" required /></label><label class="field">시간 · 선택<input v-model="visitForm.time" type="time" /></label></div>
+                <label class="field">방문 제목<input v-model="visitForm.title" maxlength="160" :placeholder="placeForm.name || '방문 제목'" /></label>
+                <label class="field">이날의 이야기<textarea v-model="visitForm.memo" maxlength="4000" rows="4" /></label>
+              </div>
+            </section>
             <details class="record-map-advanced"><summary>국가·지역 및 좌표 직접 입력</summary><div class="record-map-form-grid"><label class="field">국가<input v-model="placeForm.country" maxlength="80" /></label><label class="field">지역<input v-model="placeForm.region" maxlength="120" /></label><label class="field">위도<input v-model="placeForm.latitude" type="number" step="any" min="-90" max="90" /></label><label class="field">경도<input v-model="placeForm.longitude" type="number" step="any" min="-180" max="180" /></label></div></details>
             <p v-if="placeForm.sourceTravelRecordId" class="record-map-note">연결된 여행 기록은 원본 여행에서 관리합니다. 여기서 수정하는 장소 정보는 원본 여행에 영향을 주지 않습니다.</p>
-            <button class="button button--primary" :disabled="busy || gpsLoading">{{ busy ? '저장 중...' : '장소 저장' }}</button>
+            <div class="record-map-form__footer"><button class="button button--primary" :disabled="busy || gpsLoading">{{ busy ? '저장 중...' : '장소 저장' }}</button></div>
           </form>
 
           <form v-else-if="modal === 'visit'" class="record-map-form" @submit.prevent="saveVisit" @input="dirty = true">
@@ -555,7 +593,7 @@ onBeforeUnmount(() => {
             <div class="record-map-form-grid"><label class="field">날짜{{ visitForm.id ? ' · 선택' : '' }}<input v-model="visitForm.date" type="date" :required="!visitForm.id" /></label><label class="field">시간 · 선택<input v-model="visitForm.time" type="time" :disabled="!visitForm.date" /></label></div>
             <label class="field">메모<textarea v-model="visitForm.memo" maxlength="4000" rows="5" /></label>
             <label class="field">첨부 사진<input type="file" accept="image/*" multiple @change="visitFilesPicked" /></label><span>업로드할 사진 {{ photosPending.length }}장 · 한 장당 15MB 이하</span>
-            <button class="button button--primary" :disabled="busy">{{ busy ? '저장 중...' : '방문 기록 저장' }}</button>
+            <div class="record-map-form__footer"><button class="button button--primary" :disabled="busy">{{ busy ? '저장 중...' : '방문 기록 저장' }}</button></div>
           </form>
 
           <div v-else-if="modal === 'collection'" class="record-map-form">
@@ -584,18 +622,19 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-else-if="modal === 'detail' && selectedPlace" class="record-map-form">
-            <p>{{ [selectedPlace.country, selectedPlace.region].filter(Boolean).join(' · ') }} · {{ selectedPlace.visited ? '방문한 곳' : '가고 싶은 곳' }}</p>
-            <p class="record-map-memo">{{ selectedPlace.memo }}</p>
+            <p class="record-map-detail-meta" :class="selectedPlace.visited ? 'is-visited' : 'is-wanted'">{{ formatPlaceMeta(selectedPlace) }}</p>
+            <div v-if="selectedPlaceCollections.length" class="record-map-chip-row" role="list" aria-label="속한 모음"><span v-for="c in selectedPlaceCollections" :key="c.id" class="record-map-chip" role="listitem"><i :style="{ background: c.colorHex }"></i>{{ c.name }}</span></div>
+            <p v-if="selectedPlace.memo" class="record-map-memo">{{ selectedPlace.memo }}</p>
             <div v-if="!readOnly" class="record-map-actions"><button class="button" @click="editPlace(selectedPlace)">장소·모음 수정</button><button class="button button--primary" @click="beginVisit()">방문 기록 남기기</button><button class="button button--danger" @click="deletePlace(selectedPlace)" :disabled="busy">장소 삭제</button></div>
             <h3>사진과 방문 기록</h3><p v-if="detailLoading" role="status">방문 기록을 불러오는 중입니다.</p>
             <article v-for="visit in detailVisits" :key="visit.id" class="record-map-visit">
               <header><div><strong>{{ visit.title }}</strong><p>{{ visit.date || '날짜 미지정' }} {{ visit.time?.slice(0, 5) }}<span v-if="visit.travelPlanName"> · {{ visit.travelPlanName }}</span></p></div><div v-if="!readOnly && visit.id.startsWith('visit:')" class="record-map-actions"><button class="button" @click="beginVisit(visit)">수정</button><button class="button button--danger" @click="deleteVisit(visit)" :disabled="busy">삭제</button></div></header>
-              <p class="record-map-memo">{{ visit.memo }}</p>
-              <div class="record-map-photo-grid"><button v-for="photo in visit.photos" :key="photo.id" type="button" @click="openPhoto(photo, visit)"><img :src="buildThumbnailUrl(photo.photoUrl, 'mini')" :alt="photo.name" loading="lazy" /></button></div>
+              <p v-if="visit.memo" class="record-map-memo">{{ visit.memo }}</p>
+              <div class="record-map-photo-grid"><button v-for="photo in visit.photos" :key="photo.id" type="button" @click="openPhoto(photo, visit)"><img :src="buildThumbnailUrl(photo.photoUrl, 'mini')" :alt="photo.name" width="100" height="110" decoding="async" loading="lazy" /></button></div>
               <small v-if="visit.id.startsWith('travel:')">연결된 여행 원본 기록입니다. 여행 화면에서 수정할 수 있습니다.</small>
             </article>
             <p v-if="!detailVisits.length && !detailLoading">아직 방문 기록이 없습니다. 가고 싶은 장소로 보관하거나 첫 방문을 남겨보세요.</p>
-            <div v-if="!readOnly" class="record-map-pagination"><button class="button" :disabled="!detailPage || detailLoading" @click="loadDetail(detailPage - 1)">이전 기록</button><span>{{ detailPage + 1 }}페이지</span><button class="button" :disabled="!detailHasMore || detailLoading" @click="loadDetail(detailPage + 1)">다음 기록</button></div>
+            <div v-if="!readOnly && (detailPage > 0 || detailHasMore)" class="record-map-pagination"><button class="button" :disabled="!detailPage || detailLoading" @click="loadDetail(detailPage - 1)">이전 기록</button><span>{{ detailPage + 1 }}페이지</span><button class="button" :disabled="!detailHasMore || detailLoading" @click="loadDetail(detailPage + 1)">다음 기록</button></div>
           </div>
 
           <div v-else-if="modal === 'photo' && selectedPhoto" class="record-map-form">
@@ -614,15 +653,18 @@ onBeforeUnmount(() => {
 :global(body:has(.record-map-workspace .travel-map--fullscreen) .theme-switcher) { display:none !important; }
 .record-map-workspace > .feedback { margin:0; padding:6px 10px; font-size:.8rem; }
 .record-map-workspace { gap:8px; }
-.record-map-header { display: flex; flex-wrap: wrap; align-items:center; justify-content: space-between; gap: 8px; padding:10px 14px; }
-.record-map-header h2 { margin: 5px 0; } .record-map-header p { margin: 0; }
-.record-map-header h2 { font-size:1.1rem; }
+.record-map-header { display: flex; flex-wrap: wrap; align-items:center; justify-content: space-between; gap: 8px; padding:6px 12px; min-height:0; }
+.record-map-header > div { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; min-width:0; }
+.record-map-header h2 { margin: 0; font-size:1rem; overflow-wrap:anywhere; } .record-map-header p { margin: 0; }
 .record-map-add { position:relative; z-index:1100; }
-.record-map-add-actions { display:grid; gap:4px; min-width:0; }
+.record-map-tools .record-map-add-actions { display:grid; gap:4px; min-width:0; }
+:global(.record-map-sidebar__header .record-map-add-actions) { display:flex !important; flex-direction:row; align-items:center; gap:4px; min-width:0; }
+:global(html body .app-shell .record-map-sidebar__header .record-map-add-primary) { font-size:12px !important; padding:6px 8px !important; min-height:36px !important; }
+:global(html body .app-shell .record-map-sidebar__header .record-map-add summary) { min-height:36px !important; box-sizing:border-box; display:inline-flex; align-items:center; font-size:12px !important; padding:6px 8px !important; }
 .record-map-add-primary { min-width:0; white-space:nowrap; font-size:.78rem; padding:7px 8px; }
 .record-map-add summary { cursor:pointer; list-style:none; font-size:.78rem; padding:7px 4px; }
-:global(html body .app-shell .record-map-workspace .travel-map .record-map-tools .record-map-add summary.button--primary) { background:#365b45 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; text-shadow:none !important; }
-:global(html body .app-shell .record-map-workspace .travel-map .record-map-sidebar .record-map-sidebar__header .record-map-add summary.button--primary) { background:#365b45 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; text-shadow:none !important; font-size:12px !important; padding:6px !important; }
+:global(html body .app-shell .record-map-workspace .travel-map .record-map-tools .record-map-add summary.button--primary) { background:var(--rm-accent) !important; color:var(--rm-accent-contrast) !important; -webkit-text-fill-color:var(--rm-accent-contrast) !important; text-shadow:none !important; }
+:global(html body .app-shell .record-map-workspace .travel-map .record-map-sidebar .record-map-sidebar__header .record-map-add summary.button--primary) { background:var(--rm-accent) !important; color:var(--rm-accent-contrast) !important; -webkit-text-fill-color:var(--rm-accent-contrast) !important; text-shadow:none !important; font-size:12px !important; padding:6px !important; }
 :global(html body .app-shell .record-map-workspace .travel-map .record-map-sidebar .record-map-search button.button[type="submit"]) { background:var(--panel-bg) !important; color:var(--text) !important; -webkit-text-fill-color:var(--text) !important; text-shadow:none !important; }
 .record-map-add__menu { position:absolute; top:calc(100% + 6px); right:0; width:200px; max-height:50dvh; overflow-y:auto; display:grid; gap:4px; padding:8px; border:1px solid var(--line); background:var(--panel-bg); box-shadow:0 6px 24px #0003; }
 .record-map-add__menu .button { text-align:left; width:100%; }
@@ -634,43 +676,43 @@ onBeforeUnmount(() => {
 .record-map-frame :deep(.travel-map--record-workspace > .travel-map__toolbar) { position:absolute !important; z-index:1002; top:12px !important; right:12px !important; bottom:auto !important; left:auto !important; width:auto !important; max-width:none !important; max-height:none !important; height:auto !important; margin:0; padding:0 !important; border:0 !important; background:transparent !important; transform:none !important; overflow:visible !important; }
 .record-map-frame :deep(.travel-map--record-workspace .travel-map__stage) { position:relative; width:100%; height:100% !important; min-height:0 !important; padding:0; }
 .record-map-frame :deep(.travel-map--record-workspace .travel-map__canvas) { height:100% !important; min-height:0 !important; width:100%; }
-.record-map-tools { display:grid; gap:5px; width:92px; padding:8px; box-sizing:border-box; background:var(--panel-bg); color:var(--text); border:1px solid var(--line); box-shadow:0 4px 16px #0003; }
+.record-map-tools { display:grid; gap:5px; width:80px; padding:8px; box-sizing:border-box; background:var(--rm-panel); color:var(--rm-text); border:1px solid var(--rm-line); box-shadow:var(--rm-shadow); }
 .record-map-tools .button { padding:7px 4px !important; min-height:36px !important; min-width:0 !important; max-width:100% !important; width:100%; box-sizing:border-box; font-size:.78rem !important; }
 .record-map-tools__zoom { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:3px; }
 .record-map-tools__zoom .travel-cluster-map__zoom { min-width:20px; font-size:.8rem; }
-.record-map-tools summary { cursor:pointer; text-align:center; padding:8px 0; font-size:.78rem; }
+.record-map-tools summary { cursor:pointer; text-align:center; padding:8px 0; font-size:.74rem; white-space:nowrap; }
 .record-map-tools__settings { display:grid; gap:5px; }
 @media(max-width:760px) {
-  :global(body:has(.record-map-workspace) .app-shell) { padding-top:0 !important; }
-  :global(body:has(.record-map-workspace) .theme-switcher) { position:static !important; padding:4px 8px !important; margin:0 !important; min-height:0 !important; justify-content:flex-end; }
-  :global(body:has(.record-map-workspace) .theme-switcher button) { min-height:30px !important; padding:4px 7px !important; font-size:11px !important; }
-  :global(body:has(.record-map-workspace) .topbar) { display:flex !important; flex-wrap:wrap; gap:4px !important; padding:6px 8px !important; min-height:0 !important; }
-  :global(body:has(.record-map-workspace) .topbar__copy) { flex:1; min-width:0; }
-  :global(body:has(.record-map-workspace) .topbar__copy :is(.topbar__eyebrow,.topbar__title,.topbar__description,.topbar__context)) { display:none !important; }
-  :global(body:has(.record-map-workspace) .topbar__brand) { font-size:14px !important; }
-  :global(body:has(.record-map-workspace) .topbar__actions) { width:auto !important; gap:4px !important; }
-  :global(html body:has(.record-map-workspace) .app-shell .topbar__actions) { display:flex !important; flex-direction:row !important; flex-wrap:nowrap !important; }
-  :global(body:has(.record-map-workspace) .topbar__actions .button) { min-height:30px !important; min-width:0 !important; padding:4px 7px !important; font-size:11px !important; }
-  :global(html body:has(.record-map-workspace) .app-shell .topbar__actions .button) { width:auto !important; flex:0 0 auto !important; }
-  :global(body:has(.record-map-workspace) .topbar__nav) { width:100% !important; gap:3px !important; padding:0 !important; }
-  :global(body:has(.record-map-workspace) .topbar__nav-button) { min-height:34px !important; padding:5px 8px !important; font-size:12px !important; }
-  :global(body:has(.record-map-workspace) .record-map-mode-switch) { gap:5px; padding:6px 8px !important; }
-  :global(body:has(.record-map-workspace) .record-map-mode-switch .button) { min-height:34px !important; font-size:12px !important; padding:5px 8px !important; }
+  :global(body:has(.record-map-workspace--shared) .app-shell) { padding-top:0 !important; }
+  :global(body:has(.record-map-workspace--shared) .theme-switcher) { position:static !important; padding:4px 8px !important; margin:0 !important; min-height:0 !important; justify-content:flex-end; }
+  :global(body:has(.record-map-workspace--shared) .theme-switcher button) { min-height:30px !important; padding:4px 7px !important; font-size:11px !important; }
   .record-map-frame :deep(.travel-map--record-workspace > .travel-map__toolbar) { top:8px !important; right:8px !important; left:8px !important; }
   .record-map-frame :deep(.travel-map--record-workspace.travel-map--sidebar-expanded > .travel-map__toolbar) { display:none !important; }
   .record-map-tools { width:100%; padding:5px; grid-template-columns:repeat(4,minmax(0,1fr)); }
   .record-map-tools__zoom { grid-column:span 2; }
-  .record-map-tools > button:nth-of-type(2), .record-map-tools > details { grid-column:span 2; }
-  .record-map-tools .button { min-height:36px; }
+  .record-map-tools > details { grid-column:span 2; }
+  .record-map-tools > div:has(.record-map-add-actions) { grid-column:span 2; }
+  .record-map-tools .record-map-add-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .record-map-tools .record-map-add__menu { right:auto; left:0; }
+  .record-map-tools .button { min-height:44px !important; }
+  .record-map-tools summary { min-height:44px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; padding:0 !important; }
   .record-map-header { padding:6px 10px !important; min-height:0 !important; }
-  .record-map-header h2 { margin:0 !important; font-size:1rem !important; }
 }
-.record-map-actions, .record-map-floating-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.record-map-actions > *, .record-map-floating-actions > * { flex-shrink: 0; }
-.record-map-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
-.record-map-filters > label { display: grid; gap: 6px; flex: 1 1 140px; min-width: 0; }
-.record-map-filters input, .record-map-filters select { width: 100%; min-width: 0; }
+.record-map-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.record-map-actions > * { flex-shrink: 0; }
 .record-map-form { display: grid; gap: 14px; min-width: 0; }
+.record-map-form__section { display: grid; gap: 10px; min-width: 0; padding-bottom: 12px; border-bottom: 1px solid var(--rm-line); }
+.record-map-form__section > h3 { margin: 0; font-size: .85rem; letter-spacing: .02em; color: var(--rm-text-soft, inherit); }
+.record-map-coordinates { font-variant-numeric: tabular-nums; }
+.record-map-form__footer { position: sticky; bottom: 0; z-index: 1; margin: 0 -18px -18px; padding: 12px 18px; background: var(--rm-panel); border-top: 1px solid var(--rm-line); }
+.record-map-form__footer .button { width: 100%; min-height: 44px; }
+.record-map-form :deep(.travel-map__toolbar-group:has(> .travel-map__toolbar-label)) { display: none; }
+.record-map-detail-meta { margin: 0; padding-left: 8px; border-left: 3px solid var(--rm-line); font-weight: 600; }
+.record-map-detail-meta.is-visited { color: var(--rm-visited); border-left-color: var(--rm-visited); }
+.record-map-detail-meta.is-wanted { color: var(--rm-wanted); border-left-color: var(--rm-wanted); }
+.record-map-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.record-map-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--rm-line); font-size: .8rem; }
+.record-map-chip i { display: inline-block; width: 10px; height: 10px; flex-shrink: 0; }
 .record-map-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
 .record-map-category-create { display:flex; gap:6px; width:100%; min-width:0; }
 .record-map-category-create input { flex:1; min-width:0; }
@@ -684,25 +726,20 @@ onBeforeUnmount(() => {
 .record-map-form input, .record-map-form textarea, .record-map-form select { width: 100%; min-width: 0; }
 .record-map-form input[type="checkbox"] { width: auto; }
 .record-map-form input[type="color"] { width: 72px; height: 42px; padding: 4px; }
-fieldset { display: flex; gap: 10px; flex-wrap: wrap; border: 1px solid #53646877; padding: 12px; }
+fieldset { display: flex; gap: 10px; flex-wrap: wrap; border: 1px solid var(--rm-line); padding: 12px; }
 .record-map-note { font-size: .85rem; line-height: 1.6; opacity: .85; margin: 0; }
 .record-map-collection-list { display: grid; gap: 8px; }
-.record-map-collection-list article { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid #53646877; }
+.record-map-collection-list article { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid var(--rm-line); }
 .record-map-collection-list strong { overflow-wrap: anywhere; }
 .record-map-collection-list i { display: inline-block; width: 10px; height: 10px; margin-right: 8px; }
-.record-map-place-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px),1fr)); gap: 12px; }
-.record-map-place-grid article, .record-map-visit, .record-map-diary article { padding: 16px; border: 1px solid #53646877; min-width: 0; }
-.record-map-state { display: inline-block; background: #ba812522; color: #c98c2f; border-left: 3px solid currentColor; padding: 5px 8px; font-size: .8rem; }
-.record-map-state.is-visited { background: #009e8c22; color: #2aaf9e; }
-.record-map-place-grid h3, .record-map-memo { overflow-wrap: anywhere; }
+.record-map-visit { padding: 16px; border: 1px solid var(--rm-line); min-width: 0; }
+.record-map-memo { overflow-wrap: anywhere; }
 .record-map-memo { white-space: pre-wrap; }
-.record-map-visit header, .record-map-diary header { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: 10px; }
-.record-map-diary { display: grid; gap: 14px; }
+.record-map-visit header { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: 10px; }
 .record-map-photo-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(100px,1fr)); gap: 8px; }
-.record-map-photo-grid button { padding: 0; border: 1px solid #53646877; background: transparent; height: 110px; overflow: hidden; cursor: pointer; }
+.record-map-photo-grid button { padding: 0; border: 1px solid var(--rm-line); background: transparent; height: 110px; overflow: hidden; cursor: pointer; }
 .record-map-photo-grid img { width: 100%; height: 100%; object-fit: cover; }
 .record-map-large-photo { width: 100%; max-height: 64dvh; object-fit: contain; }
 .record-map-pagination { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center; padding: 14px 0; }
-.record-map-empty { text-align: center; padding: 24px; }
-@media(max-width:600px) { .record-map-form-grid { grid-template-columns: 1fr; } .record-map-header { padding: 14px; } .record-map-actions > .button { flex: 1 1 auto; } .record-map-pagination .button { min-height: 44px; } }
+@media(max-width:600px) { .record-map-form__footer { bottom: 0; margin: 0 -12px -12px; padding: 10px 12px; } .record-map-form-grid { grid-template-columns: 1fr; } .record-map-header { padding: 14px; } .record-map-actions > .button { flex: 1 1 auto; } .record-map-pagination .button { min-height: 44px; } }
 </style>

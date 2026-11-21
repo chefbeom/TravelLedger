@@ -71,3 +71,30 @@ export function overlapsCalendarDate(startDate, endDate, date) {
   return validCalendarDate(startDate) && validCalendarDate(endDate) && validCalendarDate(date)
     && startDate <= endDate && startDate <= date && date <= endDate
 }
+
+export function calendarWeekday(value) {
+  if (!validCalendarDate(value)) throw new RangeError('Invalid calendar date')
+  const [year, month, day] = value.split('-').map(Number)
+  return calendarDate(year, month, day).getUTCDay()
+}
+
+export function shiftCalendarDate(value, days) {
+  if (!validCalendarDate(value)) throw new RangeError('Invalid calendar date')
+  const [year, month, day] = value.split('-').map(Number)
+  const date = calendarDate(year, month, day)
+  date.setUTCDate(date.getUTCDate() + days)
+  return isoDate(date)
+}
+
+// The selected day after moving to another month: today when it belongs to that
+// month, otherwise the first day.
+export function monthTargetDate(year, month, todayIso) {
+  const prefix = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`
+  return typeof todayIso === 'string' && todayIso.startsWith(`${prefix}-`) ? todayIso : `${prefix}-01`
+}
+
+export function splitCalendarWeeks(days) {
+  const weeks = []
+  for (let index = 0; index < days.length; index += 7) weeks.push(days.slice(index, index + 7))
+  return weeks
+}

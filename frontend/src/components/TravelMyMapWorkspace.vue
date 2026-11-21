@@ -1514,13 +1514,22 @@ watch(journeyRoutePath, (path) => {
           <span class="panel__eyebrow">TRAVEL ATLAS</span>
           <h2>내 여행 지도</h2>
         </div>
-        <div class="travel-my-map-header__actions">
-          <button class="button button--secondary" type="button" @click="emit('create-travel')">새 여행 만들기</button>
-          <button class="button button--secondary" type="button" @click="emit('open-travel-manager')">여행 정보 수정</button>
-          <button class="button button--primary" type="button" @click="emit('open-memories', { planId: selectedSinglePlanId, create: true })">장소·사진 추가</button>
-          <button class="button button--secondary" type="button" :disabled="!selectedSinglePlanId" :aria-pressed="travelPickMode" @click="travelPickMode = !travelPickMode">{{ travelPickMode ? '위치 선택 취소' : '지도에 장소 찍기' }}</button>
-          <button class="button button--secondary" type="button" @click="emit('open-routes', { planId: selectedSinglePlanId })">경로 추가</button>
-          <button class="button button--primary" type="button" @click="openShareDialog">지도 공유</button>
+        <div class="travel-my-map-header__actions travel-my-map-actions">
+          <div class="travel-my-map-actions__group" role="group" aria-label="여행">
+            <span class="travel-my-map-actions__label" aria-hidden="true">여행</span>
+            <button class="button button--secondary" type="button" @click="emit('create-travel')">새 여행 만들기</button>
+            <button class="button button--secondary" type="button" @click="emit('open-travel-manager')">여행 정보 수정</button>
+          </div>
+          <div class="travel-my-map-actions__group" role="group" aria-label="기록">
+            <span class="travel-my-map-actions__label" aria-hidden="true">기록</span>
+            <button class="button button--primary travel-my-map-actions__main" type="button" @click="emit('open-memories', { planId: selectedSinglePlanId, create: true })">장소·사진 추가</button>
+            <button class="button button--secondary" type="button" :disabled="!selectedSinglePlanId" :aria-pressed="travelPickMode" @click="travelPickMode = !travelPickMode">{{ travelPickMode ? '위치 선택 취소' : '지도에 장소 찍기' }}</button>
+            <button class="button button--secondary" type="button" @click="emit('open-routes', { planId: selectedSinglePlanId })">경로 추가</button>
+          </div>
+          <div class="travel-my-map-actions__group" role="group" aria-label="공유">
+            <span class="travel-my-map-actions__label" aria-hidden="true">공유</span>
+            <button class="button button--primary" type="button" @click="openShareDialog">지도 공유</button>
+          </div>
         </div>
       </div>
       <label class="field travel-map-trip-select"><span class="field__label">여행 선택</span><select :value="selectedSinglePlanId" @change="choosePlan"><option value="">전체 여행</option><option v-for="plan in plans" :key="plan.id" :value="String(plan.id)">{{ plan.name }}{{ !plan.startDate && !plan.endDate ? ' · 기간 없음' : '' }}</option></select></label>
@@ -1917,7 +1926,23 @@ watch(journeyRoutePath, (path) => {
 </template>
 
 <style scoped>
-.travel-map-trip-select { max-width:24rem; margin:.75rem 0; }
+.travel-map-trip-select { max-width:24rem; margin:.5rem 0; }
+.travel-my-map-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:6px 14px; }
+.travel-my-map-actions__group { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding-left:14px; border-left:1px solid var(--line); }
+.travel-my-map-actions__group:first-child { padding-left:0; border-left:0; }
+.travel-my-map-actions__label { font-size:.72rem; font-weight:700; letter-spacing:.04em; color:var(--text-soft); }
+@media (max-width:720px) {
+  .workspace-stack .travel-my-map-actions { display:grid !important; grid-template-columns:repeat(2, minmax(0, 1fr)) !important; gap:6px !important; width:100% !important; justify-content:stretch !important; }
+  .workspace-stack .travel-my-map-actions .travel-my-map-actions__group { display:contents; }
+  .workspace-stack .travel-my-map-actions .travel-my-map-actions__label { display:none; }
+  .workspace-stack .travel-my-map-actions .button { width:auto !important; flex:none !important; min-width:0 !important; min-height:44px !important; }
+  .workspace-stack .travel-my-map-actions .travel-my-map-actions__main { grid-column:1 / -1; }
+}
+:global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions) { display:grid !important; grid-template-columns:repeat(2, minmax(0, 1fr)) !important; gap:6px !important; width:100% !important; justify-content:stretch !important; }
+:global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .travel-my-map-actions__group) { display:contents; }
+:global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .travel-my-map-actions__label) { display:none; }
+:global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .button) { width:auto !important; flex:none !important; min-width:0 !important; min-height:44px !important; }
+:global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .travel-my-map-actions__main) { grid-column:1 / -1; }
 .travel-map-pick-hint { margin:.4rem 0; font-size:.8rem; }
 .travel-map-advanced { border:1px solid var(--line); padding:.7rem; margin-top:.5rem; }
 .travel-map-advanced summary { cursor:pointer; font-weight:700; }

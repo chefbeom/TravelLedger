@@ -344,7 +344,11 @@ export async function createLocalImagePreview(file, options = {}) {
 
     URL.revokeObjectURL(originalPreviewUrl)
     return URL.createObjectURL(previewBlob)
-  } catch {
+  } catch (error) {
+    if (options.rejectOnDecodeError === true) {
+      URL.revokeObjectURL(originalPreviewUrl)
+      throw error
+    }
     return originalPreviewUrl
   }
 }

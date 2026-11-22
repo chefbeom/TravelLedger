@@ -102,6 +102,42 @@ function normalizeConcurrencyLimit(value, fallback = 1) {
   return Math.max(1, Math.floor(numericValue))
 }
 
+function createLimiter(concurrency) {
+  const limit = normalizeConcurrencyLimit(concurrency, 1)
+  let active = 0
+  const waiting = []
+
+  // A released slot is handed straight to the next waiter, so a new caller
+  // cannot take it in between and push the count over the limit.
+  const release = () => {
+    const next = waiting.shift()
+    if (next) next()
+    else active -= 1
+  }
+
+  return async function limited(task) {
+    if (active >= limit) {
+      await new Promise((resolve) => waiting.push(resolve))
+    } else {
+      active += 1
+    }
+    try {
+      return await task()
+    } finally {
+      release()
+    }
+  }
+}
+
+// Shared limiters so several uploads (e.g. many small photo groups) can run
+// together without exceeding the overall prepare / storage-PUT concurrency.
+export function createTravelUploadScheduler({ prepareConcurrency = 2, uploadConcurrency = 5 } = {}) {
+  return {
+    prepare: createLimiter(prepareConcurrency),
+    upload: createLimiter(uploadConcurrency),
+  }
+}
+
 async function mapWithConcurrency(items, concurrency, worker) {
   const normalizedItems = Array.isArray(items) ? items : []
   if (!normalizedItems.length) {
@@ -1368,7 +1404,7 @@ function uploadPresignedTravelMediaFileWithProgress(target, file) {
   })
 }
 
-async function prepareTravelMediaUploadEntries(files, onProgress) {
+async function prepareTravelMediaUploadEntries(files, onProgress, scheduler = null) {
   const selectedFiles = [...(files ?? [])].filter(Boolean)
   const preparedEntries = new Array(selectedFiles.length)
   let preparedCount = 0
@@ -1379,7 +1415,7 @@ async function prepareTravelMediaUploadEntries(files, onProgress) {
     total: selectedFiles.length,
   })
 
-  await mapWithConcurrency(selectedFiles, TRAVEL_MEDIA_PREPARATION_CONCURRENCY, async (file, index) => {
+  const prepareOne = async (file, index) => {
     const contentType = resolveUploadContentType(file)
     const normalizedFileType = String(file?.type || '').trim().toLowerCase()
     const sourceFile =
@@ -1414,7 +1450,13 @@ async function prepareTravelMediaUploadEntries(files, onProgress) {
       total: selectedFiles.length,
       fileName: file?.name || '',
     })
-  })
+  }
+
+  if (scheduler) {
+    await Promise.all(selectedFiles.map((file, index) => scheduler.prepare(() => prepareOne(file, index))))
+  } else {
+    await mapWithConcurrency(selectedFiles, TRAVEL_MEDIA_PREPARATION_CONCURRENCY, prepareOne)
+  }
 
   return preparedEntries
 }
@@ -1447,13 +1489,14 @@ async function uploadTravelMediaWithPresignedUrls({
   files,
   caption = '',
   onProgress,
+  scheduler = null,
 }) {
   const selectedFiles = [...(files ?? [])].filter(Boolean)
   if (!selectedFiles.length) {
     return []
   }
 
-  const preparedEntries = await prepareTravelMediaUploadEntries(selectedFiles, onProgress)
+  const preparedEntries = await prepareTravelMediaUploadEntries(selectedFiles, onProgress, scheduler)
 
   const prepared = await request(preparePath, {
     method: 'POST',
@@ -1488,7 +1531,7 @@ async function uploadTravelMediaWithPresignedUrls({
   })
 
   let uploadedCount = 0
-  await mapWithConcurrency(prepared.uploads, TRAVEL_MEDIA_UPLOAD_CONCURRENCY, async (uploadTarget, index) => {
+  const uploadOne = async (uploadTarget, index) => {
     const preparedEntry = preparedEntries[index]
     await uploadPreparedTravelMediaEntry(uploadTarget, preparedEntry)
 
@@ -1499,7 +1542,12 @@ async function uploadTravelMediaWithPresignedUrls({
       total: prepared.uploads.length,
       fileName: preparedEntry.originalFileName || uploadTarget?.originalFileName || '',
     })
-  })
+  }
+  if (scheduler) {
+    await Promise.all(prepared.uploads.map((uploadTarget, index) => scheduler.upload(() => uploadOne(uploadTarget, index))))
+  } else {
+    await mapWithConcurrency(prepared.uploads, TRAVEL_MEDIA_UPLOAD_CONCURRENCY, uploadOne)
+  }
 
   onProgress?.({
     phase: 'finalizing',
@@ -1538,6 +1586,7 @@ async function uploadTravelMediaInternal({
   files,
   caption = '',
   onProgress,
+  scheduler = null,
 }) {
   const selectedFiles = [...(files ?? [])].filter(Boolean)
   if (!selectedFiles.length) {
@@ -1560,6 +1609,7 @@ async function uploadTravelMediaInternal({
       files: selectedFiles,
       caption,
       onProgress,
+      scheduler,
     })
   }
 
@@ -1585,6 +1635,7 @@ export async function uploadTravelMemoryMedia(memoryId, files, caption = '', opt
     files,
     caption,
     onProgress: options.onProgress,
+    scheduler: options.scheduler,
   })
 }
 

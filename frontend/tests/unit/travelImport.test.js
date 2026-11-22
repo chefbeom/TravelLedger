@@ -1,3 +1,4 @@
+import { createTravelUploadScheduler } from '../../src/lib/api.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -25,6 +26,7 @@ import {
   localDateTime,
   parseGpxText,
   runImportSave,
+  IMPORT_PHOTO_GROUP_CONCURRENCY,
   sortDrafts,
   stripExtension,
   suggestPlanId,
@@ -631,4 +633,127 @@ test('runImportSave retries only the upload for an attached draft', async () => 
   assert.equal(second.ok, true)
   assert.equal(calls.filter(c => c[0] === 'memory').length, 1)
   assert.equal(calls.filter(c => c[0] === 'photos' && c[1] === '501').length, 2)
+})
+
+// ---------------------------------------------------------------- concurrent photo save
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+function manyPhotoDrafts(count, photosPer = 2) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `photos:${i}`, kind: 'photos', include: true, title: `T${i}`, date: '2026-10-02',
+    time: `${String(8 + Math.floor(i / 6)).padStart(2, '0')}:${String((i % 6) * 10).padStart(2, '0')}`,
+    category: '장소', memo: '', latitude: 1, longitude: 2,
+    photos: Array.from({ length: photosPer }, (_, k) => ({ file: `f${i}-${k}` })),
+    progress: { memoryId: null, routeId: null, photosUploaded: false, gpxUploaded: false }, status: 'draft',
+  }))
+}
+
+// Fake api modelled on the real upload: prepare-all, 3 round trips, parallel PUTs.
+function timedApi({ withScheduler, failFor = null, d = { create: 5, prep: 10, trip: 8, put: 20 } } = {}) {
+  const log = []
+  let memoryId = 0, inFlightCalls = 0, maxCalls = 0, inFlightPuts = 0, maxPuts = 0
+  const api = {
+    async createPlan() { return { id: 91 } },
+    async createMemory(_planId, payload) { await sleep(d.create); log.push(['memory', payload.title]); return { id: ++memoryId } },
+    async uploadMemoryPhotos(id, files, _onProgress, options = {}) {
+      const sched = options.scheduler
+      log.push(['upload-start', id])
+      inFlightCalls += 1; maxCalls = Math.max(maxCalls, inFlightCalls)
+      try {
+        if (failFor && files.includes(failFor)) { await sleep(d.trip); throw new Error('Presigned travel media upload is unavailable.') }
+        const run = (kind, fn) => (sched ? sched[kind](fn) : fn())
+        const mapAll = async (items, limit, fn) => {
+          if (sched) return Promise.all(items.map(item => fn(item)))
+          let next = 0
+          await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => { while (next < items.length) await fn(items[next++]) }))
+        }
+        await mapAll(files, 2, () => run('prepare', () => sleep(d.prep)))
+        await sleep(d.trip)
+        await mapAll(files, 5, () => run('upload', async () => {
+          inFlightPuts += 1; maxPuts = Math.max(maxPuts, inFlightPuts)
+          await sleep(d.put)
+          inFlightPuts -= 1
+        }))
+        await sleep(d.trip)
+      } finally { inFlightCalls -= 1 }
+    },
+  }
+  if (withScheduler) api.createUploadScheduler = () => createTravelUploadScheduler()
+  return { api, log, stats: () => ({ maxCalls, maxPuts }) }
+}
+
+async function timedRun(drafts, opts) {
+  const h = timedApi(opts)
+  const started = Date.now()
+  const result = await runImportSave({ drafts, target: { mode: 'existing', planId: '90' }, api: h.api, today: '2026-11-22', onChange: applier(drafts) })
+  return { ...h, result, elapsed: Date.now() - started }
+}
+
+test('photo drafts: records are created in order before any upload starts and uploads overlap', async () => {
+  const drafts = manyPhotoDrafts(10)
+  const { log, stats, result } = await timedRun(drafts, { withScheduler: true })
+  assert.equal(result.ok, true)
+  const firstUpload = log.findIndex(e => e[0] === 'upload-start')
+  assert.deepEqual(log.slice(0, firstUpload).map(e => e[1]), drafts.map((_, i) => `T${i}`))
+  assert.equal(log.filter(e => e[0] === 'memory').length, 10)
+  assert.ok(stats().maxCalls > 1)
+  assert.ok(stats().maxCalls <= IMPORT_PHOTO_GROUP_CONCURRENCY)
+  assert.ok(stats().maxPuts <= 5)
+  assert.ok(drafts.every(d => d.status === 'saved' && d.progress.photosUploaded))
+})
+
+test('createTravelUploadScheduler caps prepare and upload concurrency separately', async () => {
+  const scheduler = createTravelUploadScheduler({ prepareConcurrency: 2, uploadConcurrency: 3 })
+  const track = async kind => {
+    let active = 0, max = 0
+    await Promise.all(Array.from({ length: 12 }, () => scheduler[kind](async () => { active += 1; max = Math.max(max, active); await sleep(3); active -= 1 })))
+    return max
+  }
+  assert.equal(await track('prepare'), 2)
+  assert.equal(await track('upload'), 3)
+  await assert.rejects(scheduler.upload(async () => { throw new Error('boom') }), /boom/)
+  assert.equal(await scheduler.upload(async () => 'ok'), 'ok')
+})
+
+test('photo drafts: one failing draft leaves the others saved with the usual error text', async () => {
+  const drafts = manyPhotoDrafts(6)
+  const { result } = await timedRun(drafts, { withScheduler: true, failFor: 'f2-0' })
+  assert.equal(result.ok, false)
+  assert.equal(drafts.filter(d => d.status === 'saved').length, 5)
+  const failed = drafts.find(d => d.id === 'photos:2')
+  assert.equal(failed.status, 'failed')
+  assert.match(failed.error, /기록은 저장되었습니다\. 다시 시도하면 사진만 올립니다\.$/)
+  assert.ok(failed.progress.memoryId)
+  const seq = manyPhotoDrafts(6)
+  await timedRun(seq, { withScheduler: false, failFor: 'f2-0' })
+  assert.equal(seq.find(d => d.id === 'photos:2').error, failed.error)
+})
+
+test('photo drafts: resume skips finished drafts and never recreates records', async () => {
+  const drafts = manyPhotoDrafts(6)
+  const first = await timedRun(drafts, { withScheduler: true, failFor: 'f3-1' })
+  assert.equal(first.result.ok, false)
+  const second = await timedRun(drafts, { withScheduler: true })
+  assert.equal(second.result.ok, true)
+  assert.equal(second.log.filter(e => e[0] === 'memory').length, 0)
+  assert.equal(second.log.filter(e => e[0] === 'upload-start').length, 1)
+  assert.ok(drafts.every(d => d.status === 'saved'))
+})
+
+test('photo drafts: attach drafts upload to the existing record through the scheduler too', async () => {
+  const drafts = manyPhotoDrafts(3)
+  drafts[1].attachRecordId = 777
+  const { log, result } = await timedRun(drafts, { withScheduler: true })
+  assert.equal(result.ok, true)
+  assert.equal(log.filter(e => e[0] === 'memory').length, 2)
+  assert.ok(log.some(e => e[0] === 'upload-start' && e[1] === '777'))
+})
+
+test('simulated save time: concurrent groups beat the sequential flow (30 drafts x 2 photos)', async () => {
+  const oldRun = await timedRun(manyPhotoDrafts(30), { withScheduler: false })
+  const newRun = await timedRun(manyPhotoDrafts(30), { withScheduler: true })
+  console.log(`simulated save, 30 drafts x 2 photos: old sequential ${oldRun.elapsed} ms, new concurrent ${newRun.elapsed} ms`)
+  assert.ok(newRun.stats().maxPuts <= 5)
+  assert.ok(newRun.elapsed < oldRun.elapsed * 0.6)
 })

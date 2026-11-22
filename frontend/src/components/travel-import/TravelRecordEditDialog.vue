@@ -18,7 +18,7 @@ import {
   describePhotoAgainstRecord,
   toImportErrorMessage,
 } from '../../lib/travelImport'
-import { canDecodeImage, searchTravelLocations } from '../../lib/useTravelImport'
+import { searchTravelLocations } from '../../lib/useTravelImport'
 
 const MAX_NEW_PHOTOS = 50
 const DECODE_FAILURE = '사진 파일을 읽을 수 없습니다. 손상되었거나 지원하지 않는 형식입니다.'
@@ -250,10 +250,6 @@ async function stagePhotos(fileList) {
         nextRejected.push({ id: `rej-${++previewCounter}`, name: file.name, reason: kind.reason })
         continue
       }
-      if (!(await canDecodeImage(file))) {
-        nextRejected.push({ id: `rej-${++previewCounter}`, name: file.name, reason: DECODE_FAILURE })
-        continue
-      }
       let meta = null
       try {
         meta = await extractPhotoMetadata(file, { reverseGeocode: false })
@@ -262,7 +258,7 @@ async function stagePhotos(fileList) {
       }
       let previewUrl = ''
       try {
-        previewUrl = await createLocalImagePreview(file, { maxWidth: 160, maxHeight: 160 })
+        previewUrl = await createLocalImagePreview(file, { maxWidth: 160, maxHeight: 160, rejectOnDecodeError: true })
       } catch {
         nextRejected.push({ id: `rej-${++previewCounter}`, name: file.name, reason: DECODE_FAILURE })
         continue

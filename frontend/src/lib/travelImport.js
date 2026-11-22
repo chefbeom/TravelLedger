@@ -771,6 +771,8 @@ export function formatRecordPhotoNotice({ addedPhotos = 0, title = '', recordCha
 
 // ---------------------------------------------------------------- save orchestration
 
+export const IMPORT_PHOTO_GROUP_CONCURRENCY = 4
+
 export async function runImportSave({ drafts, target, api, today, onPlan, onChange }) {
   const pending = sortDrafts((drafts || []).filter((draft) => draft.include !== false && draft.status !== 'saved'))
   let createdPlanId = target.createdPlanId || ''
@@ -790,7 +792,39 @@ export async function runImportSave({ drafts, target, api, today, onPlan, onChan
 
   const planId = createdPlanId || target.planId
   let allSaved = true
+  const scheduler = typeof api.createUploadScheduler === 'function' ? api.createUploadScheduler() : null
+  const uploadOptions = scheduler ? { scheduler } : undefined
+  const uploadQueue = []
 
+  // Uploads the photos of one photo draft and records its final status.
+  async function finishPhotoDraft(job) {
+    const { draft, update, attachId, onProgress } = job
+    let progress = job.progress
+    const photos = draft.photos || []
+    if (photos.length && !progress.photosUploaded) {
+      try {
+        await api.uploadMemoryPhotos(
+          attachId || progress.memoryId,
+          photos.map((photo) => photo.file),
+          onProgress,
+          uploadOptions,
+        )
+        progress = { ...progress, photosUploaded: true }
+        update({ progress, upload: null })
+      } catch (error) {
+        update({
+          status: 'failed',
+          upload: null,
+          error: `${toImportErrorMessage(error)} ${attachId ? '' : '기록은 저장되었습니다. '}다시 시도하면 사진만 올립니다.`,
+        })
+        allSaved = false
+        return
+      }
+    }
+    update({ status: 'saved', error: '', upload: null })
+  }
+
+  // Pass 1 (sequential): plan, routes and one memory per new photo draft.
   for (const draft of pending) {
     let progress = { memoryId: null, routeId: null, photosUploaded: false, gpxUploaded: false, ...(draft.progress || {}) }
     const update = (patch) => onChange(draft.id, patch)
@@ -826,28 +860,7 @@ export async function runImportSave({ drafts, target, api, today, onPlan, onChan
     const attachId = draft.kind === 'photos' && draft.attachRecordId ? String(draft.attachRecordId) : ''
     const onProgress = (p) => update({ upload: { phase: p?.phase || '', current: p?.current ?? 0, total: p?.total ?? 0 } })
 
-    if (attachId) {
-      const attachPhotos = draft.photos || []
-      if (attachPhotos.length && !progress.photosUploaded) {
-        try {
-          await api.uploadMemoryPhotos(attachId, attachPhotos.map((photo) => photo.file), onProgress)
-          progress = { ...progress, photosUploaded: true }
-          update({ progress, upload: null })
-        } catch (error) {
-          update({
-            status: 'failed',
-            upload: null,
-            error: `${toImportErrorMessage(error)} 다시 시도하면 사진만 올립니다.`,
-          })
-          allSaved = false
-          continue
-        }
-      }
-      update({ status: 'saved', error: '', upload: null })
-      continue
-    }
-
-    if (!progress.memoryId) {
+    if (!attachId && !progress.memoryId) {
       try {
         const memory = await api.createMemory(planId, buildMemoryPayload(draft))
         progress = { ...progress, memoryId: memory?.id }
@@ -858,24 +871,24 @@ export async function runImportSave({ drafts, target, api, today, onPlan, onChan
         continue
       }
     }
-    const photos = draft.photos || []
-    if (photos.length && !progress.photosUploaded) {
-      try {
-        await api.uploadMemoryPhotos(progress.memoryId, photos.map((photo) => photo.file), onProgress)
-        progress = { ...progress, photosUploaded: true }
-        update({ progress, upload: null })
-      } catch (error) {
-        update({
-          status: 'failed',
-          upload: null,
-          error: `${toImportErrorMessage(error)} 기록은 저장되었습니다. 다시 시도하면 사진만 올립니다.`,
-        })
-        allSaved = false
-        continue
-      }
-    }
-    update({ status: 'saved', error: '', upload: null })
+
+    const job = { draft, progress, update, attachId, onProgress }
+    if (scheduler) uploadQueue.push(job)
+    else await finishPhotoDraft(job)
   }
+
+  // Pass 2: photo uploads of several drafts at once, sharing one scheduler.
+  let nextJob = 0
+  const runLane = async () => {
+    while (nextJob < uploadQueue.length) {
+      const job = uploadQueue[nextJob]
+      nextJob += 1
+      await finishPhotoDraft(job)
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(IMPORT_PHOTO_GROUP_CONCURRENCY, uploadQueue.length) }, runLane),
+  )
 
   return { planId: String(planId || ''), ok: allSaved }
 }

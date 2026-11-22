@@ -7,6 +7,7 @@ import {
   createTravelMemory,
   createTravelPlan,
   createTravelRoute,
+  createTravelUploadScheduler,
   fetchTravelPlan,
   uploadTravelMemoryMedia,
   uploadTravelRouteGpxFiles,
@@ -23,7 +24,9 @@ export async function searchTravelLocations(q, options = {}) {
 const liveApi = {
   createPlan: createTravelPlan,
   createMemory: createTravelMemory,
-  uploadMemoryPhotos: (id, files, onProgress) => uploadTravelMemoryMedia(id, files, '', { onProgress }),
+  uploadMemoryPhotos: (id, files, onProgress, options = {}) =>
+    uploadTravelMemoryMedia(id, files, '', { onProgress, scheduler: options.scheduler }),
+  createUploadScheduler: () => createTravelUploadScheduler(),
   createRoute: createTravelRoute,
   uploadRouteGpx: uploadTravelRouteGpxFiles,
 }
@@ -342,10 +345,12 @@ export function useTravelImport() {
             meta = null
           }
           if (token !== intakeToken) return
-          if (!(await canDecodeImage(file))) {
-            failure = DECODE_FAILURE
-          } else {
-            const previewUrl = await createLocalImagePreview(file, { maxWidth: 160, maxHeight: 120 })
+          {
+            const previewUrl = await createLocalImagePreview(file, {
+              maxWidth: 160,
+              maxHeight: 120,
+              rejectOnDecodeError: true,
+            })
             if (token !== intakeToken) {
               revokePreview(previewUrl)
               return

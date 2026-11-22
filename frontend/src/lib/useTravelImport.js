@@ -7,6 +7,7 @@ import {
   createTravelMemory,
   createTravelPlan,
   createTravelRoute,
+  fetchTravelPlan,
   uploadTravelMemoryMedia,
   uploadTravelRouteGpxFiles,
 } from './api'
@@ -30,7 +31,7 @@ const liveApi = {
 const DECODE_FAILURE = '사진 파일을 읽을 수 없습니다. 손상되었거나 지원하지 않는 형식입니다.'
 const DEFAULT_COLOR = '#3182F6'
 
-async function canDecodeImage(file) {
+export async function canDecodeImage(file) {
   if (typeof createImageBitmap !== 'function') return true
   try {
     const bitmap = await createImageBitmap(file)
@@ -58,6 +59,9 @@ export function useTravelImport() {
     mode: 'existing', planId: '', name: '', startDate: '', endDate: '', noPeriod: false,
     touched: false, periodTouched: false, createdPlanId: '', planColorHex: '',
   })
+  const mode = ref('all') // 'all' | 'photos'
+  const existingRecords = ref([]) // [{ id, title, memoryDate, memoryTime, latitude, longitude, photoCount }]
+  const recordsState = ref('idle') // 'idle' | 'loading' | 'ready' | 'error'
   const saveState = ref('idle') // 'idle' | 'saving' | 'done' | 'partial'
   const pickTargetId = ref('')
   const pickArmed = ref(false)
@@ -69,6 +73,7 @@ export function useTravelImport() {
   let searchToken = 0
   let searchAbort = null
   let idCounter = 0
+  let recordsToken = 0
   let plans = []
 
   const summary = computed(() => core.summarizeDrafts(drafts.value))
@@ -152,13 +157,56 @@ export function useTravelImport() {
     const period = core.inferPeriod(drafts.value)
     if (target.mode === 'existing' && !target.planId && !target.touched) {
       target.planId = core.suggestPlanId(plans, period)
+      if (target.planId) loadRecords(target.planId)
     } else if (target.mode === 'new' && !target.periodTouched && !target.noPeriod && period) {
       target.startDate = period.startDate
       target.endDate = period.endDate
     }
   }
 
-  function reset({ planId = '', plans: nextPlans = [] } = {}) {
+  function applyAttachSuggestions() {
+    for (const draft of drafts.value) {
+      if (draft.kind !== 'photos' || draft.status === 'saved' || draft.attachTouched || draft.progress?.memoryId) continue
+      const suggestion = core.suggestAttachRecord(draft, existingRecords.value)
+      draft.attachRecordId = suggestion ? String(suggestion.recordId) : ''
+      draft.attachSource = suggestion ? 'suggested' : ''
+      draft.attachReason = suggestion ? core.describeAttachReason(suggestion) : ''
+    }
+  }
+
+  async function loadRecords(planId) {
+    recordsToken += 1
+    const token = recordsToken
+    recordsState.value = 'loading'
+    existingRecords.value = []
+    try {
+      const detail = await fetchTravelPlan(planId)
+      if (token !== recordsToken) return
+      const media = Array.isArray(detail?.mediaItems) ? detail.mediaItems : []
+      existingRecords.value = (Array.isArray(detail?.memoryRecords) ? detail.memoryRecords : []).map((record) => ({
+        id: String(record.id),
+        title: record.title || '',
+        memoryDate: record.memoryDate || '',
+        memoryTime: core.normalizeClock(record.memoryTime),
+        latitude: record.latitude ?? null,
+        longitude: record.longitude ?? null,
+        photoCount: media.filter((item) => String(item.recordType || '').toUpperCase() === 'MEMORY'
+          && String(item.recordId) === String(record.id)).length,
+      }))
+      recordsState.value = 'ready'
+      applyAttachSuggestions()
+    } catch {
+      if (token !== recordsToken) return
+      existingRecords.value = []
+      recordsState.value = 'error'
+    }
+  }
+
+  function reset({ planId = '', plans: nextPlans = [], mode: nextMode = 'all', initialFiles = [] } = {}) {
+    recordsToken += 1
+    existingRecords.value = []
+    recordsState.value = 'idle'
+    mode.value = nextMode === 'photos' ? 'photos' : 'all'
     intakeToken += 1
     searchToken += 1
     searchAbort?.abort()
@@ -185,9 +233,12 @@ export function useTravelImport() {
     })
     if (planId) {
       target.planId = String(planId)
+      loadRecords(target.planId)
     } else if (!plans.length) {
       target.mode = 'new'
     }
+    if (initialFiles && initialFiles.length) return addFiles(initialFiles)
+    return Promise.resolve()
   }
 
   async function geocodeInto(draft, { overrideNames = true } = {}) {
@@ -231,7 +282,7 @@ export function useTravelImport() {
         nextRejected.push({ id: nextId('rejected', file.name), fileName: file.name, reason: `한 번에 최대 ${core.IMPORT_LIMITS.maxFilesPerImport}개까지 추가할 수 있습니다.` })
         continue
       }
-      const result = core.classifyImportFile(file)
+      const result = core.classifyImportFile(file, { photosOnly: mode.value === 'photos' })
       if (result.kind === 'rejected') {
         nextRejected.push({ id: nextId('rejected', file.name), fileName: file.name, reason: result.reason })
         continue
@@ -338,11 +389,12 @@ export function useTravelImport() {
       drafts.value = core.sortDrafts([...drafts.value, ...photoDrafts])
       fitKey.value += 1
       refreshSuggestions()
+      applyAttachSuggestions()
       finishIntake()
       for (const created of photoDrafts) {
         if (token !== intakeToken) return
         const live = findDraft(created.id)
-        if (live && live.latitude !== null && live.longitude !== null) await geocodeInto(live)
+        if (live && !live.attachRecordId && live.latitude !== null && live.longitude !== null) await geocodeInto(live)
       }
     } else {
       finishIntake()
@@ -474,8 +526,36 @@ export function useTravelImport() {
     }
   }
 
+  function setAttachRecord(id, recordId) {
+    const draft = findDraft(id)
+    if (!draft || draft.kind !== 'photos' || draft.status === 'saved' || draft.progress?.memoryId) return
+    draft.attachTouched = true
+    draft.attachRecordId = String(recordId || '')
+    draft.attachSource = recordId ? 'manual' : ''
+    draft.attachReason = ''
+    if (!recordId && draft.latitude !== null && draft.longitude !== null && !draft.placeName && !draft.titleEdited) {
+      geocodeInto(draft)
+    }
+  }
+
+  function attachOptionsFor(draft) {
+    if (!existingRecords.value.length || draft?.kind !== 'photos') return []
+    return core.buildAttachOptions(draft, existingRecords.value)
+  }
+
+  function setMode(next) {
+    mode.value = next === 'photos' ? 'photos' : 'all'
+  }
+
   function setTargetPlan(value) {
     target.touched = true
+    for (const draft of drafts.value) {
+      if (draft.kind !== 'photos' || draft.status === 'saved') continue
+      draft.attachRecordId = ''
+      draft.attachTouched = false
+      draft.attachSource = ''
+      draft.attachReason = ''
+    }
     if (value === '__new__') {
       const period = core.inferPeriod(drafts.value)
       const today = todayIso()
@@ -486,10 +566,19 @@ export function useTravelImport() {
       target.periodTouched = false
       target.startDate = period?.startDate || today
       target.endDate = period?.endDate || today
+      recordsToken += 1
+      existingRecords.value = []
+      recordsState.value = 'idle'
       return
     }
     target.mode = 'existing'
     target.planId = value ? String(value) : ''
+    if (target.planId) loadRecords(target.planId)
+    else {
+      recordsToken += 1
+      existingRecords.value = []
+      recordsState.value = 'idle'
+    }
   }
 
   async function save() {
@@ -515,6 +604,8 @@ export function useTravelImport() {
       records: summary.value.savedRecords,
       photos: summary.value.savedPhotos,
       routes: summary.value.savedRoutes,
+      attachedRecords: summary.value.savedAttached,
+      attachedPhotos: summary.value.savedAttachedPhotos,
     }
     if (!result.ok && !result.planId && target.mode === 'new') {
       error.value = drafts.value.find((draft) => draft.status === 'failed')?.error || '여행을 만들지 못했습니다.'
@@ -523,6 +614,7 @@ export function useTravelImport() {
   }
 
   function dispose() {
+    recordsToken += 1
     intakeToken += 1
     searchToken += 1
     searchAbort?.abort()
@@ -534,6 +626,7 @@ export function useTravelImport() {
     drafts, rejected, intake, target, saveState, summary, problems, hasUnsaved, canSave,
     pickTargetId, pickArmed, focusedId, fitKey, gpsLoading, error, searchResults, searchMessage,
     mapMarkers, mapRoutes, planStartDate, planPeriod,
+    mode, existingRecords, recordsState, setAttachRecord, attachOptionsFor, setMode,
     reset, addFiles, addPlace, searchPlaces, useCurrentLocation, updateDraft, setDraftLocation,
     removePhoto, removeDraft, removeRejected, setTargetPlan, updateTarget, save, dispose,
   }

@@ -37,7 +37,9 @@ function pad(value) {
 
 // ---------------------------------------------------------------- files
 
-export function classifyImportFile(file) {
+export const PHOTO_ONLY_REJECT = '사진(JPG·PNG·WEBP·GIF·BMP)만 추가할 수 있습니다. GPX나 장소는 ‘장소·GPX도 추가’에서 넣어 주세요.'
+
+export function classifyImportFile(file, { photosOnly = false } = {}) {
   const name = String(file?.name || '')
   const type = String(file?.type || '')
   const size = Number(file?.size || 0)
@@ -50,6 +52,9 @@ export function classifyImportFile(file) {
       return { kind: 'rejected', reason: '사진은 한 장당 15MB 이하만 올릴 수 있습니다.' }
     }
     return { kind: 'photo' }
+  }
+  if (photosOnly) {
+    return { kind: 'rejected', reason: PHOTO_ONLY_REJECT }
   }
   if (/\.gpx$/i.test(name) || /gpx/i.test(type)) {
     if (size > IMPORT_LIMITS.maxGpxBytes) {
@@ -342,6 +347,11 @@ function baseDraft(overrides) {
     progress: { memoryId: null, routeId: null, photosUploaded: false, gpxUploaded: false },
     status: 'draft',
     error: '',
+    attachRecordId: '',
+    attachSource: '',
+    attachTouched: false,
+    attachReason: '',
+    upload: null,
     ...overrides,
   }
 }
@@ -468,8 +478,121 @@ export function suggestPlanId(plans, period) {
   return String(candidates[0].id)
 }
 
+// ---------------------------------------------------------------- attach to existing records
+
+export function normalizeClock(value) {
+  const match = /^(\d{1,2}):(\d{1,2})(?::\d{1,2})?$/.exec(String(value ?? '').trim())
+  if (!match) return ''
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours > 23 || minutes > 59) return ''
+  return `${pad(hours)}:${pad(minutes)}`
+}
+
+export function minutesApart(a, b) {
+  const left = minutesOf(normalizeClock(a))
+  const right = minutesOf(normalizeClock(b))
+  if (left === null || right === null) return null
+  return Math.abs(left - right)
+}
+
+export function suggestAttachRecord(draft, records, limits = IMPORT_LIMITS) {
+  if (!draft || draft.kind !== 'photos' || !draft.date) return null
+  const candidates = (records || []).filter((record) => record && String(record.memoryDate || '') === draft.date)
+  const photoTimes = (draft.photos || []).map((photo) => normalizeClock(photo?.time)).filter(Boolean)
+  const draftHasGps = hasCoordinates(draft)
+  const matches = []
+
+  for (const record of candidates) {
+    const recordTime = normalizeClock(record.memoryTime)
+    let minutes = null
+    if (recordTime && photoTimes.length) {
+      minutes = Math.min(...photoTimes.map((time) => minutesApart(time, recordTime)))
+    }
+    if (draftHasGps) {
+      if (!hasCoordinates(record)) continue
+      const distanceMeters = haversineKm(
+        { latitude: Number(draft.latitude), longitude: Number(draft.longitude) },
+        { latitude: Number(record.latitude), longitude: Number(record.longitude) },
+      ) * 1000
+      if (distanceMeters > limits.groupDistanceMeters) continue
+      if (minutes !== null && minutes > limits.groupGapMinutes) continue
+      matches.push({ recordId: record.id, distanceMeters, minutes, reason: 'nearby' })
+    } else {
+      if (minutes === null || minutes > limits.attachGapMinutes) continue
+      matches.push({ recordId: record.id, distanceMeters: null, minutes, reason: 'time' })
+    }
+  }
+  if (!matches.length) return null
+  matches.sort((left, right) => (left.distanceMeters ?? 0) - (right.distanceMeters ?? 0)
+    || (left.minutes ?? 0) - (right.minutes ?? 0)
+    || String(left.recordId).localeCompare(String(right.recordId)))
+  return matches[0]
+}
+
+export function describeAttachReason(suggestion) {
+  if (!suggestion) return ''
+  if (suggestion.reason === 'time') {
+    return `같은 날 ${Math.round(suggestion.minutes ?? 0)}분 차이로 찍어 자동으로 골랐습니다.`
+  }
+  const meters = Math.round(suggestion.distanceMeters ?? 0)
+  const distance = meters < 1000 ? `${meters}m` : `${(meters / 1000).toFixed(1)}km`
+  return `같은 날 약 ${distance} 거리에서 찍어 자동으로 골랐습니다.`
+}
+
+function attachLabel(record) {
+  const title = String(record.title || '').trim() || '제목 없음'
+  const short = title.length > 40 ? `${title.slice(0, 40)}…` : title
+  return `기존 기록: ${short} · ${String(record.memoryDate || '').slice(5)}`
+}
+
+export function buildAttachOptions(draft, records) {
+  const list = (records || []).filter(Boolean)
+  const options = [{ value: '', label: '새 기록으로 저장', title: '' }]
+  if (!list.length) return options
+  const suggestion = suggestAttachRecord(draft, list)
+  const used = new Set()
+  const push = (record) => {
+    const value = String(record.id)
+    if (used.has(value)) return
+    used.add(value)
+    options.push({ value, label: attachLabel(record), title: String(record.title || '').trim() || '제목 없음' })
+  }
+  if (suggestion) {
+    const matched = list.find((record) => String(record.id) === String(suggestion.recordId))
+    if (matched) push(matched)
+  }
+  list
+    .filter((record) => draft?.date && record.memoryDate === draft.date)
+    .sort((left, right) => String(normalizeClock(left.memoryTime) || '99:99').localeCompare(String(normalizeClock(right.memoryTime) || '99:99')))
+    .forEach(push)
+  list
+    .filter((record) => !used.has(String(record.id)))
+    .sort((left, right) => String(right.memoryDate || '').localeCompare(String(left.memoryDate || '')))
+    .forEach(push)
+  return options
+}
+
+export function describePhotoAgainstRecord(photo, record, limits = IMPORT_LIMITS) {
+  const hasGps = hasCoordinates(photo)
+  let distanceMeters = null
+  if (hasGps && hasCoordinates(record)) {
+    distanceMeters = haversineKm(
+      { latitude: Number(photo.latitude), longitude: Number(photo.longitude) },
+      { latitude: Number(record.latitude), longitude: Number(record.longitude) },
+    ) * 1000
+  }
+  return {
+    hasGps,
+    distanceMeters,
+    far: distanceMeters !== null && distanceMeters > limits.groupDistanceMeters,
+    dateDiffers: Boolean(photo?.date && record?.memoryDate && photo.date !== record.memoryDate),
+  }
+}
+
 export function validateDraft(draft) {
   if (!draft || draft.include === false) return []
+  if (draft.kind === 'photos' && draft.attachRecordId) return []
   const problems = []
   const title = String(draft.title || '').trim()
   if (!title) problems.push('제목을 입력해 주세요.')
@@ -486,7 +609,9 @@ export function summarizeDrafts(drafts) {
   const summary = {
     records: 0, photos: 0, routes: 0, excluded: 0, needsLocation: 0, needsReview: 0,
     saved: 0, failed: 0, pending: 0, savedRecords: 0, savedPhotos: 0, savedRoutes: 0,
+    attached: 0, attachedPhotos: 0, savedAttached: 0, savedAttachedPhotos: 0,
   }
+  const savedAttachedIds = new Set()
   for (const draft of drafts || []) {
     const included = draft.include !== false
     if (!included) {
@@ -494,8 +619,13 @@ export function summarizeDrafts(drafts) {
       continue
     }
     const photoCount = draft.kind === 'photos' ? (draft.photos?.length || 0) : 0
+    const attaching = draft.kind === 'photos' && Boolean(draft.attachRecordId)
     if (draft.kind === 'gpx') summary.routes += 1
-    else {
+    else if (attaching) {
+      summary.attached += 1
+      summary.attachedPhotos += photoCount
+      summary.photos += photoCount
+    } else {
       summary.records += 1
       summary.photos += photoCount
       if (!hasCoordinates(draft)) summary.needsLocation += 1
@@ -504,7 +634,11 @@ export function summarizeDrafts(drafts) {
     if (draft.status === 'saved') {
       summary.saved += 1
       if (draft.kind === 'gpx') summary.savedRoutes += 1
-      else {
+      else if (attaching) {
+        savedAttachedIds.add(String(draft.attachRecordId))
+        summary.savedAttachedPhotos += photoCount
+        summary.savedPhotos += photoCount
+      } else {
         summary.savedRecords += 1
         summary.savedPhotos += photoCount
       }
@@ -513,6 +647,7 @@ export function summarizeDrafts(drafts) {
       if (draft.status === 'failed' || draft.status === 'warning') summary.failed += 1
     }
   }
+  summary.savedAttached = savedAttachedIds.size
   return summary
 }
 
@@ -608,14 +743,30 @@ function withParticle(text) {
   return `${text}${hasFinal ? '을' : '를'}`
 }
 
-export function formatImportNotice({ records = 0, photos = 0, routes = 0, planName = '', createdPlan = false } = {}) {
+export function formatImportNotice({
+  records = 0, photos = 0, routes = 0, planName = '', createdPlan = false, attachedRecords = 0, attachedPhotos = 0,
+} = {}) {
+  const target = planName ? ` ‘${planName}’에` : ''
+  if (records === 0 && routes === 0 && attachedRecords > 0 && attachedPhotos === photos && photos > 0) {
+    return `사진 ${photos}장을${target} 기존 기록 ${attachedRecords}건에 더했습니다.`
+  }
   const parts = []
   if (records > 0) parts.push(`기록 ${records}건`)
   if (photos > 0) parts.push(`사진 ${photos}장`)
   if (routes > 0) parts.push(`경로 ${routes}개`)
   if (!parts.length) return createdPlan && planName ? `‘${planName}’ 여행은 만들어졌습니다.` : '저장한 항목이 없습니다.'
-  const target = planName ? ` ‘${planName}’에` : ''
-  return `${withParticle(parts.join(' · '))}${target} 저장했습니다.`
+  let text = `${withParticle(parts.join(' · '))}${target} 저장했습니다.`
+  if (attachedRecords > 0 && attachedPhotos > 0) {
+    text += ` 그중 사진 ${attachedPhotos}장은 기존 기록 ${attachedRecords}건에 더했습니다.`
+  }
+  return text
+}
+
+export function formatRecordPhotoNotice({ addedPhotos = 0, title = '', recordChanged = false } = {}) {
+  if (recordChanged && addedPhotos > 0) return `기록을 수정했습니다. 사진 ${addedPhotos}장을 추가했습니다.`
+  if (recordChanged) return '기록을 수정했습니다.'
+  if (addedPhotos > 0) return `사진 ${addedPhotos}장을 ‘${title || '기록'}’ 기록에 추가했습니다.`
+  return '기록을 수정했습니다.'
 }
 
 // ---------------------------------------------------------------- save orchestration
@@ -672,6 +823,30 @@ export async function runImportSave({ drafts, target, api, today, onPlan, onChan
       continue
     }
 
+    const attachId = draft.kind === 'photos' && draft.attachRecordId ? String(draft.attachRecordId) : ''
+    const onProgress = (p) => update({ upload: { phase: p?.phase || '', current: p?.current ?? 0, total: p?.total ?? 0 } })
+
+    if (attachId) {
+      const attachPhotos = draft.photos || []
+      if (attachPhotos.length && !progress.photosUploaded) {
+        try {
+          await api.uploadMemoryPhotos(attachId, attachPhotos.map((photo) => photo.file), onProgress)
+          progress = { ...progress, photosUploaded: true }
+          update({ progress, upload: null })
+        } catch (error) {
+          update({
+            status: 'failed',
+            upload: null,
+            error: `${toImportErrorMessage(error)} 다시 시도하면 사진만 올립니다.`,
+          })
+          allSaved = false
+          continue
+        }
+      }
+      update({ status: 'saved', error: '', upload: null })
+      continue
+    }
+
     if (!progress.memoryId) {
       try {
         const memory = await api.createMemory(planId, buildMemoryPayload(draft))
@@ -686,19 +861,20 @@ export async function runImportSave({ drafts, target, api, today, onPlan, onChan
     const photos = draft.photos || []
     if (photos.length && !progress.photosUploaded) {
       try {
-        await api.uploadMemoryPhotos(progress.memoryId, photos.map((photo) => photo.file))
+        await api.uploadMemoryPhotos(progress.memoryId, photos.map((photo) => photo.file), onProgress)
         progress = { ...progress, photosUploaded: true }
-        update({ progress })
+        update({ progress, upload: null })
       } catch (error) {
         update({
           status: 'failed',
+          upload: null,
           error: `${toImportErrorMessage(error)} 기록은 저장되었습니다. 다시 시도하면 사진만 올립니다.`,
         })
         allSaved = false
         continue
       }
     }
-    update({ status: 'saved', error: '' })
+    update({ status: 'saved', error: '', upload: null })
   }
 
   return { planId: String(planId || ''), ok: allSaved }

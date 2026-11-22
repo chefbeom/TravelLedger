@@ -10,8 +10,9 @@ const props = defineProps({
   planPeriod: { type: Object, default: null },
   focused: { type: Boolean, default: false },
   index: { type: Number, default: 0 },
+  attachOptions: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['update', 'locate', 'show-on-map', 'remove-photo', 'focus'])
+const emit = defineEmits(['update', 'locate', 'show-on-map', 'remove-photo', 'focus', 'attach'])
 
 const TRANSPORTS = [
   ['WALK', '도보'], ['BUS', '버스'], ['TAXI', '택시'], ['TRAIN', '기차'],
@@ -54,9 +55,18 @@ const trackSummary = computed(() => {
     total > kept ? `점 ${total.toLocaleString('ko-KR')}→${kept.toLocaleString('ko-KR')}` : `점 ${total.toLocaleString('ko-KR')}개`,
   ].filter(Boolean).join(' · ')
 })
+const attached = computed(() => props.draft.kind === 'photos' && Boolean(props.draft.attachRecordId))
+const attachTitle = computed(() => props.attachOptions.find((option) => option.value === String(props.draft.attachRecordId))?.title || '기록')
+const uploadText = computed(() => {
+  const upload = props.draft.upload
+  if (!upload?.phase) return ''
+  if (upload.phase === 'preparing') return `사진 준비 중 ${upload.current}/${upload.total}`
+  if (upload.phase === 'uploading') return `사진 올리는 중 ${upload.current}/${upload.total}`
+  return '마무리 중'
+})
 const statusText = computed(() => {
   switch (props.draft.status) {
-    case 'saving': return '저장 중'
+    case 'saving': return uploadText.value || '저장 중'
     case 'saved': return '저장됨'
     case 'failed': return `실패: ${props.draft.error}`
     case 'warning': return props.draft.error
@@ -99,6 +109,24 @@ const memoLength = computed(() => String(props.draft.memo || '').length)
     </div>
 
     <div class="travel-import-item__body">
+      <label v-if="draft.kind === 'photos' && attachOptions.length" class="travel-import-item__field">
+        <span>저장 위치</span>
+        <select
+          aria-label="저장 위치"
+          :value="draft.attachRecordId"
+          :disabled="locked || Boolean(draft.progress?.memoryId)"
+          @change="emit('attach', $event.target.value)"
+        >
+          <option v-for="option in attachOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+      </label>
+
+      <template v-if="attached">
+        <p class="travel-import-item__attach">기존 기록 ‘{{ attachTitle }}’에 사진 {{ draft.photos.length }}장을 더합니다. 기록의 제목·날짜·위치는 바뀌지 않습니다.</p>
+        <small v-if="draft.attachReason" class="travel-import-item__hint">{{ draft.attachReason }}</small>
+      </template>
+
+      <template v-else>
       <label class="travel-import-item__field travel-import-item__field--title">
         <span>제목</span>
         <input
@@ -167,6 +195,7 @@ const memoLength = computed(() => String(props.draft.memo || '').length)
           </label>
         </div>
       </details>
+      </template>
 
       <p v-if="statusText" class="travel-import-item__status" :class="`is-${draft.status}`">{{ statusText }}</p>
     </div>
@@ -206,6 +235,7 @@ const memoLength = computed(() => String(props.draft.memo || '').length)
 .travel-import-item__problems li { list-style: none; }
 .travel-import-item__advanced summary { cursor: pointer; min-height: 32px; font-size: .8rem; display: flex; align-items: center; }
 .travel-import-item__advanced-body { display: grid; gap: 8px; padding-top: 6px; }
+.travel-import-item__attach { margin: 0; font-size: .85rem; font-weight: 600; overflow-wrap: anywhere; }
 .travel-import-item__status { margin: 0; font-size: .82rem; font-weight: 600; overflow-wrap: anywhere; }
 .travel-import-item__status.is-saved { color: var(--rm-visited); }
 .travel-import-item__status.is-failed, .travel-import-item__status.is-warning { color: var(--rm-danger-text); }

@@ -13,6 +13,8 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   plans: { type: Array, default: () => [] },
   planId: { type: [String, Number], default: '' },
+  mode: { type: String, default: 'all' },
+  initialFiles: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['close', 'saved', 'open-route-editor'])
 
@@ -29,19 +31,22 @@ const picking = computed(() => imp.pickArmed || Boolean(imp.pickTargetId))
 const canRetry = computed(() => imp.saveState === 'partial')
 const needsPlanChoice = computed(() => imp.target.mode === 'existing' && !imp.target.planId && !imp.target.createdPlanId)
 const hasFiles = computed(() => imp.drafts.length > 0)
+const photoMode = computed(() => imp.mode === 'photos')
+const dialogTitle = computed(() => (photoMode.value ? '사진 추가' : '여행에 추가'))
 const planLocked = computed(() => Boolean(imp.target.createdPlanId))
 const summaryText = computed(() => {
   const s = imp.summary
   const parts = [`기록 ${s.records}`, `사진 ${s.photos}`, `경로 ${s.routes}`]
   if (s.excluded) parts.push(`제외 ${s.excluded}`)
   if (s.needsReview) parts.push(`확인 필요 ${s.needsReview}`)
+  if (s.attached) parts.push(`기존 기록에 추가 ${s.attached}`)
   if (s.saved) parts.push(`저장됨 ${s.saved}`)
   if (s.failed) parts.push(`실패 ${s.failed}`)
   return parts.join(' · ')
 })
 
 watch(() => props.open, (value) => {
-  if (value) imp.reset({ planId: props.planId, plans: props.plans })
+  if (value) imp.reset({ planId: props.planId, plans: props.plans, mode: props.mode, initialFiles: props.initialFiles })
 }, { immediate: true })
 
 onMounted(() => {
@@ -82,6 +87,8 @@ function emitSaved(result) {
     records: result?.counts?.records ?? imp.summary.savedRecords,
     photos: result?.counts?.photos ?? imp.summary.savedPhotos,
     routes: result?.counts?.routes ?? imp.summary.savedRoutes,
+    attachedRecords: result?.counts?.attachedRecords ?? imp.summary.savedAttached,
+    attachedPhotos: result?.counts?.attachedPhotos ?? imp.summary.savedAttachedPhotos,
     planName: selectedPlanName(),
     createdPlan,
   })
@@ -192,7 +199,7 @@ function chooseResult(result) {
   <RecordMapDialog
     :open="open"
     wide
-    title="여행에 추가"
+    :title="dialogTitle"
     :busy="busy"
     class="travel-import-dialog"
     @close="requestClose"
@@ -244,7 +251,9 @@ function chooseResult(result) {
         <p v-else-if="needsPlanChoice" class="travel-import-hint">저장할 여행을 고르세요.</p>
       </section>
 
-      <div class="travel-import-grid">
+      <p v-if="imp.recordsState === 'error'" class="travel-import-hint" role="status">기존 기록을 불러오지 못해 모두 새 기록으로 저장합니다.</p>
+
+      <div class="travel-import-grid" :class="{ 'is-photos': photoMode }">
         <div ref="mapColumn" class="travel-import-mapcol">
           <p v-if="picking" class="travel-import-pickbar" role="status">
             <span>지도를 눌러 위치를 정하세요.</span>
@@ -285,25 +294,33 @@ function chooseResult(result) {
               type="file"
               multiple
               class="travel-import-drop__input"
-              accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,.jpg,.jpeg,.png,.webp,.gif,.bmp,.gpx,application/gpx+xml"
-              aria-label="사진·GPX 파일 선택"
+              :accept="photoMode ? 'image/*' : 'image/jpeg,image/png,image/webp,image/gif,image/bmp,.jpg,.jpeg,.png,.webp,.gif,.bmp,.gpx,application/gpx+xml'"
+              :aria-label="photoMode ? '사진 파일 선택' : '사진·GPX 파일 선택'"
               @change="onFiles"
             />
-            <strong>사진·GPX 파일을 끌어 놓거나 <span class="travel-import-drop__pick">파일 선택</span></strong>
-            <small>JPG·PNG·WEBP·GIF·BMP 15MB, GPX 10MB 이하 · 사진의 날짜·위치로 제목과 일정을 자동으로 채웁니다.</small>
+            <template v-if="photoMode">
+              <strong>사진을 끌어 놓거나 <span class="travel-import-drop__pick">사진 선택</span></strong>
+              <small>JPG·PNG·WEBP·GIF·BMP, 한 장 15MB 이하 · 여러 장 가능 · 사진의 날짜·위치로 일정과 장소를 채웁니다.</small>
+            </template>
+            <template v-else>
+              <strong>사진·GPX 파일을 끌어 놓거나 <span class="travel-import-drop__pick">파일 선택</span></strong>
+              <small>JPG·PNG·WEBP·GIF·BMP 15MB, GPX 10MB 이하 · 사진의 날짜·위치로 제목과 일정을 자동으로 채웁니다.</small>
+            </template>
           </label>
 
-          <div class="travel-import-tools">
+          <button v-if="photoMode" type="button" class="button button--ghost travel-import-modeswitch" :disabled="busy" @click="imp.setMode('all')">장소·GPX도 추가</button>
+
+          <div v-if="!photoMode" class="travel-import-tools">
             <button type="button" class="button button--secondary" :aria-pressed="imp.pickArmed" @click="armPick">지도에서 위치 찍기</button>
             <button type="button" class="button button--secondary" :disabled="imp.gpsLoading" @click="imp.useCurrentLocation()">현재 위치</button>
           </div>
 
-          <form class="travel-import-search" @submit.prevent="imp.searchPlaces(query)">
+          <form v-if="!photoMode" class="travel-import-search" @submit.prevent="imp.searchPlaces(query)">
             <input v-model="query" type="search" aria-label="장소 검색" placeholder="장소 이름이나 주소" maxlength="100" autocomplete="off" />
             <button type="submit" class="button button--secondary">장소 찾기</button>
           </form>
-          <p v-if="imp.searchMessage" class="travel-import-hint" role="status">{{ imp.searchMessage }}</p>
-          <ul v-if="imp.searchResults.length" class="travel-import-results">
+          <p v-if="!photoMode && imp.searchMessage" class="travel-import-hint" role="status">{{ imp.searchMessage }}</p>
+          <ul v-if="!photoMode && imp.searchResults.length" class="travel-import-results">
             <li v-for="result in imp.searchResults" :key="result.id">
               <button type="button" class="button button--ghost" :aria-label="result.name" @click="chooseResult(result)">
                 <strong>{{ result.name }}</strong>
@@ -328,6 +345,8 @@ function chooseResult(result) {
                   :plan-period="imp.planPeriod"
                   :focused="imp.focusedId === draft.id"
                   :index="index"
+                  :attach-options="imp.attachOptionsFor(draft)"
+                  @attach="imp.setAttachRecord(draft.id, $event)"
                   @update="imp.updateDraft(draft.id, $event)"
                   @locate="locate(draft)"
                   @show-on-map="showOnMap(draft)"
@@ -353,7 +372,7 @@ function chooseResult(result) {
       <footer class="travel-import-footer">
         <p class="travel-import-summary" role="status" aria-live="polite">{{ summaryText }}</p>
         <div class="travel-import-footer__actions">
-          <button type="button" class="button button--ghost" @click="openRouteEditor">경로 직접 그리기</button>
+          <button v-if="!photoMode" type="button" class="button button--ghost" @click="openRouteEditor">경로 직접 그리기</button>
           <button type="button" class="button button--secondary" @click="requestClose">취소</button>
           <button type="button" class="button button--primary" :disabled="!imp.canSave" @click="onSave">{{ canRetry ? '남은 항목 다시 저장' : '저장' }}</button>
         </div>
@@ -394,6 +413,7 @@ function chooseResult(result) {
 .travel-import-drop small { color: var(--rm-text-soft, inherit); }
 .travel-import-drop__pick { text-decoration: underline; color: var(--rm-accent); }
 .travel-import-drop__input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.travel-import-modeswitch { justify-self: start; min-height: 40px; }
 .travel-import-tools { display: flex; flex-wrap: wrap; gap: 8px; }
 .travel-import-tools .button { flex: 1 1 140px; min-height: 44px; }
 .travel-import-tools .button[aria-pressed="true"] { box-shadow: inset 0 -3px 0 var(--rm-accent) !important; border-color: var(--rm-accent) !important; }
@@ -421,6 +441,8 @@ function chooseResult(result) {
   .travel-import-grid { grid-template-columns: minmax(0, 1fr); }
   .travel-import-mapcol { position: static; }
   .travel-import-mapbox { height: 38vh; min-height: 260px; }
+  .travel-import-grid.is-photos .travel-import-panel { order: -1; }
+  .travel-import-grid.is-photos .travel-import-mapbox { height: 30vh; min-height: 220px; }
   .travel-import-dialog .travel-import-map :deep(.travel-map__hint) { display: none !important; }
   .travel-import-map :deep(.travel-map__toolbar-group) { padding: 4px 6px; }
   .travel-import-map :deep(.travel-map__toolbar-button) { min-height: 36px; padding: 4px 10px; }

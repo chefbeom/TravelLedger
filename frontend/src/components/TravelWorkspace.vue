@@ -1,7 +1,7 @@
 <script setup>
-import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, markRaw, onMounted, reactive, ref, watch } from 'vue'
 import { fetchTravelPortfolio } from '../lib/api'
-import { formatImportNotice } from '../lib/travelImport'
+import { formatImportNotice, formatRecordPhotoNotice } from '../lib/travelImport'
 const TravelHubWorkspace = defineAsyncComponent(() => import('./TravelHubWorkspace.vue'))
 const TravelMyMapWorkspace = defineAsyncComponent(() => import('./TravelMyMapWorkspace.vue'))
 const TravelImportDialog = defineAsyncComponent(() => import('./travel-import/TravelImportDialog.vue'))
@@ -37,11 +37,17 @@ const hubPhotoFocusRequest = ref(null)
 const hubRouteFocusRequest = ref(null)
 const hubRecordFocusRequest = ref(null)
 const appliedRecordFocusToken = ref('')
-const importDialog = reactive({ open: false, planId: '' })
-const recordEditor = reactive({ open: false, planId: '', recordId: '' })
+const importDialog = reactive({ open: false, planId: '', mode: 'all', files: [] })
+const recordEditor = reactive({ open: false, planId: '', recordId: '', files: [] })
 const mapReloadKey = ref(0)
 const hubRefreshKey = ref(0)
 const importNotice = ref('')
+const hubNotice = ref(null) // { token, message } for the setup screen
+
+function showNotice(message) {
+  importNotice.value = message
+  if (primaryTab.value === 'setup') hubNotice.value = { token: Date.now(), message }
+}
 
 const travelModes = [
   {
@@ -300,6 +306,8 @@ async function handleWorkflowComplete(payload) {
 
 function openImport(payload = {}) {
   importDialog.planId = String(payload?.planId || '')
+  importDialog.mode = payload?.mode === 'photos' ? 'photos' : 'all'
+  importDialog.files = markRaw(Array.from(payload?.files || []))
   importDialog.open = true
 }
 
@@ -314,7 +322,8 @@ async function refreshTravelPortfolio() {
 
 async function handleImportSaved(result) {
   importDialog.open = false
-  importNotice.value = formatImportNotice(result)
+  importDialog.files = []
+  showNotice(formatImportNotice(result))
   // Refresh the plan list first: the map drops a plan filter whose plan it does not know yet.
   await refreshTravelPortfolio()
   if (result?.planId) currentPlanId.value = String(result.planId)
@@ -322,16 +331,18 @@ async function handleImportSaved(result) {
   hubRefreshKey.value += 1
 }
 
-function openRecordEditor({ planId, recordId } = {}) {
+function openRecordEditor({ planId, recordId, files } = {}) {
   if (!planId || !recordId) return
   recordEditor.planId = String(planId)
   recordEditor.recordId = String(recordId)
+  recordEditor.files = markRaw(Array.from(files || []))
   recordEditor.open = true
 }
 
 async function handleRecordEdited(kind, payload) {
   recordEditor.open = false
-  importNotice.value = kind === 'deleted' ? '기록을 삭제했습니다.' : '기록을 수정했습니다.'
+  recordEditor.files = []
+  showNotice(kind === 'deleted' ? '기록을 삭제했습니다.' : formatRecordPhotoNotice(payload || {}))
   await refreshTravelPortfolio()
   mapReloadKey.value += 1
   hubRefreshKey.value += 1
@@ -557,7 +568,9 @@ onMounted(loadTravelSummary)
         @request-open-log="handleRequestOpenLog"
         @workflow-complete="handleWorkflowComplete"
         :external-refresh-key="hubRefreshKey"
+        :external-notice="hubNotice"
         @request-open-import="openImport"
+        @request-open-record-editor="openRecordEditor"
         @workflow-close="closeTravelSetup"
         @record-focus-consumed="emit('record-focus-consumed', $event)"
       />
@@ -568,7 +581,9 @@ onMounted(loadTravelSummary)
       :open="importDialog.open"
       :plans="travelPortfolio?.plans || []"
       :plan-id="importDialog.planId"
-      @close="importDialog.open = false"
+      :mode="importDialog.mode"
+      :initial-files="importDialog.files"
+      @close="importDialog.open = false; importDialog.files = []"
       @saved="handleImportSaved"
       @open-route-editor="openRouteEditorFromImport"
     />
@@ -577,7 +592,8 @@ onMounted(loadTravelSummary)
       :open="recordEditor.open"
       :plan-id="recordEditor.planId"
       :record-id="recordEditor.recordId"
-      @close="recordEditor.open = false"
+      :initial-files="recordEditor.files"
+      @close="recordEditor.open = false; recordEditor.files = []"
       @saved="handleRecordEdited('saved', $event)"
       @deleted="handleRecordEdited('deleted', $event)"
     />

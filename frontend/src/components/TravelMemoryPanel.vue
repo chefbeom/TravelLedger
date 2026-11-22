@@ -52,7 +52,26 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['save-memory', 'delete-memory', 'delete-media', 'open-import'])
+const emit = defineEmits(['save-memory', 'delete-memory', 'delete-media', 'open-import', 'open-record-photos'])
+
+const photoPickerInput = ref(null)
+let photoPickRecordId = ''
+
+function pickPhotos(recordId, event) {
+  photoPickRecordId = recordId ? String(recordId) : ''
+  event?.currentTarget?.focus?.()
+  photoPickerInput.value?.click() // must stay synchronous inside the click handler
+}
+
+function onPhotosPicked(event) {
+  const files = Array.from(event.target.files || [])
+  event.target.value = ''
+  const recordId = photoPickRecordId
+  photoPickRecordId = ''
+  if (!files.length) return
+  if (recordId) emit('open-record-photos', { recordId, files })
+  else emit('open-import', { mode: 'photos', files })
+}
 
 const activeDayDate = ref('')
 const showGpxRoutes = ref(false)
@@ -847,15 +866,27 @@ function submitMemory() {
 
 <template>
   <div v-if="travelPlan" class="workspace-stack">
+    <input
+      ref="photoPickerInput"
+      class="travel-memory-photo-picker"
+      type="file"
+      accept="image/*"
+      multiple
+      tabindex="-1"
+      aria-hidden="true"
+      data-photo-picker="list"
+      @change="onPhotosPicked"
+    />
     <section class="panel panel--map-fill travel-memory-map-panel">
       <div class="panel__header">
         <div>
           <h2>기록 지도</h2>
-          <p>지도를 누르면 먼저 임시 핀이 생기고, 그 핀을 한 번 더 눌렀을 때만 기록 입력 모달이 열립니다.</p>
+          <p>사진은 ‘사진 추가’로 올리세요(여러 장 가능). 사진 없이 장소만 남기려면 ‘새 기록’을 누르거나 지도를 눌러 임시 핀을 만든 뒤 한 번 더 누르세요.</p>
         </div>
-        <div class="topbar__actions">
+        <div class="travel-memory-map-panel__actions">
           <span class="panel__badge">{{ mapMarkers.length }}개 핀</span>
-          <button class="button button--primary" type="button" @click="openBlankEditor()">새 기록</button>
+          <button class="button button--primary" type="button" @click="pickPhotos(null, $event)">사진 추가</button>
+          <button class="button button--secondary" type="button" @click="openBlankEditor()">새 기록</button>
         </div>
       </div>
 
@@ -895,7 +926,7 @@ function submitMemory() {
         initial-map-size="expanded"
         :auto-fit="false"
         hint-title="지도 클릭으로 핀 먼저 만들기"
-        hint-text="지도 클릭은 임시 핀만 만들고, 임시 핀을 다시 눌렀을 때 기록 입력 모달이 열립니다. 기존 저장 핀 클릭이나 드래그는 바로 수정으로 이어집니다."
+        hint-text="지도를 누르면 임시 핀이 생기고, 그 핀을 다시 누르면 장소 기록을 쓸 수 있습니다. 사진은 위의 ‘사진 추가’를 쓰세요."
         @pick-location="handlePickLocation"
         @select-selected-point="handleSelectSelectedPoint"
         @move-selected-point="handleMoveSelectedPoint"
@@ -1005,6 +1036,7 @@ function submitMemory() {
               <td>{{ memory.photoCount }}</td>
               <td class="sheet-table__actions">
                 <button class="button button--ghost" @click="openMemoryForEdit(memory)">수정</button>
+                <button class="button button--ghost" type="button" :aria-label="`${memory.title || '기록'}에 사진 추가`" @click="pickPhotos(memory.id, $event)">사진 추가</button>
                 <button class="button button--danger" @click="emit('delete-memory', memory)">삭제</button>
               </td>
             </tr>
@@ -1105,7 +1137,8 @@ function submitMemory() {
             </div>
             <label class="field field--full">
               <span class="field__label">사진 업로드</span>
-              <input accept="image/*" capture="environment" multiple type="file" @change="handlePhotoSelection" />
+              <input accept="image/*" multiple type="file" @change="handlePhotoSelection" />
+              <small v-if="!editingMemoryId" class="field__hint">여기서 고른 사진은 모두 이 기록 하나에 붙습니다. 장소별로 나누려면 ‘여러 장 한 번에 가져오기’를 쓰세요.</small>
             </label>
             <label class="field field--full">
               <span class="field__label">사진 설명</span>
@@ -1171,6 +1204,12 @@ function submitMemory() {
 </template>
 
 <style scoped>
+.travel-memory-photo-picker { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.travel-memory-map-panel__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+@media (max-width: 760px) {
+  .travel-memory-map-panel__actions .button { min-height: 44px; }
+}
 :global(html body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active) { box-shadow: inset 0 -3px 0 var(--rm-accent) !important; border-color: var(--rm-accent) !important; }
-:global(html body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active :is(strong, small)) { color: var(--rm-text) !important; -webkit-text-fill-color: var(--rm-text) !important; }
+:global(html body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active :is(strong, small)) { color: var(--rm-accent-contrast) !important; -webkit-text-fill-color: var(--rm-accent-contrast) !important; }
+:global(:root[data-theme='toss'] body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active :is(strong, small)) { color: var(--rm-text) !important; -webkit-text-fill-color: var(--rm-text) !important; }
 </style>

@@ -107,6 +107,7 @@ const props = defineProps({
   },
   initialPlanId: { type: [String, Number], default: '' },
   externalRefreshKey: { type: Number, default: 0 },
+  externalNotice: { type: Object, default: null },
 })
 
 const emit = defineEmits([
@@ -117,6 +118,7 @@ const emit = defineEmits([
   'workflow-complete',
   'workflow-close',
   'request-open-import',
+  'request-open-record-editor',
 ])
 
 const fallbackCategories = {
@@ -1581,6 +1583,10 @@ watch(() => [props.workflowMode, props.initialPlanId], async ([mode, planId]) =>
   await refreshTravelData(String(planId), props.route === 'photo-album')
 })
 
+watch(() => props.externalNotice?.token, (token) => {
+  if (token) setFeedback(props.externalNotice.message)
+})
+
 watch(() => props.externalRefreshKey, () => {
   refreshTravelData(props.initialPlanId || selectedPlanId.value, props.route === 'photo-album')
 })
@@ -2175,7 +2181,7 @@ async function openPortfolioMemoryEditor(payload) {
 
 <template>
   <div class="workspace-stack">
-    <div v-if="feedback" class="feedback feedback--success">{{ feedback }}</div>
+    <div v-if="feedback" class="feedback feedback--success" role="status">{{ feedback }}</div>
     <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
     <RecordShareDialog v-if="planToShare" kind="TRAVEL" :source="planToShare" @close="planToShare = null" @shared="planToShare = null; setFeedback('여행 공유 요청을 보냈습니다.')" />
 
@@ -2286,7 +2292,8 @@ async function openPortfolioMemoryEditor(payload) {
             @save-memory="handleSaveMemory"
             @delete-memory="handleDeleteMemory"
             @delete-media="handleDeleteMedia"
-            @open-import="emit('request-open-import', { planId: selectedPlanId })"
+            @open-import="payload => emit('request-open-import', { ...(payload || {}), planId: selectedPlanId })"
+            @open-record-photos="payload => emit('request-open-record-editor', { planId: selectedPlanId, recordId: payload.recordId, files: payload.files })"
           />
           <div class="entry-editor__actions travel-setup-workflow__stage-actions">
             <button class="button button--ghost" type="button" @click="selectWorkflowStep(1)">여행 정보</button>
@@ -2799,7 +2806,7 @@ async function openPortfolioMemoryEditor(payload) {
         </div>
       </section>
       <TravelOverviewWorkspace v-if="logTab === 'overview' && !integratedMode" :travel-plan="travelPlan" />
-      <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" @open-import="emit('request-open-import', { planId: selectedPlanId })" />
+      <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" @open-import="payload => emit('request-open-import', { ...(payload || {}), planId: selectedPlanId })" @open-record-photos="payload => emit('request-open-record-editor', { planId: selectedPlanId, recordId: payload.recordId, files: payload.files })" />
       <TravelRouteWorkspace v-else :travel-plan="travelPlan" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="routeRefreshKey" :focus-request="externalRouteFocusRequest" @save-route="handleSaveRoute" @delete-route="handleDeleteRoute" />
     </template>
 
@@ -2818,7 +2825,7 @@ async function openPortfolioMemoryEditor(payload) {
         </div>
         <small v-if="integratedPhotoMode" class="field__hint">사진 업로드와 기록 편집은 여행 로그에서 하고, 여기서는 지도와 사진첩 중심으로 다시 모아 봅니다.</small>
       </section>
-      <TravelMemoryPanel v-if="showAlbumUploadTab && albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" @open-import="emit('request-open-import', { planId: selectedPlanId })" />
+      <TravelMemoryPanel v-if="showAlbumUploadTab && albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" @open-import="payload => emit('request-open-import', { ...(payload || {}), planId: selectedPlanId })" @open-record-photos="payload => emit('request-open-record-editor', { planId: selectedPlanId, recordId: payload.recordId, files: payload.files })" />
       <TravelMyPhotosWorkspace v-else-if="albumTab === 'my-photos'" :portfolio="travelPortfolio" :plans="travelPlans" :is-loading="isLoading || isTravelPortfolioLoading" :focus-request="externalPhotoFocusRequest" @open-memory-editor="openPortfolioMemoryEditor" />
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>

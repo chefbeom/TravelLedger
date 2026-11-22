@@ -469,6 +469,64 @@ function handleSelectLightboxPhoto(photo) {
     focusMapAtJourneyPhoto(pin ?? photo)
   }
 }
+const photoPickerInput = ref(null)
+const photoDropActive = ref(false)
+let photoPickTarget = null
+
+function pickPhotos(target, event) {
+  photoPickTarget = target
+  event?.currentTarget?.focus?.() // Safari does not focus a clicked button; needed to restore focus after the dialog closes
+  photoPickerInput.value?.click() // must happen synchronously inside the click handler
+}
+
+function onPhotosPicked(event) {
+  const files = Array.from(event.target.files || [])
+  event.target.value = ''
+  const target = photoPickTarget
+  photoPickTarget = null
+  if (!files.length || !target) return
+  if (target.kind === 'record') {
+    pauseJourneyPlayback()
+    pauseJourneyRoutePlayback()
+    lightboxPhoto.value = null
+    emit('open-record-editor', { planId: target.planId, recordId: target.recordId, files })
+    return
+  }
+  emit('open-import', { planId: selectedSinglePlanId.value, mode: 'photos', files })
+}
+
+function pickPhotosForRecord(photo) {
+  if (!photo?.recordId || !photo.planId) return
+  pickPhotos({ kind: 'record', planId: photo.planId, recordId: photo.recordId })
+}
+
+const dropPlanName = computed(() => props.plans.find((plan) => String(plan.id) === selectedSinglePlanId.value)?.name || '여행')
+
+function hasFileDrag(event) {
+  return Array.from(event.dataTransfer?.types || []).includes('Files')
+}
+
+function onMapDragOver(event) {
+  if (!hasFileDrag(event)) return
+  event.preventDefault()
+  photoDropActive.value = true
+}
+
+function onMapDragLeave(event) {
+  if (event.currentTarget?.contains?.(event.relatedTarget)) return
+  photoDropActive.value = false
+}
+
+function onMapDrop(event) {
+  if (!hasFileDrag(event)) return
+  event.preventDefault()
+  photoDropActive.value = false
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (!files.length) return
+  const hasGpx = files.some((file) => /\.gpx$/i.test(file.name || ''))
+  emit('open-import', { planId: selectedSinglePlanId.value, mode: hasGpx ? 'all' : 'photos', files })
+}
+
 function handleEditPhoto(photo) {
   if (!photo?.recordId) {
     return
@@ -1521,6 +1579,17 @@ watch(journeyRoutePath, (path) => {
 
 <template>
   <div class="workspace-stack">
+    <input
+      ref="photoPickerInput"
+      class="travel-photo-picker"
+      type="file"
+      accept="image/*"
+      multiple
+      tabindex="-1"
+      aria-hidden="true"
+      data-photo-picker="map"
+      @change="onPhotosPicked"
+    />
     <section class="panel">
       <div class="panel__header travel-my-map-header">
         <div>
@@ -1535,7 +1604,8 @@ watch(journeyRoutePath, (path) => {
           </div>
           <div class="travel-my-map-actions__group" role="group" aria-label="기록">
             <span class="travel-my-map-actions__label" aria-hidden="true">기록</span>
-            <button class="button button--primary travel-my-map-actions__main" type="button" @click="emit('open-import', { planId: selectedSinglePlanId })">＋ 사진·GPX·장소 추가</button>
+            <button class="button button--primary travel-my-map-actions__main" type="button" @click="pickPhotos({ kind: 'trip' }, $event)">사진 추가</button>
+            <button class="button button--secondary" type="button" @click="emit('open-import', { planId: selectedSinglePlanId })">＋ 사진·GPX·장소 추가</button>
             <button class="button button--secondary" type="button" @click="emit('open-memories', { planId: selectedSinglePlanId })">기록 목록·편집</button>
           </div>
           <div class="travel-my-map-actions__group" role="group" aria-label="공유">
@@ -1617,7 +1687,13 @@ watch(journeyRoutePath, (path) => {
       </details>
     </section>
 
-    <section class="panel panel--map-fill travel-overview-map-panel">
+    <section
+      class="panel panel--map-fill travel-overview-map-panel"
+      @dragover="onMapDragOver"
+      @dragleave="onMapDragLeave"
+      @drop="onMapDrop"
+    >
+      <p v-if="photoDropActive" class="travel-map-drop-hint" role="status">사진을 놓으면 ‘{{ dropPlanName }}’에 추가합니다.</p>
       <div class="panel__header">
         <div>
           <h2>사진 지도</h2>
@@ -1647,7 +1723,7 @@ watch(journeyRoutePath, (path) => {
       <p v-else-if="isLoading && !overview" class="panel__empty">사진 지도 데이터를 불러오는 중입니다...</p>
       <div v-else class="travel-map-workbench">
       <p v-if="isLoading" class="travel-map-reloading" role="status">지도 갱신 중…</p>
-      <p v-if="selectedMarkerRecord" class="travel-map-selected-record" role="status" @pointerdown.stop @mousedown.stop @touchstart.stop>선택: {{ selectedMarkerRecord.title || selectedMarkerRecord.placeName || '기록' }}<template v-if="selectedMarkerRecord.memoryDate || selectedMarkerRecord.visitedDate"> · {{ selectedMarkerRecord.memoryDate || selectedMarkerRecord.visitedDate }}</template> <button class="button button--secondary" type="button" @click="emit('open-record-editor', { planId: selectedMarkerRecord.planId, recordId: selectedMarkerRecord.id })">이 기록 수정</button></p>
+      <p v-if="selectedMarkerRecord" class="travel-map-selected-record" role="status" @pointerdown.stop @mousedown.stop @touchstart.stop>선택: {{ selectedMarkerRecord.title || selectedMarkerRecord.placeName || '기록' }}<template v-if="selectedMarkerRecord.memoryDate || selectedMarkerRecord.visitedDate"> · {{ selectedMarkerRecord.memoryDate || selectedMarkerRecord.visitedDate }}</template> <button class="button button--secondary" type="button" @click="emit('open-record-editor', { planId: selectedMarkerRecord.planId, recordId: selectedMarkerRecord.id })">이 기록 수정</button> <button class="button button--secondary" type="button" @click="pickPhotos({ kind: 'record', planId: selectedMarkerRecord.planId, recordId: selectedMarkerRecord.id }, $event)">이 기록에 사진 추가</button></p>
       <TravelMyMapClusterPanel
         ref="mapPanelRef"
         :photo-clusters="mapPhotoClusters"
@@ -1733,11 +1809,13 @@ watch(journeyRoutePath, (path) => {
             :is-representative-saving="isRepresentativeSaving"
             :representative-updating-id="representativeUpdatingId"
             :show-edit-action="true"
+            :show-add-photo-action="true"
             :playback-state="journeyPlaybackState"
             @close="closeJourneyPhoto"
             @select-photo="handleSelectLightboxPhoto"
             @set-representative="handleUpdateRepresentative"
             @edit-photo="handleEditPhoto"
+            @add-photos="pickPhotosForRecord"
             @toggle-journey-playback="toggleJourneyPlayback"
             @journey-speed-change="setJourneyPlaybackSpeed"
           />
@@ -1930,10 +2008,12 @@ watch(journeyRoutePath, (path) => {
       :is-representative-saving="isRepresentativeSaving"
       :representative-updating-id="representativeUpdatingId"
       :show-edit-action="true"
+      :show-add-photo-action="true"
       @close="closeJourneyPhoto"
       @select-photo="handleSelectLightboxPhoto"
       @set-representative="handleUpdateRepresentative"
       @edit-photo="handleEditPhoto"
+      @add-photos="pickPhotosForRecord"
     />
   </div>
 </template>
@@ -1950,12 +2030,17 @@ watch(journeyRoutePath, (path) => {
   .workspace-stack .travel-my-map-actions .travel-my-map-actions__label { display:none; }
   .workspace-stack .travel-my-map-actions .button { width:auto !important; flex:none !important; min-width:0 !important; min-height:44px !important; }
   .workspace-stack .travel-my-map-actions .travel-my-map-actions__main { grid-column:1 / -1; }
+  .workspace-stack .travel-my-map-actions .travel-my-map-actions__group[aria-label="공유"] .button { grid-column:1 / -1; }
 }
 :global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions) { display:grid !important; grid-template-columns:repeat(2, minmax(0, 1fr)) !important; gap:6px !important; width:100% !important; justify-content:stretch !important; }
 :global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .travel-my-map-actions__group) { display:contents; }
 :global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .travel-my-map-actions__label) { display:none; }
 :global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .button) { width:auto !important; flex:none !important; min-width:0 !important; min-height:44px !important; }
 :global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .travel-my-map-actions__main) { grid-column:1 / -1; }
+:global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .travel-my-map-actions__group[aria-label="공유"] .button) { grid-column:1 / -1; }
+.travel-photo-picker { position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
+.travel-overview-map-panel { position:relative; }
+.travel-map-drop-hint { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:1200; margin:0; padding:10px 16px; max-width:calc(100% - 32px); border:2px solid var(--rm-accent, #3182f6); background:var(--rm-panel, #fff); color:var(--rm-text, inherit); font-weight:700; font-size:.9rem; text-align:center; pointer-events:none; overflow-wrap:anywhere; }
 .travel-map-selected-record { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:0 0 8px; font-size:.88rem; font-weight:600; }
 .travel-map-selected-record .button { min-height:40px; }
 .travel-map-import-notice { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:.4rem 0; font-size:.88rem; }

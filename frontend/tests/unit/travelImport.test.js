@@ -2,6 +2,14 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   IMPORT_LIMITS,
+  PHOTO_ONLY_REJECT,
+  buildAttachOptions,
+  describeAttachReason,
+  describePhotoAgainstRecord,
+  formatRecordPhotoNotice,
+  minutesApart,
+  normalizeClock,
+  suggestAttachRecord,
   buildMemoryPayload,
   buildNewPlanPayload,
   buildRoutePayload,
@@ -437,4 +445,190 @@ test('runImportSave skips excluded and already saved drafts', async () => {
   const result = await runImportSave({ drafts, target: { mode: 'existing', planId: '90' }, api, today: '2026-11-22', onChange: applier(drafts) })
   assert.equal(result.ok, true)
   assert.deepEqual(calls, [])
+})
+
+// ---------------------------------------------------------------- photo add / attach
+
+const REC = { id: 501, title: '기요미즈데라', memoryDate: '2026-10-01', memoryTime: '10:00', latitude: 34.9949, longitude: 135.785 }
+function photoDraft(overrides = {}) {
+  return { kind: 'photos', date: '2026-10-01', latitude: 34.99491, longitude: 135.78501, photos: [{ time: '10:20' }], ...overrides }
+}
+
+test('classifyImportFile photosOnly rejects GPX and other files but keeps the default behavior', () => {
+  assert.equal(classifyImportFile({ name: 'a.gpx', size: 10 }, { photosOnly: true }).reason, PHOTO_ONLY_REJECT)
+  assert.equal(classifyImportFile({ name: 'a.txt', size: 10 }, { photosOnly: true }).reason, PHOTO_ONLY_REJECT)
+  assert.equal(classifyImportFile({ name: 'a.jpg', size: 10 }, { photosOnly: true }).kind, 'photo')
+  assert.match(classifyImportFile({ name: 'a.heic', size: 10 }, { photosOnly: true }).reason, /HEIC/)
+  assert.match(classifyImportFile({ name: 'a.jpg', size: 16 * MB }, { photosOnly: true }).reason, /15MB/)
+  assert.equal(classifyImportFile({ name: 'a.gpx', size: 10 }).kind, 'gpx')
+})
+
+test('normalizeClock and minutesApart', () => {
+  assert.equal(normalizeClock('10:00:00'), '10:00')
+  assert.equal(normalizeClock('9:5'), '09:05')
+  assert.equal(normalizeClock(''), '')
+  assert.equal(normalizeClock('abc'), '')
+  assert.equal(minutesApart('10:00', '10:45'), 45)
+  assert.equal(minutesApart('', '10:45'), null)
+})
+
+test('suggestAttachRecord matches nearby same-day records', () => {
+  const s = suggestAttachRecord(photoDraft(), [REC])
+  assert.equal(s.recordId, 501)
+  assert.equal(s.reason, 'nearby')
+  assert.ok(s.distanceMeters < 50)
+})
+
+test('suggestAttachRecord rejects far, late, other-day, undated and non-photo drafts', () => {
+  assert.equal(suggestAttachRecord(photoDraft({ latitude: 34.9979, longitude: 135.785 }), [REC]), null)
+  assert.equal(suggestAttachRecord(photoDraft({ photos: [{ time: '12:01' }] }), [REC]), null)
+  assert.equal(suggestAttachRecord(photoDraft({ date: '2026-10-02' }), [REC]), null)
+  assert.equal(suggestAttachRecord(photoDraft({ date: '' }), [REC]), null)
+  assert.equal(suggestAttachRecord(photoDraft({ kind: 'gpx' }), [REC]), null)
+  assert.equal(suggestAttachRecord(photoDraft({ kind: 'place' }), [REC]), null)
+})
+
+test('suggestAttachRecord skips the time condition when the record has no time', () => {
+  const s = suggestAttachRecord(photoDraft({ photos: [{ time: '23:00' }] }), [{ ...REC, memoryTime: '' }])
+  assert.equal(s.recordId, 501)
+})
+
+test('suggestAttachRecord handles photos without GPS by time only', () => {
+  const noGps = photoDraft({ latitude: null, longitude: null })
+  assert.equal(suggestAttachRecord(noGps, [REC]).reason, 'time')
+  assert.equal(suggestAttachRecord(noGps, [{ ...REC, memoryTime: '' }]), null)
+  assert.equal(suggestAttachRecord(photoDraft({ latitude: null, longitude: null, photos: [{ time: '11:00' }] }), [REC]), null)
+})
+
+test('suggestAttachRecord prefers the closest candidate', () => {
+  const far = { ...REC, id: 502, latitude: 34.9958, longitude: 135.785 }
+  assert.equal(suggestAttachRecord(photoDraft(), [far, REC]).recordId, 501)
+})
+
+test('describeAttachReason formats meters, kilometers and minutes', () => {
+  assert.equal(describeAttachReason({ reason: 'nearby', distanceMeters: 10.4 }), '같은 날 약 10m 거리에서 찍어 자동으로 골랐습니다.')
+  assert.equal(describeAttachReason({ reason: 'nearby', distanceMeters: 1500 }), '같은 날 약 1.5km 거리에서 찍어 자동으로 골랐습니다.')
+  assert.equal(describeAttachReason({ reason: 'time', minutes: 12 }), '같은 날 12분 차이로 찍어 자동으로 골랐습니다.')
+})
+
+test('buildAttachOptions lists the suggestion first, then the same day, then the rest', () => {
+  const other = { id: 502, title: '점심', memoryDate: '2026-10-02', memoryTime: '', latitude: null, longitude: null }
+  const sameDay = { id: 503, title: 'x'.repeat(50), memoryDate: '2026-10-01', memoryTime: '09:00', latitude: 35, longitude: 136 }
+  const options = buildAttachOptions(photoDraft(), [other, sameDay, REC])
+  assert.equal(options[0].label, '새 기록으로 저장')
+  assert.equal(options[1].value, '501')
+  assert.equal(options[1].label, '기존 기록: 기요미즈데라 · 10-01')
+  assert.equal(options[2].value, '503')
+  assert.ok(options[2].label.includes('…'))
+  assert.equal(options[3].value, '502')
+  assert.equal(buildAttachOptions(photoDraft(), []).length, 1)
+})
+
+test('validateDraft skips checks for drafts that attach to an existing record', () => {
+  assert.deepEqual(validateDraft({ kind: 'photos', include: true, title: '', date: '', attachRecordId: '501' }), [])
+  assert.ok(validateDraft({ kind: 'photos', include: true, title: '', date: '2026-10-01' }).length)
+})
+
+test('summarizeDrafts counts attached drafts separately', () => {
+  const drafts = [
+    { kind: 'photos', include: true, title: 'A', date: 'd', photos: [1, 2], latitude: 1, longitude: 2, status: 'saved' },
+    { kind: 'photos', include: true, date: 'd', photos: [1], attachRecordId: '501', status: 'saved' },
+    { kind: 'photos', include: true, date: 'd', photos: [1, 2, 3], attachRecordId: '501', status: 'draft' },
+    { kind: 'photos', include: true, date: 'd', photos: [1], attachRecordId: '502', status: 'saved' },
+  ]
+  const s = summarizeDrafts(drafts)
+  assert.equal(s.records, 1)
+  assert.equal(s.attached, 3)
+  assert.equal(s.attachedPhotos, 5)
+  assert.equal(s.photos, 7)
+  assert.equal(s.savedAttached, 2)
+  assert.equal(s.savedAttachedPhotos, 2)
+  assert.equal(s.savedPhotos, 4)
+  assert.equal(s.needsLocation, 0)
+})
+
+test('formatImportNotice mentions attached photos and keeps the legacy text otherwise', () => {
+  assert.equal(formatImportNotice({ records: 1, photos: 3, planName: '가을 교토 여행' }), '기록 1건 · 사진 3장을 ‘가을 교토 여행’에 저장했습니다.')
+  assert.equal(
+    formatImportNotice({ records: 1, photos: 3, planName: '가을 교토 여행', attachedRecords: 1, attachedPhotos: 1 }),
+    '기록 1건 · 사진 3장을 ‘가을 교토 여행’에 저장했습니다. 그중 사진 1장은 기존 기록 1건에 더했습니다.',
+  )
+  assert.equal(
+    formatImportNotice({ records: 0, photos: 2, planName: 'A', attachedRecords: 1, attachedPhotos: 2 }),
+    '사진 2장을 ‘A’에 기존 기록 1건에 더했습니다.',
+  )
+})
+
+test('formatRecordPhotoNotice covers the four branches', () => {
+  assert.equal(formatRecordPhotoNotice({ addedPhotos: 2, title: 'A', recordChanged: true }), '기록을 수정했습니다. 사진 2장을 추가했습니다.')
+  assert.equal(formatRecordPhotoNotice({ recordChanged: true }), '기록을 수정했습니다.')
+  assert.equal(formatRecordPhotoNotice({ addedPhotos: 2, title: 'A' }), '사진 2장을 ‘A’ 기록에 추가했습니다.')
+  assert.equal(formatRecordPhotoNotice({}), '기록을 수정했습니다.')
+})
+
+test('describePhotoAgainstRecord reports GPS, distance and date differences', () => {
+  assert.deepEqual(describePhotoAgainstRecord({ date: '2026-10-01' }, REC), { hasGps: false, distanceMeters: null, far: false, dateDiffers: false })
+  const near = describePhotoAgainstRecord({ latitude: 34.9953, longitude: 135.785, date: '2026-10-01' }, REC)
+  assert.equal(near.far, false)
+  assert.ok(near.distanceMeters > 30 && near.distanceMeters < 50)
+  const far = describePhotoAgainstRecord({ latitude: 35.0057, longitude: 135.785 }, REC)
+  assert.equal(far.far, true)
+  assert.equal(describePhotoAgainstRecord({ date: '2026-10-03' }, REC).dateDiffers, true)
+})
+
+function attachHarness({ failPresign = 0 } = {}) {
+  const calls = []
+  let left = failPresign
+  let memoryId = 600
+  const api = {
+    async createMemory(planId, payload) { calls.push(['memory', payload.title]); return { id: ++memoryId } },
+    async uploadMemoryPhotos(id, files, onProgress) {
+      calls.push(['photos', String(id), files.length, typeof onProgress])
+      onProgress?.({ phase: 'uploading', current: 1, total: 2 })
+      if (left > 0) { left -= 1; throw new Error('Presigned travel media upload is unavailable.') }
+    },
+  }
+  return { api, calls }
+}
+
+function attachDrafts() {
+  const progress = () => ({ memoryId: null, routeId: null, photosUploaded: false, gpxUploaded: false })
+  return [
+    { id: 'photos:a', kind: 'photos', include: true, title: 'A', date: '2026-10-02', time: '10:00', category: '장소', memo: '', latitude: 1, longitude: 2, photos: [{ file: 'f1' }, { file: 'f2' }], progress: progress(), status: 'draft', attachRecordId: '' },
+    { id: 'photos:b', kind: 'photos', include: true, title: '', date: '2026-10-01', time: '10:20', photos: [{ file: 'f3' }], progress: progress(), status: 'draft', attachRecordId: '501' },
+  ]
+}
+
+test('runImportSave uploads to the existing record without creating a memory', async () => {
+  const { api, calls } = attachHarness()
+  const drafts = attachDrafts()
+  const changes = []
+  const result = await runImportSave({
+    drafts, target: { mode: 'existing', planId: '90' }, api, today: '2026-11-22',
+    onChange: (id, patch) => { changes.push([id, patch]); Object.assign(drafts.find(d => d.id === id), patch) },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(calls.filter(c => c[0] === 'memory').length, 1)
+  assert.equal(calls.filter(c => c[0] === 'photos').length, 2)
+  const attachedCall = calls.find(c => c[0] === 'photos' && c[1] === '501')
+  assert.equal(attachedCall[2], 1)
+  assert.equal(attachedCall[3], 'function')
+  assert.equal(drafts[1].progress.memoryId, null)
+  assert.ok(changes.some(([id, patch]) => id === 'photos:b' && patch.upload?.phase === 'uploading' && patch.upload.total === 2))
+  assert.deepEqual(drafts.map(d => d.status), ['saved', 'saved'])
+})
+
+test('runImportSave retries only the upload for an attached draft', async () => {
+  const { api, calls } = attachHarness({ failPresign: 2 })
+  const drafts = attachDrafts()
+  const onChange = (id, patch) => Object.assign(drafts.find(d => d.id === id), patch)
+  const first = await runImportSave({ drafts, target: { mode: 'existing', planId: '90' }, api, today: '2026-11-22', onChange })
+  assert.equal(first.ok, false)
+  assert.equal(drafts[1].status, 'failed')
+  assert.match(drafts[1].error, /다시 시도하면 사진만 올립니다/)
+  assert.doesNotMatch(drafts[1].error, /Presigned/)
+  const second = await runImportSave({ drafts, target: { mode: 'existing', planId: '90' }, api, today: '2026-11-22', onChange })
+  assert.equal(second.ok, true)
+  assert.equal(calls.filter(c => c[0] === 'memory').length, 1)
+  assert.equal(calls.filter(c => c[0] === 'photos' && c[1] === '501').length, 2)
 })

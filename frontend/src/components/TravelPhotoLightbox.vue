@@ -37,13 +37,17 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  showAddPhotoAction: {
+    type: Boolean,
+    default: false,
+  },
   playbackState: {
     type: Object,
     default: null,
   },
 })
 
-const emit = defineEmits(['close', 'select-photo', 'set-representative', 'edit-photo', 'toggle-journey-playback', 'journey-speed-change'])
+const emit = defineEmits(['close', 'select-photo', 'set-representative', 'edit-photo', 'add-photos', 'toggle-journey-playback', 'journey-speed-change'])
 
 const DEFAULT_TITLE = '\uC0AC\uC9C4 \uBCF4\uAE30'
 const CLOSE_LABEL = '\uB2EB\uAE30'
@@ -315,6 +319,14 @@ onBeforeUnmount(() => {
           <p>{{ recordedAtLabel }}</p>
         </div>
         <div class="travel-modal__header-actions">
+          <button
+            v-if="showAddPhotoAction && activePhoto.recordId && String(activePhoto.recordType || '').toUpperCase() === 'MEMORY'"
+            class="button button--secondary"
+            type="button"
+            @click="emit('add-photos', activePhoto)"
+          >
+            이 기록에 사진 추가
+          </button>
           <button
             v-if="showEditAction && activePhoto.recordId"
             class="button button--secondary"

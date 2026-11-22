@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.media.ExifTestImages;
 import com.playdata.calen.common.media.PreparedThumbnailProfile;
 import io.minio.MinioClient;
 import java.awt.Color;
@@ -18,7 +19,10 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import io.minio.RemoveObjectArgs;
+import io.minio.StatObjectResponse;
 import java.util.List;
+import org.mockito.ArgumentCaptor;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -73,7 +77,7 @@ class TravelMediaStorageServiceTest {
         assertThat(Files.exists(tempDir.resolve(stored.storagePath()))).isTrue();
         assertThat(service.loadPreparedThumbnail(stored.storagePath(), stored.contentType(), 480)).isNull();
 
-        Path thumbnailDirectory = tempDir.resolve(Path.of(stored.storagePath())).getParent().resolve(".thumbs");
+        Path thumbnailDirectory = tempDir.resolve(Path.of(stored.storagePath())).getParent().resolve(".thumbs-v2");
         assertThat(Files.exists(thumbnailDirectory)).isFalse();
     }
 
@@ -130,7 +134,8 @@ class TravelMediaStorageServiceTest {
                                 "receipt.pdf",
                                 "application/pdf",
                                 128L,
-                                List.of()
+                                List.of(),
+                                false
                         )
                 ))
                 .isInstanceOf(BadRequestException.class)
@@ -153,7 +158,8 @@ class TravelMediaStorageServiceTest {
                                 "receipt.pdf",
                                 "application/pdf",
                                 128L,
-                                List.of()
+                                List.of(),
+                                false
                         )
                 ))
                 .isInstanceOf(BadRequestException.class)
@@ -284,6 +290,145 @@ class TravelMediaStorageServiceTest {
         verify(input).bytes();
     }
 
+    @Test
+    void loadThumbnailRegeneratesOrientedThumbnailWhenOnlyLegacyExists() throws Exception {
+        TravelMediaStorageService service = createLocalStorageService();
+        TravelMediaStorageService.StoredTravelMedia stored = storeOrientedPhoto(service);
+        deleteVersionedThumbnails(stored);
+        Path legacy = legacyThumbnailPathFor(stored.storagePath(), 480);
+        Files.createDirectories(legacy.getParent());
+        Files.write(legacy, ExifTestImages.markerJpeg(480, 270));
+
+        var thumbnail = service.loadThumbnail(stored.storagePath(), stored.contentType(), 480);
+
+        assertThat(thumbnail).isNotNull();
+        BufferedImage image;
+        try (var stream = thumbnail.resource().getInputStream()) {
+            image = ImageIO.read(stream);
+        }
+        assertThat(image.getHeight()).isGreaterThan(image.getWidth());
+        assertThat(Files.exists(thumbnailPathFor(stored.storagePath(), stored.contentType(), 480))).isTrue();
+    }
+
+    @Test
+    void loadThumbnailFallsBackToLegacyWhenOnDemandGenerationIsBusy() throws Exception {
+        TravelMediaStorageService service = createLocalStorageService();
+        TravelMediaStorageService.StoredTravelMedia stored = storeOrientedPhoto(service);
+        deleteVersionedThumbnails(stored);
+        byte[] legacyBytes = ExifTestImages.markerJpeg(480, 270);
+        Path legacy = legacyThumbnailPathFor(stored.storagePath(), 480);
+        Files.createDirectories(legacy.getParent());
+        Files.write(legacy, legacyBytes);
+
+        int drained = service.onDemandThumbnailPermitsForTest().drainPermits();
+        try {
+            var thumbnail = service.loadThumbnail(stored.storagePath(), stored.contentType(), 480);
+
+            assertThat(thumbnail).isNotNull();
+            try (var stream = thumbnail.resource().getInputStream()) {
+                assertThat(stream.readAllBytes()).isEqualTo(legacyBytes);
+            }
+            assertThat(Files.exists(thumbnailPathFor(stored.storagePath(), stored.contentType(), 480))).isFalse();
+        } finally {
+            service.onDemandThumbnailPermitsForTest().release(drained);
+        }
+    }
+
+    @Test
+    void deleteImageWithThumbnailsRemovesLegacyAndVersionedThumbnails() throws Exception {
+        TravelMediaStorageService service = createLocalStorageService();
+        TravelMediaStorageService.StoredTravelMedia stored = storeOrientedPhoto(service);
+        for (int width : PreparedThumbnailProfile.defaultWidths()) {
+            Path legacy = legacyThumbnailPathFor(stored.storagePath(), width);
+            Files.createDirectories(legacy.getParent());
+            Files.write(legacy, new byte[] {1});
+        }
+
+        service.deleteImageWithThumbnailsQuietly(stored.storagePath(), stored.contentType());
+
+        assertThat(Files.exists(tempDir.resolve(stored.storagePath()))).isFalse();
+        for (int width : PreparedThumbnailProfile.defaultWidths()) {
+            assertThat(Files.exists(legacyThumbnailPathFor(stored.storagePath(), width))).isFalse();
+            assertThat(Files.exists(thumbnailPathFor(stored.storagePath(), stored.contentType(), width))).isFalse();
+        }
+    }
+
+    @Test
+    void ensurePreparedThumbnailsCreatesVersionedSetWhenOnlyLegacyExists() throws Exception {
+        TravelMediaStorageService service = createLocalStorageService();
+        TravelMediaStorageService.StoredTravelMedia stored = storeOrientedPhoto(service);
+        deleteVersionedThumbnails(stored);
+        Path legacy = legacyThumbnailPathFor(stored.storagePath(), 480);
+        Files.createDirectories(legacy.getParent());
+        Files.write(legacy, ExifTestImages.markerJpeg(480, 270));
+
+        var status = service.ensurePreparedThumbnails(stored.storagePath(), stored.contentType());
+
+        assertThat(status).isEqualTo(TravelMediaStorageService.ThumbnailPreparationStatus.CREATED);
+        for (int width : PreparedThumbnailProfile.defaultWidths()) {
+            assertThat(Files.exists(thumbnailPathFor(stored.storagePath(), stored.contentType(), width))).isTrue();
+        }
+    }
+
+    @Test
+    void completePresignedUploadDiscardsClientThumbnailsWithoutOrientationMarker() throws Exception {
+        MinioClient client = mock(MinioClient.class);
+        StatObjectResponse stat = mock(StatObjectResponse.class);
+        when(stat.size()).thenReturn(5L);
+        when(client.statObject(org.mockito.ArgumentMatchers.any())).thenReturn(stat);
+        TravelMediaStorageService service = createPresignedStorageService(client);
+
+        service.completePresignedUpload(1L, 2L, 3L, completedPhotoUpload(false));
+
+        ArgumentCaptor<RemoveObjectArgs> removed = ArgumentCaptor.forClass(RemoveObjectArgs.class);
+        verify(client, org.mockito.Mockito.times(4)).removeObject(removed.capture());
+        assertThat(removed.getAllValues()).extracting(RemoveObjectArgs::object).containsExactlyInAnyOrder(
+                "travel-media/1/2/3/.thumbs-v2/96/photo.jpg",
+                "travel-media/1/2/3/.thumbs-v2/240/photo.jpg",
+                "travel-media/1/2/3/.thumbs-v2/480/photo.jpg",
+                "travel-media/1/2/3/.thumbs-v2/960/photo.jpg");
+    }
+
+    @Test
+    void completePresignedUploadKeepsClientThumbnailsWithOrientationMarker() throws Exception {
+        MinioClient client = mock(MinioClient.class);
+        StatObjectResponse stat = mock(StatObjectResponse.class);
+        when(stat.size()).thenReturn(5L);
+        when(client.statObject(org.mockito.ArgumentMatchers.any())).thenReturn(stat);
+        TravelMediaStorageService service = createPresignedStorageService(client);
+
+        service.completePresignedUpload(1L, 2L, 3L, completedPhotoUpload(true));
+
+        verify(client, never()).removeObject(org.mockito.ArgumentMatchers.any());
+    }
+
+    private TravelMediaStorageService.CompletedUpload completedPhotoUpload(boolean orientedThumbnails) {
+        List<TravelMediaStorageService.CompletedPreparedThumbnailUpload> thumbnails = PreparedThumbnailProfile.defaultSpecs().stream()
+                .map(spec -> new TravelMediaStorageService.CompletedPreparedThumbnailUpload(
+                        spec.key(), "travel-media/1/2/3/.thumbs-v2/" + spec.width() + "/photo.jpg", "image/jpeg", 5L))
+                .toList();
+        return new TravelMediaStorageService.CompletedUpload(
+                "travel-media/1/2/3/photo.jpg", "photo.jpg", "image/jpeg", 5L, thumbnails, orientedThumbnails);
+    }
+
+    private TravelMediaStorageService.StoredTravelMedia storeOrientedPhoto(TravelMediaStorageService service) throws Exception {
+        byte[] bytes = ExifTestImages.withOrientation(ExifTestImages.markerJpeg(1600, 900), 6, false);
+        return service.store(1L, 2L, 3L, new MockMultipartFile("file", "portrait.jpg", "image/jpeg", bytes));
+    }
+
+    private void deleteVersionedThumbnails(TravelMediaStorageService.StoredTravelMedia stored) throws Exception {
+        for (int width : PreparedThumbnailProfile.defaultWidths()) {
+            Files.deleteIfExists(thumbnailPathFor(stored.storagePath(), stored.contentType(), width));
+        }
+    }
+
+    private Path legacyThumbnailPathFor(String storagePath, int width) {
+        Path relativePath = Path.of(storagePath);
+        String fileName = relativePath.getFileName().toString();
+        String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+        return tempDir.resolve(relativePath.getParent().resolve(".thumbs").resolve(String.valueOf(width)).resolve(baseName + ".jpg"));
+    }
+
     private TravelMediaStorageService createLocalStorageService() {
         @SuppressWarnings("unchecked")
         ObjectProvider<MinioClient> minioProvider = mock(ObjectProvider.class);
@@ -339,8 +484,8 @@ class TravelMediaStorageServiceTest {
                 : "jpg";
 
         Path thumbnailRelativePath = directory == null
-                ? Path.of(".thumbs", String.valueOf(width), baseName + "." + extension)
-                : directory.resolve(".thumbs").resolve(String.valueOf(width)).resolve(baseName + "." + extension);
+                ? Path.of(".thumbs-v2", String.valueOf(width), baseName + "." + extension)
+                : directory.resolve(".thumbs-v2").resolve(String.valueOf(width)).resolve(baseName + "." + extension);
         return tempDir.resolve(thumbnailRelativePath);
     }
 

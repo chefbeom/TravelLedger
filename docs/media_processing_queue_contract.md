@@ -12,6 +12,7 @@ This contract records how TravelLedger should handle large photo/video uploads a
 | Prepared thumbnails | Image uploads generate fixed prepared thumbnail profiles, and media responses prefer prepared thumbnails instead of original files. | `ImageThumbnailService.createPreparedThumbnails`, `PreparedThumbnailProfile.defaultWidths`, `TravelMediaStorageService.loadPreparedThumbnail`. |
 | Thumbnail backfill | Existing travel images can be repaired by a bounded startup/scheduled/manual backfill pass. | `TravelThumbnailBackfillService` with enabled flag, page size, max items per run, running guard, cursor, and status counts. |
 | Family album thumbnail serving | Family album thumbnail responses fail closed instead of falling back to original bytes when a thumbnail is unavailable. | `FamilyAlbumControllerTest.shouldNotFallbackToOriginalImageWhenThumbnailIsUnavailable`. |
+| Thumbnail orientation | Prepared thumbnails are display-oriented (EXIF applied, no EXIF in output) and stored under `.thumbs-v2`; legacy `.thumbs` variants are read only as a fallback and removed with the media. Completion without the client orientation marker discards client thumbnails so the server regenerates them. | `TravelMediaStorageService.loadThumbnail`, `completePresignedUpload`, `ImageThumbnailService.applyExifOrientation`. |
 
 ## Queue separation target
 

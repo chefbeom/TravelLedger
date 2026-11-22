@@ -267,3 +267,67 @@ export function seedPhotoRecord(state) {
   state.nextMemoryId = 502
   state.nextMediaId = 802
 }
+
+// ---- Orientation fixtures (photo-orientation.spec.js): built in memory, no image files in the repository ----
+
+// APP1 segment with only the Orientation tag (little or big endian TIFF).
+export function orientationOnlyExif(orientation, littleEndian = true) {
+  const t = Buffer.alloc(26)
+  const u16 = (v, at) => (littleEndian ? t.writeUInt16LE(v, at) : t.writeUInt16BE(v, at))
+  const u32 = (v, at) => (littleEndian ? t.writeUInt32LE(v, at) : t.writeUInt32BE(v, at))
+  t.write(littleEndian ? 'II' : 'MM', 0, 'ascii'); u16(42, 2); u32(8, 4)
+  u16(1, 8); u16(0x0112, 10); u16(3, 12); u32(1, 14); u16(orientation, 18); u32(0, 22)
+  const payload = Buffer.concat([Buffer.from('Exif\0\0', 'binary'), t])
+  const head = Buffer.alloc(4); head.writeUInt16BE(0xFFE1, 0); head.writeUInt16BE(payload.length + 2, 2)
+  return Buffer.concat([head, payload])
+}
+export const withSegment = (jpeg, segment) => Buffer.concat([jpeg.subarray(0, 2), segment, jpeg.subarray(2)])
+
+// Orientation + capture date + GPS (so the import dialog fills title/date/location).
+export function orientationExifSegment({ orientation, lat, lon, dateTime }) {
+  const t = Buffer.alloc(190)
+  const entry = (at, tag, type, count, value) => { t.writeUInt16LE(tag, at); t.writeUInt16LE(type, at + 2); t.writeUInt32LE(count, at + 4); t.writeUInt32LE(value, at + 8) }
+  const ref = (at, tag, text) => { t.writeUInt16LE(tag, at); t.writeUInt16LE(2, at + 2); t.writeUInt32LE(2, at + 4); t.write(text + '\0', at + 8, 'ascii') }
+  const dms = (at, v) => {
+    const d = Math.floor(v), mf = (v - d) * 60, m = Math.floor(mf), s = Math.round((mf - m) * 60000)
+    ;[[d, 1], [m, 1], [s, 1000]].forEach(([n, den], i) => { t.writeUInt32LE(n, at + i * 8); t.writeUInt32LE(den, at + i * 8 + 4) })
+  }
+  t.write('II', 0, 'ascii'); t.writeUInt16LE(42, 2); t.writeUInt32LE(8, 4)
+  t.writeUInt16LE(3, 8)
+  t.writeUInt16LE(0x0112, 10); t.writeUInt16LE(3, 12); t.writeUInt32LE(1, 14); t.writeUInt16LE(orientation, 18)
+  entry(22, 0x8769, 4, 1, 50); entry(34, 0x8825, 4, 1, 88); t.writeUInt32LE(0, 46)
+  t.writeUInt16LE(1, 50); entry(52, 0x9003, 2, 20, 68); t.writeUInt32LE(0, 64); t.write(dateTime + '\0', 68, 'ascii')
+  t.writeUInt16LE(4, 88); ref(90, 0x0001, 'N'); entry(102, 0x0002, 5, 3, 142); ref(114, 0x0003, 'E'); entry(126, 0x0004, 5, 3, 166); t.writeUInt32LE(0, 138)
+  dms(142, lat); dms(166, lon)
+  const payload = Buffer.concat([Buffer.from('Exif\0\0', 'binary'), t])
+  const head = Buffer.alloc(4); head.writeUInt16BE(0xFFE1, 0); head.writeUInt16BE(payload.length + 2, 2)
+  return Buffer.concat([head, payload])
+}
+export const withOrientationExif = (jpeg, meta) => Buffer.concat([jpeg.subarray(0, 2), orientationExifSegment(meta), jpeg.subarray(2)])
+
+// 120x60 raw picture: blue, red 30x20 rectangle in the raw top-left corner.
+export async function markerJpeg(page) {
+  const base64 = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 120; canvas.height = 60
+    const context = canvas.getContext('2d')
+    context.fillStyle = '#3366cc'; context.fillRect(0, 0, 120, 60)
+    context.fillStyle = '#ff0000'; context.fillRect(0, 0, 30, 20)
+    return canvas.toDataURL('image/jpeg', 0.9).split(',')[1]
+  })
+  return Buffer.from(base64, 'base64')
+}
+
+// Raw pixels are landscape (480x240); with Orientation 6 the correct view is portrait with the sky on top.
+export async function portraitSceneJpeg(page) {
+  const base64 = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 480; canvas.height = 240
+    const context = canvas.getContext('2d')
+    context.translate(0, 240); context.rotate(-Math.PI / 2)
+    context.fillStyle = '#7cc4ff'; context.fillRect(0, 0, 240, 300)
+    context.fillStyle = '#3a9d4a'; context.fillRect(0, 300, 240, 180)
+    return canvas.toDataURL('image/jpeg', 0.92).split(',')[1]
+  })
+  return Buffer.from(base64, 'base64')
+}

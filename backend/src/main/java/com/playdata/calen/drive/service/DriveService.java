@@ -1111,7 +1111,7 @@ public class DriveService {
             return new ThumbnailPayload(
                     bytes,
                     preparedThumbnail.contentType(),
-                    "\"" + item.getId() + "-" + item.getLastModifiedAt() + "-travel-thumb\"",
+                    "\"" + item.getId() + "-" + item.getLastModifiedAt() + "-travel-thumb-v2\"",
                     item.getLastModifiedAt() != null
                             ? item.getLastModifiedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                             : System.currentTimeMillis()

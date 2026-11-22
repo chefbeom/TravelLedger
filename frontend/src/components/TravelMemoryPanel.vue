@@ -69,6 +69,7 @@ function onPhotosPicked(event) {
   const recordId = photoPickRecordId
   photoPickRecordId = ''
   if (!files.length) return
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
   if (recordId) emit('open-record-photos', { recordId, files })
   else emit('open-import', { mode: 'photos', files })
 }
@@ -926,7 +927,7 @@ function submitMemory() {
         initial-map-size="expanded"
         :auto-fit="false"
         hint-title="지도 클릭으로 핀 먼저 만들기"
-        hint-text="지도를 누르면 임시 핀이 생기고, 그 핀을 다시 누르면 장소 기록을 쓸 수 있습니다. 사진은 위의 ‘사진 추가’를 쓰세요."
+        hint-text="지도를 누르면 임시 핀이 생기고, 그 핀을 다시 누르면 장소 기록을 쓸 수 있습니다. 사진은 ‘사진 추가’(패널 머리 또는 지도 도구 줄)를 쓰세요."
         @pick-location="handlePickLocation"
         @select-selected-point="handleSelectSelectedPoint"
         @move-selected-point="handleMoveSelectedPoint"
@@ -934,6 +935,14 @@ function submitMemory() {
         @select-marker="handleSelectMarker"
       >
         <template #toolbar>
+        <div class="travel-map__toolbar-group travel-memory-map-toolbar-photo">
+          <button
+            class="travel-map__toolbar-button travel-memory-map-toolbar-photo__button"
+            type="button"
+            aria-label="사진 추가 (지도 도구)"
+            @click="pickPhotos(null, $event)"
+          >사진 추가</button>
+        </div>
         <div class="travel-map__toolbar-group">
           <span class="travel-map__toolbar-label">GPX 경로</span>
           <button
@@ -1209,6 +1218,9 @@ function submitMemory() {
 @media (max-width: 760px) {
   .travel-memory-map-panel__actions .button { min-height: 44px; }
 }
+/* The :not(#id) only raises specificity above the global dark-theme !important button rules (record_map_ux_workplan 3.6). */
+:global(:root body .app-shell .record-map-hub .travel-memory-map-panel .travel-map__toolbar-button.travel-memory-map-toolbar-photo__button:not(#rm-specificity-boost)) { border-color: var(--rm-accent, #3a5a40) !important; box-shadow: inset 3px 0 0 var(--rm-accent, #3a5a40) !important; font-weight: 800 !important; }
+:global(:root[data-theme='toss'] body .app-shell .record-map-hub .travel-memory-map-panel__actions .button--primary:not(#rm-specificity-boost)) { background: var(--rm-accent, #9bd3a3) !important; border-color: var(--rm-accent, #9bd3a3) !important; color: var(--rm-accent-contrast, #0f1517) !important; -webkit-text-fill-color: var(--rm-accent-contrast, #0f1517) !important; }
 :global(html body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active) { box-shadow: inset 0 -3px 0 var(--rm-accent) !important; border-color: var(--rm-accent) !important; }
 :global(html body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active :is(strong, small)) { color: var(--rm-accent-contrast) !important; -webkit-text-fill-color: var(--rm-accent-contrast) !important; }
 :global(:root[data-theme='toss'] body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active :is(strong, small)) { color: var(--rm-text) !important; -webkit-text-fill-color: var(--rm-text) !important; }

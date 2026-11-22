@@ -44,9 +44,9 @@ class TravelMediaStorageAdapterTest {
 
     @Test void completionUsesVerifiedStorageMetadataNotClientDeclaredSizeAndGpsStaysOutsideTheSdk() {
         var file = new Completed("key", "photo.jpg", "image/jpeg", 21,
-                List.of(new CompletedThumbnail("480", "thumb/key", "image/png", 5)), BigDecimal.ONE, BigDecimal.TEN);
+                List.of(new CompletedThumbnail("480", "thumb/key", "image/png", 5)), BigDecimal.ONE, BigDecimal.TEN, true);
         var wire = new TravelMediaStorageService.CompletedUpload("key", "photo.jpg", "image/jpeg", 21,
-                List.of(new TravelMediaStorageService.CompletedPreparedThumbnailUpload("480", "thumb/key", "image/png", 5)));
+                List.of(new TravelMediaStorageService.CompletedPreparedThumbnailUpload("480", "thumb/key", "image/png", 5)), true);
         when(sdk.completePresignedUpload(1L, 2L, 3L, wire)).thenReturn(
                 new TravelMediaStorageService.StoredTravelMedia("verified.jpg", "stored.jpg", "verified/key", "image/png", 19));
         assertThat(adapter.complete(1L, 2L, 3L, file)).isEqualTo(new Stored("verified.jpg", "stored.jpg", "verified/key", "image/png", 19));
@@ -56,10 +56,10 @@ class TravelMediaStorageAdapterTest {
     @Test void completionWithoutThumbnailsAndDeletionKeepTheExistingSdkOperations() {
         when(sdk.supportsPresignedUpload()).thenReturn(true);
         when(sdk.completePresignedUpload(1L, 2L, 3L,
-                new TravelMediaStorageService.CompletedUpload("key", "receipt.pdf", "application/pdf", 12, List.of())))
+                new TravelMediaStorageService.CompletedUpload("key", "receipt.pdf", "application/pdf", 12, List.of(), false)))
                 .thenReturn(new TravelMediaStorageService.StoredTravelMedia("receipt.pdf", "receipt.pdf", "key", "application/pdf", 12));
         assertThat(adapter.supportsPresigned()).isTrue();
-        assertThat(adapter.complete(1L, 2L, 3L, new Completed("key", "receipt.pdf", "application/pdf", 12, null, null, null)).fileSize()).isEqualTo(12);
+        assertThat(adapter.complete(1L, 2L, 3L, new Completed("key", "receipt.pdf", "application/pdf", 12, null, null, null, false)).fileSize()).isEqualTo(12);
         adapter.delete("key", "application/pdf");
         verify(sdk).deleteImageWithThumbnailsQuietly("key", "application/pdf");
     }

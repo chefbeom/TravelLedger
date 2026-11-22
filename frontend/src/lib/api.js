@@ -1393,6 +1393,7 @@ async function prepareTravelMediaUploadEntries(files, onProgress) {
           gpsLatitude: null,
           gpsLongitude: null,
           thumbnails: [],
+          orientedThumbnails: false,
         }
 
     preparedEntries[index] = {
@@ -1403,6 +1404,7 @@ async function prepareTravelMediaUploadEntries(files, onProgress) {
       gpsLatitude: preparedImage.gpsLatitude,
       gpsLongitude: preparedImage.gpsLongitude,
       thumbnails: preparedImage.thumbnails,
+      orientedThumbnails: preparedImage.orientedThumbnails === true,
     }
 
     preparedCount += 1
@@ -1523,6 +1525,7 @@ async function uploadTravelMediaWithPresignedUrls({
         })),
         gpsLatitude: preparedEntries[index]?.gpsLatitude,
         gpsLongitude: preparedEntries[index]?.gpsLongitude,
+        orientedThumbnails: preparedEntries[index]?.orientedThumbnails === true,
       })),
     }),
   })

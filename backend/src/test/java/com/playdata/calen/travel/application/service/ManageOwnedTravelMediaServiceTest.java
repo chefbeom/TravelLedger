@@ -97,6 +97,6 @@ class ManageOwnedTravelMediaServiceTest {
         assertThatThrownBy(()->service.delete(7L,20L)).hasMessage("storage");
         verify(media,never()).delete(any());verifyNoInteractions(cache,summaries,clusters);
     }
-    static Completed completed(String key){return new Completed("test/"+key,key+".png","image/png",1,null,new BigDecimal("37.12345675"),new BigDecimal("127"));}
+    static Completed completed(String key){return new Completed("test/"+key,key+".png","image/png",1,null,new BigDecimal("37.12345675"),new BigDecimal("127"),true);}
     static Media photo(){return new Media(20L,1L,"trip","#ABCDEF",10L,TravelRecordType.MEMORY,TravelMediaType.PHOTO,"a","image/png",1L,null,"owner",null,null,null,"place",null,null,null,null,null,null,null,null,null,null,false);}
 }

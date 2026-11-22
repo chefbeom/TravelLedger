@@ -14,7 +14,7 @@ public final class TravelMediaData {
     public record Candidate(String originalFileName, String contentType, long fileSize, List<ThumbnailCandidate> thumbnails) {}
     public record CompletedThumbnail(String variant, String objectKey, String contentType, long fileSize) {}
     public record Completed(String objectKey, String originalFileName, String contentType, long fileSize, List<CompletedThumbnail> thumbnails,
-            BigDecimal gpsLatitude, BigDecimal gpsLongitude) {
+            BigDecimal gpsLatitude, BigDecimal gpsLongitude, boolean orientedThumbnails) {
         @Override
         public String toString() {
             return "Completed[objectKey=<redacted>, metadata=<redacted>]";

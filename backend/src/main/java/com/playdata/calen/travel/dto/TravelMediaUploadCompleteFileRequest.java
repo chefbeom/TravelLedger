@@ -12,6 +12,7 @@ public record TravelMediaUploadCompleteFileRequest(
         @Positive long fileSize,
         List<@jakarta.validation.Valid TravelPreparedThumbnailUploadCompleteRequest> thumbnails,
         BigDecimal gpsLatitude,
-        BigDecimal gpsLongitude
+        BigDecimal gpsLongitude,
+        Boolean orientedThumbnails
 ) {
 }

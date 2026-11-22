@@ -45,7 +45,7 @@ public class TravelMediaStorageAdapter implements TravelMediaStoragePort {
                         thumbnail.variant(), thumbnail.objectKey(), thumbnail.contentType(), thumbnail.fileSize()))
                 .toList();
         var result = storage.completePresignedUpload(owner, plan, record, new TravelMediaStorageService.CompletedUpload(
-                file.objectKey(), file.originalFileName(), file.contentType(), file.fileSize(), thumbnails));
+                file.objectKey(), file.originalFileName(), file.contentType(), file.fileSize(), thumbnails, file.orientedThumbnails()));
         return new Stored(result.originalFileName(), result.storedFileName(), result.storagePath(), result.contentType(), result.fileSize());
     }
 

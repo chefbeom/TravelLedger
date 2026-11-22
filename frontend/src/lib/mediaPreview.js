@@ -1,4 +1,14 @@
 import exifr from 'exifr'
+import {
+  buildOrientationExifSegment,
+  drawOrientedImage,
+  insertExifSegment,
+  normalizeExifOrientation,
+  resolveOrientationToApply,
+  resolveOrientedSize,
+} from './imageOrientation.js'
+
+export const THUMBNAIL_CACHE_VERSION = '2'
 
 export const THUMBNAIL_VARIANTS = Object.freeze({
   pin: 'pin',
@@ -80,18 +90,9 @@ function resolveWidthBoundedSize(width, height, maxWidth) {
   }
 }
 
-function isRotatedOrientation(orientation) {
-  return orientation >= 5 && orientation <= 8
-}
-
-function normalizeOrientation(orientation) {
-  const numericOrientation = Number(orientation)
-  return Number.isFinite(numericOrientation) ? numericOrientation : 1
-}
-
 async function resolveImageOrientation(file) {
   try {
-    return normalizeOrientation(await exifr.orientation(file))
+    return normalizeExifOrientation(await exifr.orientation(file))
   } catch {
     return 1
   }
@@ -112,56 +113,71 @@ async function resolveImageGps(file) {
   }
 }
 
-async function loadPreviewImage(file, objectUrl) {
+async function decodeImageSource(blob, objectUrl) {
   if (typeof createImageBitmap === 'function') {
     try {
-      return await createImageBitmap(file, { imageOrientation: 'none' })
+      return await createImageBitmap(blob, { imageOrientation: 'from-image' })
     } catch {
-      return await createImageBitmap(file)
+      try {
+        return await createImageBitmap(blob)
+      } catch {
+        // fall through to the image element decoder
+      }
     }
   }
 
-  return readImageElement(objectUrl)
+  if (objectUrl) {
+    return readImageElement(objectUrl)
+  }
+  const temporaryUrl = URL.createObjectURL(blob)
+  try {
+    return await readImageElement(temporaryUrl)
+  } finally {
+    URL.revokeObjectURL(temporaryUrl)
+  }
 }
 
-function drawOrientedPreview(context, image, orientation, targetWidth, targetHeight) {
-  const requiresSwappedDrawSize = isRotatedOrientation(orientation)
-  const drawWidth = requiresSwappedDrawSize ? targetHeight : targetWidth
-  const drawHeight = requiresSwappedDrawSize ? targetWidth : targetHeight
+let browserAppliesOrientationPromise = null
 
-  context.save()
-
-  switch (orientation) {
-    case 2:
-      context.translate(targetWidth, 0)
-      context.scale(-1, 1)
-      break
-    case 3:
-      context.translate(targetWidth, targetHeight)
-      context.rotate(Math.PI)
-      break
-    case 4:
-      context.translate(0, targetHeight)
-      context.scale(1, -1)
-      break
-    case 5:
-      context.transform(0, 1, 1, 0, 0, 0)
-      break
-    case 6:
-      context.transform(0, 1, -1, 0, targetWidth, 0)
-      break
-    case 7:
-      context.transform(0, -1, -1, 0, targetWidth, targetHeight)
-      break
-    case 8:
-      context.transform(0, -1, 1, 0, 0, targetHeight)
-      break
-    default:
-      break
+// Measures once whether this browser applies EXIF Orientation while decoding:
+// a tiny JPEG tagged Orientation 6 decodes portrait (height > width) when it does.
+export function detectBrowserAppliesExifOrientation() {
+  if (!browserAppliesOrientationPromise) {
+    browserAppliesOrientationPromise = (async () => {
+      if (typeof document === 'undefined') {
+        return true
+      }
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 2
+        canvas.height = 1
+        const context = canvas.getContext('2d')
+        if (!context) {
+          return true
+        }
+        context.fillStyle = '#ffffff'
+        context.fillRect(0, 0, 1, 1)
+        context.fillStyle = '#000000'
+        context.fillRect(1, 0, 1, 1)
+        const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+        if (!jpeg) {
+          return true
+        }
+        const tagged = insertExifSegment(new Uint8Array(await jpeg.arrayBuffer()), buildOrientationExifSegment(6))
+        if (!tagged) {
+          return true
+        }
+        const decoded = await decodeImageSource(new Blob([tagged], { type: 'image/jpeg' }))
+        const width = decoded.width || decoded.naturalWidth
+        const height = decoded.height || decoded.naturalHeight
+        decoded.close?.()
+        return height > width
+      } catch {
+        return true
+      }
+    })()
   }
-
-  context.drawImage(image, 0, 0, drawWidth, drawHeight)
-  context.restore()
+  return browserAppliesOrientationPromise
 }
 
 function normalizeCoordinate(value) {
@@ -193,7 +209,7 @@ async function renderOrientedImageBlob(image, orientation, targetWidth, targetHe
 
   context.imageSmoothingEnabled = true
   context.imageSmoothingQuality = 'high'
-  drawOrientedPreview(context, image, orientation, canvas.width, canvas.height)
+  drawOrientedImage(context, image, orientation, canvas.width, canvas.height)
 
   const blob = await new Promise((resolve) => {
     if (mimeType === 'image/jpeg') {
@@ -223,6 +239,7 @@ export function buildThumbnailUrl(url, width = THUMBNAIL_VARIANTS.preview) {
     const parsed = new URL(normalizedUrl, baseOrigin)
     parsed.searchParams.set('thumbnail', 'true')
     parsed.searchParams.set('w', String(thumbnailWidth))
+    parsed.searchParams.set('tv', THUMBNAIL_CACHE_VERSION)
 
     if (parsed.origin === baseOrigin) {
       return `${parsed.pathname}${parsed.search}${parsed.hash}`
@@ -239,22 +256,24 @@ export async function prepareClientImageUpload(file) {
       gpsLatitude: null,
       gpsLongitude: null,
       thumbnails: [],
+      orientedThumbnails: false,
     }
   }
 
   const objectUrl = URL.createObjectURL(file)
 
   try {
-    const [orientation, gps, image] = await Promise.all([
+    const [exifOrientation, gps, image, browserApplies] = await Promise.all([
       resolveImageOrientation(file),
       resolveImageGps(file),
-      loadPreviewImage(file, objectUrl),
+      decodeImageSource(file, objectUrl),
+      detectBrowserAppliesExifOrientation(),
     ])
 
+    const orientation = resolveOrientationToApply(exifOrientation, browserApplies)
     const sourceWidth = image.width || image.naturalWidth
     const sourceHeight = image.height || image.naturalHeight
-    const orientedWidth = isRotatedOrientation(orientation) ? sourceHeight : sourceWidth
-    const orientedHeight = isRotatedOrientation(orientation) ? sourceWidth : sourceHeight
+    const { width: orientedWidth, height: orientedHeight } = resolveOrientedSize(sourceWidth, sourceHeight, orientation)
     const thumbnailContentType = resolvePreparedThumbnailContentType(file.type)
 
     const thumbnails = []
@@ -277,10 +296,13 @@ export async function prepareClientImageUpload(file) {
       })
     }
 
+    image.close?.()
+
     return {
       gpsLatitude: gps.latitude,
       gpsLongitude: gps.longitude,
       thumbnails,
+      orientedThumbnails: true,
     }
   } finally {
     URL.revokeObjectURL(objectUrl)
@@ -299,16 +321,16 @@ export async function createLocalImagePreview(file, options = {}) {
   const quality = Number.isFinite(Number(options.quality)) ? Number(options.quality) : 0.82
 
   try {
-    const orientation = await resolveImageOrientation(file)
-    const image = await loadPreviewImage(file, originalPreviewUrl)
+    const [exifOrientation, image, browserApplies] = await Promise.all([
+      resolveImageOrientation(file),
+      decodeImageSource(file, originalPreviewUrl),
+      detectBrowserAppliesExifOrientation(),
+    ])
+    const orientation = resolveOrientationToApply(exifOrientation, browserApplies)
     const sourceWidth = image.width || image.naturalWidth
     const sourceHeight = image.height || image.naturalHeight
-    const previewSize = resolvePreviewSize(
-      isRotatedOrientation(orientation) ? sourceHeight : sourceWidth,
-      isRotatedOrientation(orientation) ? sourceWidth : sourceHeight,
-      maxWidth,
-      maxHeight,
-    )
+    const oriented = resolveOrientedSize(sourceWidth, sourceHeight, orientation)
+    const previewSize = resolvePreviewSize(oriented.width, oriented.height, maxWidth, maxHeight)
 
     const previewBlob = await renderOrientedImageBlob(
       image,
@@ -318,6 +340,7 @@ export async function createLocalImagePreview(file, options = {}) {
       'image/jpeg',
       quality,
     )
+    image.close?.()
 
     URL.revokeObjectURL(originalPreviewUrl)
     return URL.createObjectURL(previewBlob)

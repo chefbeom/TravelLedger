@@ -29,7 +29,7 @@ public final class TravelMediaUploadMapper {
                         .map(thumbnail -> thumbnail == null ? null : new CompletedThumbnail(
                                 thumbnail.variant(), thumbnail.objectKey(), thumbnail.contentType(), thumbnail.fileSize()))
                         .toList(),
-                file.gpsLatitude(), file.gpsLongitude())).toList();
+                file.gpsLatitude(), file.gpsLongitude(), Boolean.TRUE.equals(file.orientedThumbnails()))).toList();
     }
 
     public static TravelMediaUploadPrepareResponse response(Prepared prepared) {

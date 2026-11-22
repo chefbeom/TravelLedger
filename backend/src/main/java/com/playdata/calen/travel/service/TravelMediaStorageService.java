@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -40,6 +42,10 @@ public class TravelMediaStorageService {
     private static final long MAX_TRAVEL_MEDIA_FILE_SIZE = 15L * 1024 * 1024;
     private static final long MAX_GPX_FILE_SIZE = 10L * 1024 * 1024;
     private static final int HEADER_BYTES = 32;
+    private static final String THUMBNAIL_DIRECTORY = ".thumbs-v2";
+    private static final String LEGACY_THUMBNAIL_DIRECTORY = ".thumbs";
+    private static final int ON_DEMAND_THUMBNAIL_PERMITS = 2;
+    private static final long ON_DEMAND_THUMBNAIL_WAIT_MS = 1500;
     private static final List<Integer> PREPARED_THUMBNAIL_WIDTHS = PreparedThumbnailProfile.defaultWidths();
     private static final Set<String> IMAGE_FILE_EXTENSIONS = Set.of(
             "jpg",
@@ -59,6 +65,7 @@ public class TravelMediaStorageService {
     private final MinioProperties minioProperties;
     private final boolean presignedUploadEnabled;
     private final ImageThumbnailService imageThumbnailService;
+    private final Semaphore onDemandThumbnailPermits = new Semaphore(ON_DEMAND_THUMBNAIL_PERMITS);
 
     public TravelMediaStorageService(
             @Value("${app.travel.media-storage-path}") String mediaStoragePath,
@@ -286,6 +293,10 @@ public class TravelMediaStorageService {
         try {
             StatObjectResponse stat = verifyUploadedObject(upload.objectKey(), upload.fileSize());
             verifyPreparedThumbnailUploads(upload.objectKey(), verifiedContentType, upload.thumbnails());
+            if (verifiedContentType.startsWith("image/") && !upload.orientedThumbnails()) {
+                // Client thumbnails from an older frontend may be rotated twice; the server regenerates them lazily.
+                deletePreparedThumbnailsQuietly(upload.objectKey(), verifiedContentType);
+            }
 
             return new StoredTravelMedia(
                     upload.originalFileName(),
@@ -342,11 +353,46 @@ public class TravelMediaStorageService {
             return null;
         }
 
-        if (!prepareDerivedThumbnails(storagePath, contentType)) {
-            return null;
+        if (acquireOnDemandThumbnailPermit()) {
+            try {
+                if (prepareDerivedThumbnails(storagePath, contentType)) {
+                    preparedThumbnail = loadPreparedThumbnail(storagePath, contentType, requestedWidth);
+                    if (preparedThumbnail != null) {
+                        return preparedThumbnail;
+                    }
+                }
+            } finally {
+                onDemandThumbnailPermits.release();
+            }
         }
 
-        return loadPreparedThumbnail(storagePath, contentType, requestedWidth);
+        return loadLegacyThumbnail(storagePath, contentType, requestedWidth);
+    }
+
+    Semaphore onDemandThumbnailPermitsForTest() {
+        return onDemandThumbnailPermits;
+    }
+
+    private boolean acquireOnDemandThumbnailPermit() {
+        try {
+            return onDemandThumbnailPermits.tryAcquire(ON_DEMAND_THUMBNAIL_WAIT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private PreparedThumbnail loadLegacyThumbnail(String storagePath, String contentType, Integer requestedWidth) {
+        String legacyPath = buildLegacyThumbnailStoragePath(
+                storagePath,
+                contentType,
+                PreparedThumbnailProfile.selectWidth(requestedWidth)
+        );
+        try {
+            return new PreparedThumbnail(loadAsResource(legacyPath), resolveThumbnailContentType(contentType));
+        } catch (BadRequestException ignored) {
+            return null;
+        }
     }
 
     public ThumbnailPreparationStatus ensurePreparedThumbnails(String storagePath, String contentType) {
@@ -385,6 +431,13 @@ public class TravelMediaStorageService {
             return;
         }
 
+        PREPARED_THUMBNAIL_WIDTHS.forEach(width -> {
+            deleteQuietly(buildThumbnailStoragePath(storagePath, contentType, width));
+            deleteQuietly(buildLegacyThumbnailStoragePath(storagePath, contentType, width));
+        });
+    }
+
+    private void deletePreparedThumbnailsQuietly(String storagePath, String contentType) {
         PREPARED_THUMBNAIL_WIDTHS.forEach(width -> deleteQuietly(buildThumbnailStoragePath(storagePath, contentType, width)));
     }
 
@@ -627,7 +680,8 @@ public class TravelMediaStorageService {
             List<ImageThumbnailService.PreparedThumbnailContent> thumbnails = imageThumbnailService.createPreparedThumbnails(
                     sourceBytes,
                     contentType,
-                    PREPARED_THUMBNAIL_WIDTHS
+                    PREPARED_THUMBNAIL_WIDTHS,
+                    true
             );
 
             for (ImageThumbnailService.PreparedThumbnailContent thumbnail : thumbnails) {
@@ -664,6 +718,14 @@ public class TravelMediaStorageService {
     }
 
     private String buildThumbnailStoragePath(String storagePath, String contentType, int width) {
+        return buildThumbnailStoragePath(storagePath, contentType, width, THUMBNAIL_DIRECTORY);
+    }
+
+    private String buildLegacyThumbnailStoragePath(String storagePath, String contentType, int width) {
+        return buildThumbnailStoragePath(storagePath, contentType, width, LEGACY_THUMBNAIL_DIRECTORY);
+    }
+
+    private String buildThumbnailStoragePath(String storagePath, String contentType, int width, String thumbnailDirectory) {
         int separatorIndex = storagePath.lastIndexOf('/');
         String directory = separatorIndex >= 0 ? storagePath.substring(0, separatorIndex) : "";
         String fileName = separatorIndex >= 0 ? storagePath.substring(separatorIndex + 1) : storagePath;
@@ -672,9 +734,9 @@ public class TravelMediaStorageService {
         String thumbnailFileName = baseName + "." + extension;
 
         if (directory.isEmpty()) {
-            return String.join("/", ".thumbs", String.valueOf(width), thumbnailFileName);
+            return String.join("/", thumbnailDirectory, String.valueOf(width), thumbnailFileName);
         }
-        return String.join("/", directory, ".thumbs", String.valueOf(width), thumbnailFileName);
+        return String.join("/", directory, thumbnailDirectory, String.valueOf(width), thumbnailFileName);
     }
 
     private String stripExtension(String fileName) {
@@ -1231,7 +1293,8 @@ public class TravelMediaStorageService {
             String originalFileName,
             String contentType,
             long fileSize,
-            List<CompletedPreparedThumbnailUpload> thumbnails
+            List<CompletedPreparedThumbnailUpload> thumbnails,
+            boolean orientedThumbnails
     ) {
     }
 

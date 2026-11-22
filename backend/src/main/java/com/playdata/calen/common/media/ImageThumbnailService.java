@@ -41,6 +41,7 @@ public class ImageThumbnailService {
     private static final int MAX_WIDTH = 1280;
     private static final int MAX_SOURCE_BYTES = 64 * 1024 * 1024;
     private static final long MAX_SOURCE_PIXELS = 40_000_000L;
+    private static final String THUMBNAIL_RENDER_VERSION = "orientation-v2";
     private static final String CACHE_DIRECTORY_NAME = "calen-thumbnail-cache";
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
@@ -89,6 +90,15 @@ public class ImageThumbnailService {
     }
 
     public List<PreparedThumbnailContent> createPreparedThumbnails(byte[] sourceBytes, String contentType, List<Integer> requestedWidths) {
+        return createPreparedThumbnails(sourceBytes, contentType, requestedWidths, false);
+    }
+
+    public List<PreparedThumbnailContent> createPreparedThumbnails(
+            byte[] sourceBytes,
+            String contentType,
+            List<Integer> requestedWidths,
+            boolean includeWiderBuckets
+    ) {
         if (sourceBytes == null || sourceBytes.length == 0 || sourceBytes.length > MAX_SOURCE_BYTES
                 || contentType == null || !contentType.startsWith("image/") || requestedWidths == null || requestedWidths.isEmpty()) {
             return List.of();
@@ -115,10 +125,11 @@ public class ImageThumbnailService {
                     .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
 
             return normalizedWidths.stream()
-                    .filter(width -> orientedImage.getWidth() > width)
+                    .filter(width -> includeWiderBuckets || orientedImage.getWidth() > width)
                     .map(width -> createPreparedThumbnail(
                             orientedImage,
                             width,
+                            Math.min(width, orientedImage.getWidth()),
                             keepAlpha,
                             outputFormat,
                             outputContentType,
@@ -184,7 +195,7 @@ public class ImageThumbnailService {
             }
 
             Integer orientation = exifDirectory.getInteger(ExifIFD0Directory.TAG_ORIENTATION);
-            return orientation == null ? 1 : orientation;
+            return orientation == null || orientation < 1 || orientation > 8 ? 1 : orientation;
         } catch (Exception exception) {
             return 1;
         }
@@ -214,11 +225,21 @@ public class ImageThumbnailService {
                 transform.scale(1.0, -1.0);
                 transform.translate(0.0, -height);
             }
+            case 5 -> {
+                targetWidth = height;
+                targetHeight = width;
+                transform = new AffineTransform(0, 1, 1, 0, 0, 0);
+            }
             case 6 -> {
                 targetWidth = height;
                 targetHeight = width;
                 transform.translate(height, 0.0);
                 transform.rotate(Math.PI / 2.0);
+            }
+            case 7 -> {
+                targetWidth = height;
+                targetHeight = width;
+                transform = new AffineTransform(0, -1, -1, 0, height, width);
             }
             case 8 -> {
                 targetWidth = height;
@@ -253,6 +274,7 @@ public class ImageThumbnailService {
 
     private Optional<PreparedThumbnailContent> createPreparedThumbnail(
             BufferedImage sourceImage,
+            int bucketWidth,
             int targetWidth,
             boolean keepAlpha,
             String outputFormat,
@@ -282,7 +304,7 @@ public class ImageThumbnailService {
             if (!writeThumbnail(thumbnail, keepAlpha, outputFormat, outputStream, jpegQuality)) {
                 return Optional.empty();
             }
-            return Optional.of(new PreparedThumbnailContent(targetWidth, outputStream.toByteArray(), outputContentType, fileExtension));
+            return Optional.of(new PreparedThumbnailContent(bucketWidth, outputStream.toByteArray(), outputContentType, fileExtension));
         } catch (IOException exception) {
             log.debug("Failed to write prepared thumbnail.", exception);
             return Optional.empty();
@@ -334,6 +356,7 @@ public class ImageThumbnailService {
 
     private String buildCacheKey(Resource resource, String contentType, int width, String extension) {
         String source = String.join("|",
+                THUMBNAIL_RENDER_VERSION,
                 resource.getDescription(),
                 contentType,
                 extension,

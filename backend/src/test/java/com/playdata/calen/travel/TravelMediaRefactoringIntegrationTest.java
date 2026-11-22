@@ -321,8 +321,8 @@ class TravelMediaRefactoringIntegrationTest {
         when(storage.completePresignedUpload(eq(f.owner()), eq(f.plan()), eq(f.record()), any())).thenReturn(stored(mime));
     }
     TravelMediaStorageService.StoredTravelMedia stored(String mime) { return new TravelMediaStorageService.StoredTravelMedia("photo.jpg", "stored.jpg", "test-only/photo.jpg", mime, 10); }
-    List<Completed> completed() { return List.of(new Completed("scoped/key", "photo.jpg", "image/jpeg", 12, null, new BigDecimal("37.123456789"), new BigDecimal("127.123456789"))); }
+    List<Completed> completed() { return List.of(new Completed("scoped/key", "photo.jpg", "image/jpeg", 12, null, new BigDecimal("37.123456789"), new BigDecimal("127.123456789"), true)); }
     TravelMediaUploadCompleteRequest request(TravelMediaType type) { return new TravelMediaUploadCompleteRequest(type, " caption ",
-            List.of(new TravelMediaUploadCompleteFileRequest("scoped/key", "photo.jpg", "image/jpeg", 12, null, new BigDecimal("37.123456789"), new BigDecimal("127.123456789")))); }
+            List.of(new TravelMediaUploadCompleteFileRequest("scoped/key", "photo.jpg", "image/jpeg", 12, null, new BigDecimal("37.123456789"), new BigDecimal("127.123456789"), true))); }
     void verifyEviction(Fixture f, int count) { verify(redis, times(count)).delete(TravelSummaryCache.plansKey(f.owner()), TravelSummaryCache.portfolioKey(f.owner()), TravelSummaryCache.mapKey(f.owner()), TravelSummaryCache.PUBLIC_TRIPS_KEY); }
 }

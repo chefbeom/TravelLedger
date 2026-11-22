@@ -24,10 +24,14 @@ class TravelMediaUploadMapperTest {
     @Test void completePreservesRawGpsUntilThePolicyRunsAndDoesNotChangeNullElementValidationTiming() {
         var lat = new BigDecimal("37.123456789");
         var file = new TravelMediaUploadCompleteFileRequest("key", "photo.jpg", "image/jpeg", 11,
-                Arrays.asList(new TravelPreparedThumbnailUploadCompleteRequest("480", "thumb", "image/png", 5), null), lat, null);
+                Arrays.asList(new TravelPreparedThumbnailUploadCompleteRequest("480", "thumb", "image/png", 5), null), lat, null, true);
         var result = TravelMediaUploadMapper.completed(new TravelMediaUploadCompleteRequest(TravelMediaType.PHOTO, null, Arrays.asList(file, null)));
         assertThat(result.get(0).gpsLatitude()).isSameAs(lat);
         assertThat(result.get(0).gpsLongitude()).isNull();
+        assertThat(result.get(0).orientedThumbnails()).isTrue();
+        var unmarked = new TravelMediaUploadCompleteFileRequest("key", "photo.jpg", "image/jpeg", 11, null, null, null, null);
+        assertThat(TravelMediaUploadMapper.completed(new TravelMediaUploadCompleteRequest(TravelMediaType.PHOTO, null, List.of(unmarked)))
+                .get(0).orientedThumbnails()).isFalse();
         assertThat(result.get(0).thumbnails()).containsExactly(new CompletedThumbnail("480", "thumb", "image/png", 5), null);
         assertThat(result.get(1)).isNull();
         assertThat(TravelMediaUploadMapper.completed(new TravelMediaUploadCompleteRequest(TravelMediaType.PHOTO, null, null))).isNull();

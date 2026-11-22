@@ -379,3 +379,47 @@ test('P13 cancelling the file chooser does nothing', async ({ page }) => {
   expect(requestsTo(state, 'POST', /\/api\/travel\//)).toHaveLength(0)
   expect(state.errors).toEqual([])
 })
+
+for (const theme of ['light', 'dark']) {
+  test(`P14 the setup map toolbar has its own "사진 추가" that opens the photo dialog (${theme})`, async ({ page }) => {
+    if (theme === 'dark') await page.addInitScript(() => localStorage.setItem('calen-theme-mode', 'toss'))
+    const state = createState()
+    await mock(page, state)
+    await openMap(page, { plan: 90 })
+    await openLegacyList(page)
+    const toolButton = page.getByRole('button', { name: '사진 추가 (지도 도구)' })
+    await toolButton.scrollIntoViewIfNeeded()
+    await expect(toolButton).toBeVisible()
+    await expect(page.getByRole('button', { name: '사진 추가', exact: true })).toHaveCount(1)
+    const photos = await photoSet(page)
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), toolButton.click()])
+    await chooser.setFiles(photos.a)
+    const dialog = photoDialog(page)
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByLabel('저장할 여행')).toHaveValue('90')
+    expect(state.errors).toEqual([])
+  })
+}
+
+test('P15 in the dark theme the primary "사진 추가" differs from "새 기록" and the toolbar button is emphasised', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('calen-theme-mode', 'toss'))
+  const state = createState()
+  await mock(page, state)
+  await openMap(page, { plan: 90 })
+  await openLegacyList(page)
+  const actions = page.locator('.travel-memory-map-panel__actions')
+  const style = (locator) => locator.evaluate((element) => {
+    const computed = getComputedStyle(element)
+    return { background: computed.backgroundColor, fill: computed.webkitTextFillColor, border: computed.borderTopColor, shadow: computed.boxShadow, weight: computed.fontWeight }
+  })
+  const add = await style(actions.getByRole('button', { name: '사진 추가', exact: true }))
+  const record = await style(actions.getByRole('button', { name: '새 기록', exact: true }))
+  expect(add.background).not.toBe(record.background)
+  expect(add.fill).not.toBe(add.background)
+  const toolButton = page.getByRole('button', { name: '사진 추가 (지도 도구)' })
+  await toolButton.scrollIntoViewIfNeeded()
+  const tool = await style(toolButton)
+  expect(tool.shadow).not.toBe('none')
+  expect(Number(tool.weight)).toBeGreaterThanOrEqual(700)
+  expect(state.errors).toEqual([])
+})

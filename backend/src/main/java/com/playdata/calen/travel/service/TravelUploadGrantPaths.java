@@ -25,7 +25,8 @@ public final class TravelUploadGrantPaths {
         String lower = name.toLowerCase(Locale.ROOT);
         String extension = lower.endsWith(".png") || lower.endsWith(".gif") || lower.endsWith(".webp") ? "png" : "jpg";
         return PreparedThumbnailProfile.defaultWidths().stream().anyMatch(width ->
-                thumbnail.equals(directory + "/.thumbs/" + width + "/" + stem + "." + extension));
+                thumbnail.equals(directory + "/.thumbs-v2/" + width + "/" + stem + "." + extension)
+                        || thumbnail.equals(directory + "/.thumbs/" + width + "/" + stem + "." + extension));
     }
 
     private static boolean isScopedLeaf(Long owner, Long plan, String tail, String key) {

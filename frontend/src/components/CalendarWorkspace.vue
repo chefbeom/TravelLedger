@@ -21,6 +21,7 @@ import ReceiptHistoryThumbnail from './ReceiptHistoryThumbnail.vue'
 import { pendingReceiptReviewIds, unreadReceiptReviewIds, receiptReviewPage, selectReceiptAnalysisItems } from '../lib/receiptReview'
 import { groupReceiptHistoryRequests } from '../lib/receiptHistoryGroups'
 import { RECEIPT_MAX_REQUEST_BATCH_SIZE } from '../lib/receiptRequestQueue'
+import { ledgerEntryCapabilities } from '../lib/ledgerEntryCapabilities'
 import { formatReceiptHistoryRequestTime, normalizeReceiptHistoryView, receiptHistoryTileSummary } from '../lib/receiptHistoryView'
 
 const CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v3'
@@ -369,6 +370,7 @@ const emit = defineEmits([
   'adjust-entry',
   'revert-adjustment',
   'show-adjustments',
+  'ledger-changed',
   'apply-entry-suggestion',
   'apply-title-suggestion',
   'change-anchor-month',
@@ -1144,7 +1146,7 @@ watch(() => [props.focusEntryId, groupedSelectedDateEntries.value], ([id, rows])
   if (index >= 0) { positionedCalendarFocusId = String(id); selectedDayEntryPage.value = Math.floor(index / SELECTED_DAY_ENTRY_PAGE_SIZE) }
 })
 const selectableDayEntries = computed(() => pagedSelectedDateRows.value.flatMap(row => row.parts).filter(
-  (entry) => !entry.hasAdjustmentHistory && !entry.adjustmentType,
+  (entry) => ledgerEntryCapabilities(entry).bulkSelectable,
 ))
 const selectedDayEntrySelection = useTableSelection(selectableDayEntries)
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
@@ -5342,6 +5344,9 @@ defineExpose({
                   @adjust-entry="emit('adjust-entry', $event)"
                   @revert-adjustment="emit('revert-adjustment', $event)"
                   @show-adjustments="emit('show-adjustments', $event)"
+                  :category-groups="categoryGroups"
+                  :payment-methods="paymentMethods"
+                  @ledger-changed="emit('ledger-changed', $event)"
                   @open-settings="openTransactionSheetSettings"
                 />
               </template>
@@ -5393,6 +5398,9 @@ defineExpose({
               @adjust-entry="emit('adjust-entry', $event)"
               @revert-adjustment="emit('revert-adjustment', $event)"
               @show-adjustments="emit('show-adjustments', $event)"
+              :category-groups="categoryGroups"
+              :payment-methods="paymentMethods"
+              @ledger-changed="emit('ledger-changed', $event)"
               @open-settings="openTransactionSheetSettings"
               @close="closeTransactionSheetModal"
             />

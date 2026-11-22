@@ -95,6 +95,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class LedgerEntryService {
+    private static final String MSG_RECORD_IMMUTABLE = "취소·환불 처리 기록은 직접 수정하거나 삭제할 수 없습니다. 원거래의 '거래 관리'에서 처리해 주세요.";
+    private static final String MSG_LOCKED = "결제 취소·환불이 적용 중인 거래는 %s을(를) 바꿀 수 없습니다. 결제 취소 취소 또는 환불 취소 후 수정해 주세요.";
+    private static final String MSG_DATE = "결제 취소·환불 처리일(%s)보다 늦은 날짜로 옮길 수 없습니다.";
+    private static final String MSG_DELETE_ACTIVE = "결제 취소·환불이 적용 중인 거래는 삭제할 수 없습니다. 결제 취소 취소 또는 환불 취소 후 삭제해 주세요.";
+    private static final String MSG_RECORD_RESTORE = "취소·환불 처리 기록은 원거래를 복구하면 함께 복구됩니다.";
+    private static final String MSG_STRICT = "취소·환불 이력이 있는 거래는 일괄 수정·분할 묶음 수정·변경 이력 복구에서 제외됩니다. 거래 관리에서 개별로 수정해 주세요.";
+
 
     private final AppUserService appUserService;
     private final LedgerEntryRepository ledgerEntryRepository;
@@ -145,7 +152,7 @@ public class LedgerEntryService {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_TRASH_PAGE_SIZE);
 
-        Page<LedgerEntry> resultPage = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDescEntryDateDescIdDesc(
+        Page<LedgerEntry> resultPage = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNotNullAndAdjustmentTypeIsNullOrderByDeletedAtDescEntryDateDescIdDesc(
                 userId,
                 PageRequest.of(safePage, safeSize)
         );
@@ -846,9 +853,30 @@ public class LedgerEntryService {
         appUserService.getRequiredUserForWrite(userId);
         LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
                 .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다."));
-        requireOrdinaryEditableEntry(ledgerEntry);
+        if (ledgerEntry.getAdjustmentType() != null) throw new BadRequestException(MSG_RECORD_IMMUTABLE);
+        List<LedgerEntry> records = adjustmentRecordsOf(userId, ledgerEntry);
+        boolean limited = LedgerEntryEditPolicy.hasActiveAdjustment(ledgerEntry, records);
+        if (limited) {
+            List<String> changed = LedgerEntryEditPolicy.lockedFieldChanges(ledgerEntry, request);
+            if (!changed.isEmpty()) {
+                throw new BadRequestException(MSG_LOCKED.formatted(String.join("·", changed)));
+            }
+            var limit = LedgerEntryEditPolicy.earliestActiveRecordDate(records);
+            if (limit.isPresent() && request.entryDate().isAfter(limit.get())) {
+                throw new BadRequestException(MSG_DATE.formatted(limit.get()));
+            }
+        }
         LedgerEntrySnapshot beforeSnapshot = toSnapshot(ledgerEntry);
         applyRequest(userId, ledgerEntry, request);
+        if (limited) {
+            // applyRequest recomputes the KRW amount and exchange metadata; the request was verified to match stored values.
+            ledgerEntry.setAmount(beforeSnapshot.amount());
+            ledgerEntry.setForeignCurrencyCode(beforeSnapshot.foreignCurrencyCode());
+            ledgerEntry.setForeignAmount(beforeSnapshot.foreignAmount());
+            ledgerEntry.setExchangeRateToKrw(beforeSnapshot.exchangeRateToKrw());
+            ledgerEntry.setExchangeRateDate(beforeSnapshot.exchangeRateDate());
+            ledgerEntry.setExchangeRateProvider(beforeSnapshot.exchangeRateProvider());
+        }
         LedgerEntrySnapshot afterSnapshot = toSnapshot(ledgerEntry);
         recordChangeHistory(
                 ledgerEntry.getOwner(),
@@ -858,6 +886,11 @@ public class LedgerEntryService {
                 buildUpdateSummary(beforeSnapshot, afterSnapshot)
         );
         return toResponse(ledgerEntry);
+    }
+
+    private List<LedgerEntry> adjustmentRecordsOf(Long userId, LedgerEntry origin) {
+        if (!origin.isHasAdjustmentHistory()) return List.of();
+        return ledgerEntryRepository.findAllByOwnerIdAndAdjustmentOriginIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(userId, origin.getId());
     }
 
     @Transactional
@@ -951,12 +984,20 @@ public class LedgerEntryService {
         appUserService.getRequiredUserForWrite(userId);
         LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
                 .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다."));
-        requireOrdinaryEditableEntry(ledgerEntry);
+        if (ledgerEntry.getAdjustmentType() != null) throw new BadRequestException(MSG_RECORD_IMMUTABLE);
+        List<LedgerEntry> records = adjustmentRecordsOf(userId, ledgerEntry);
+        if (LedgerEntryEditPolicy.hasActiveAdjustment(ledgerEntry, records)) {
+            throw new BadRequestException(MSG_DELETE_ACTIVE);
+        }
         if (permanent) {
+            ledgerEntryRepository.deleteAll(records);
             ledgerEntryRepository.delete(ledgerEntry);
             return;
         }
-        ledgerEntry.setDeletedAt(LocalDateTime.now());
+        // The same whole-second timestamp lets restore identify the reverted history trashed together with the original.
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        records.forEach(record -> record.setDeletedAt(now));
+        ledgerEntry.setDeletedAt(now);
     }
 
     @Transactional
@@ -964,6 +1005,11 @@ public class LedgerEntryService {
         appUserService.getRequiredUserForWrite(userId);
         LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNotNull(entryId, userId)
                 .orElseThrow(() -> new NotFoundException("복구할 내역을 찾을 수 없습니다."));
+        if (ledgerEntry.getAdjustmentType() != null) throw new BadRequestException(MSG_RECORD_RESTORE);
+        if (ledgerEntry.isHasAdjustmentHistory()) {
+            ledgerEntryRepository.findAllByOwnerIdAndAdjustmentOriginIdAndDeletedAt(userId, ledgerEntry.getId(), ledgerEntry.getDeletedAt())
+                    .forEach(record -> record.setDeletedAt(null));
+        }
         ledgerEntry.setDeletedAt(null);
         return toResponse(ledgerEntry);
     }
@@ -1522,7 +1568,7 @@ public class LedgerEntryService {
 
     private void requireOrdinaryEditableEntry(LedgerEntry entry) {
         if (entry.getAdjustmentType() != null || entry.isHasAdjustmentHistory()) {
-            throw new BadRequestException("취소·환불 이력이 있는 거래는 기록 보존을 위해 일반 수정·삭제할 수 없습니다. 잘못된 처리는 처리 내역에서 되돌려 주세요.");
+            throw new BadRequestException(MSG_STRICT);
         }
     }
 

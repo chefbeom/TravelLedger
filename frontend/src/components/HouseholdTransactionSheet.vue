@@ -1,10 +1,11 @@
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { fetchLedgerAdjustmentGroup } from '../lib/api'
+import { computed, nextTick, ref, watch } from 'vue'
+import { ledgerEntryCapabilities, splitPartIntents } from '../lib/ledgerEntryCapabilities'
 import {
-  adjustmentsForEntry, compareLedgerChronologically, ledgerEntryStatusLabel, rowContainsEntryId,
+  adjustmentsForEntry, ledgerEntryStatusLabel, rowContainsEntryId,
   splitAdjustmentLabel, splitDisplayedAmount, splitExpectedCount, summarizeLedgerAdjustments,
 } from '../lib/ledgerSheetGroups'
+import LedgerManageDialog from './LedgerManageDialog.vue'
 
 const props = defineProps({
   focusEntryId: { type: [String, Number], default: null },
@@ -27,6 +28,8 @@ const props = defineProps({
   modal: { type: Boolean, default: false },
   canMoveToPreviousDay: { type: Boolean, default: true },
   canMoveToNextDay: { type: Boolean, default: true },
+  categoryGroups: { type: Array, default: () => [] },
+  paymentMethods: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -43,12 +46,14 @@ const emit = defineEmits([
   'adjust-entry',
   'revert-adjustment',
   'show-adjustments',
+  'ledger-changed',
 ])
 
 const managedRow = ref(null)
 const managedSplit = ref(null)
-const manageGroup = reactive({ loading: false, error: '', origin: null, adjustments: null, seq: 0 })
+const managedInitialStep = ref('menu')
 const sheetRoot = ref(null)
+const sheetTitle = ref(null)
 let focusedEntryKey = ''
 watch(() => [props.focusEntryId, props.entries], async ([id, rows]) => {
   if (!id || !rows.some(row => rowContainsEntryId(row, id))) return
@@ -58,7 +63,6 @@ watch(() => [props.focusEntryId, props.entries], async ([id, rows]) => {
   const target = sheetRoot.value?.querySelector('[data-calendar-focused-entry="true"]')
   if (target) { focusedEntryKey = key; target.scrollIntoView({ block: 'nearest' }); target.focus({ preventScroll: true }) }
 }, { immediate: true })
-const managerCloseButton = ref(null)
 let managerTrigger = null
 const activeSplitKey = ref('')
 const splitIntent = ref('view')
@@ -80,7 +84,11 @@ function closeSplit(restoreFocus = true) {
   activeSplitKey.value = ''
   if (restoreFocus && splitTrigger?.isConnected) nextTick(() => splitTrigger?.focus())
 }
-function selectableParts(row) { return row.parts.filter(entry => !entry.hasAdjustmentHistory && !entry.adjustmentType) }
+function selectableParts(row) { return row.parts.filter(entry => ledgerEntryCapabilities(entry).bulkSelectable) }
+const SPLIT_INTENT_LABELS = { refund: '환불', cancel: '결제 취소', uncancel: '결제 취소 취소', unrefund: '환불 취소', delete: '삭제' }
+function partIntentAvailable(part, intent) {
+  return splitPartIntents(part, adjustmentsForEntry(activeSplit.value, part.id)).includes(intent)
+}
 function selectedPartCount(row) { return selectableParts(row).filter(entry => props.selection.isSelected(entry)).length }
 function toggleSplit(row) {
   const eligible = selectableParts(row)
@@ -121,13 +129,13 @@ function splitTypes(row) {
 const rowViews = computed(() => props.entries.map(row => ({
   row,
   summary: row.kind === 'entry' ? summarizeLedgerAdjustments(row.parts[0], row.adjustments) : null,
+  caps: row.kind === 'entry' ? ledgerEntryCapabilities(row.parts[0], row.adjustments) : null,
 })))
 function shortDate(value) {
   const match = /^\d{4}-(\d{2})-(\d{2})/.exec(String(value || ''))
   return match ? `${Number(match[1])}월 ${Number(match[2])}일` : ''
 }
 function clock(value) { return value ? String(value).slice(0, 5) : '' }
-function stamp(value) { return String(value || '').replace('T', ' ').slice(0, 16) }
 function historyLine(origin, items) {
   if (!items.length) return origin.hasAdjustmentHistory ? '다른 날짜에 처리 기록이 있습니다' : ''
   return `처리 이력 ${items.length}건 · ${items.map(item => item.sameDateAsOrigin ? item.label : `${item.label} ${shortDate(item.entryDate)}`).join(' · ')}`
@@ -145,71 +153,21 @@ function adjustmentRowNote(entry) {
 function partLabel(part) { return summarizeLedgerAdjustments(part, adjustmentsForEntry(activeSplit.value, part.id)).label }
 function partAdjustments(part) { return summarizeLedgerAdjustments(part, adjustmentsForEntry(activeSplit.value, part.id)).items }
 
-async function openManager(row, event) {
-  managerTrigger = event.currentTarget
+async function openManager(row, event, initialStep = 'menu') {
+  managerTrigger = event?.currentTarget || null
   managedSplit.value = null
+  managedInitialStep.value = initialStep
   managedRow.value = row
-  resetManageGroup()
-  const first = row.parts[0]
-  if (row.kind === 'adjustment' || row.adjustments.length > 0 || first?.hasAdjustmentHistory) loadManageGroup(first.id)
-  await nextTick()
-  managerCloseButton.value?.focus()
 }
 async function openSplitManager(row, event) {
-  managerTrigger = event.currentTarget
+  managerTrigger = event?.currentTarget || null
   managedSplit.value = row
+  managedInitialStep.value = 'menu'
   managedRow.value = row
-  resetManageGroup()
-  await nextTick()
-  managerCloseButton.value?.focus()
 }
-function openPartManager(part, event) {
-  openManager({ key: `entry:${part.id}`, kind: 'entry', isSplit: false, parts: [part], adjustments: adjustmentsForEntry(activeSplit.value, part.id) }, event)
+function openPartManager(part, event, initialStep = 'menu') {
+  openManager({ key: `entry:${part.id}`, kind: 'entry', isSplit: false, parts: [part], adjustments: adjustmentsForEntry(activeSplit.value, part.id) }, event, initialStep)
 }
-function resetManageGroup() {
-  manageGroup.seq += 1
-  manageGroup.loading = false
-  manageGroup.error = ''
-  manageGroup.origin = null
-  manageGroup.adjustments = null
-}
-async function loadManageGroup(entryId) {
-  const seq = ++manageGroup.seq
-  manageGroup.loading = true
-  manageGroup.error = ''
-  try {
-    const json = await fetchLedgerAdjustmentGroup(entryId)
-    if (seq !== manageGroup.seq || !managedRow.value) return
-    if (!(json && typeof json === 'object' && !Array.isArray(json) && json.origin && Array.isArray(json.adjustments))) {
-      throw new Error('unexpected adjustment group response')
-    }
-    manageGroup.origin = json.origin
-    manageGroup.adjustments = [...json.adjustments].sort(compareLedgerChronologically)
-  } catch {
-    if (seq === manageGroup.seq) manageGroup.error = 'failed'
-  } finally {
-    if (seq === manageGroup.seq) manageGroup.loading = false
-  }
-}
-function retryManageGroup() {
-  if (managedRow.value) loadManageGroup(managedRow.value.parts[0].id)
-}
-const managedOrigin = computed(() => {
-  if (!managedRow.value) return null
-  if (managedSplit.value) return managedRow.value.parts[0]
-  if (manageGroup.origin) return manageGroup.origin
-  return managedRow.value.kind === 'adjustment' ? null : managedRow.value.parts[0]
-})
-const managedHistory = computed(() => {
-  const row = managedRow.value
-  if (!row || managedSplit.value) return []
-  return manageGroup.adjustments ?? (row.kind === 'adjustment' ? row.parts : row.adjustments)
-})
-const managedSummary = computed(() => summarizeLedgerAdjustments(managedOrigin.value || {}, managedHistory.value))
-const managedPending = computed(() => managedRow.value?.kind === 'adjustment' && !managedOrigin.value)
-const managedShowHistory = computed(() => !managedSplit.value && Boolean(managedRow.value)
-  && (managedHistory.value.length > 0 || Boolean(managedOrigin.value?.hasAdjustmentHistory) || managedRow.value.kind === 'adjustment'))
-const managedBadge = computed(() => managedPending.value ? ledgerEntryStatusLabel(managedRow.value.parts[0]) : managedSummary.value.label)
 async function chooseSplitAction(intent) {
   const row = managedSplit.value
   closeManager(false)
@@ -221,26 +179,27 @@ async function chooseSplitAction(intent) {
 function closeManager(restoreFocus = true) {
   managedRow.value = null
   managedSplit.value = null
-  resetManageGroup()
-  if (restoreFocus && managerTrigger?.isConnected) nextTick(() => managerTrigger?.focus())
+  managedInitialStep.value = 'menu'
+  if (restoreFocus) {
+    nextTick(() => {
+      if (managerTrigger?.isConnected) managerTrigger.focus()
+      else sheetTitle.value?.focus()
+    })
+  }
 }
 function managerAction(action, payload) {
   closeManager(false)
   closeSplit(false)
   emit(action, payload)
 }
+function manageDelete(payload) {
+  managerAction('delete-entry', payload)
+  nextTick(() => sheetTitle.value?.focus())
+}
 function shareSplitPart(entry) { closeSplit(false); emit('share-entry', entry) }
 
 function money(value) {
   return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 2 }).format(Number(value || 0))
-}
-function canRefund(entry) {
-  return entry.entryType === 'EXPENSE' && !entry.adjustmentType && !entry.financiallyExcluded
-    && Number(entry.amount || 0) > Number(entry.refundedPrincipal || 0)
-}
-function canCancel(entry) {
-  return entry.entryType === 'EXPENSE' && !entry.adjustmentType && !entry.financiallyExcluded
-    && !Number(entry.refundedPrincipal || 0) && !entry.travelRecordId
 }
 
 function updatePage(offset) {
@@ -255,10 +214,10 @@ function updatePage(offset) {
       <div>
         <nav class="household-sheet-date-nav" aria-label="거래 날짜 이동" data-no-drag="true">
           <button type="button" class="button button--ghost household-sheet-date-nav__button" aria-label="이전 날" title="이전 날" :disabled="!canMoveToPreviousDay" @click="emit('move-day', -1)">‹</button>
-          <h2 aria-live="polite" aria-atomic="true">{{ selectedDateLabel }} 거래 시트</h2>
+          <h2 ref="sheetTitle" tabindex="-1" aria-live="polite" aria-atomic="true">{{ selectedDateLabel }} 거래 시트</h2>
           <button type="button" class="button button--ghost household-sheet-date-nav__button" aria-label="다음 날" title="다음 날" :disabled="!canMoveToNextDay" @click="emit('move-day', 1)">›</button>
         </nav>
-        <p>선택한 날짜의 거래를 바로 수정하거나 삭제할 수 있습니다.</p>
+        <p>거래의 '관리'에서 수정·결제 취소·환불·삭제를 할 수 있습니다.</p>
       </div>
       <div class="household-sheet-header">
         <span class="panel__badge">{{ countLabel }}</span>
@@ -318,7 +277,7 @@ function updatePage(offset) {
           </tr>
         </thead>
         <tbody>
-          <template v-for="{ row, summary } in rowViews" :key="row.key">
+          <template v-for="{ row, summary, caps } in rowViews" :key="row.key">
           <tr v-if="row.isSplit" class="split-sheet-row" :data-calendar-focused-entry="rowContainsEntryId(row, focusEntryId)" tabindex="-1">
             <td class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox"
               :aria-label="`${splitTitle(row)} 분할 거래 선택`" :disabled="!selectableParts(row).length"
@@ -334,7 +293,7 @@ function updatePage(offset) {
             <td v-if="hasMemoColumn" class="sheet-table__memo split-sheet-row__memo"><span class="split-sheet-row__clip">{{ splitMemo(row) }}</span></td>
             <td class="sheet-table__actions">
               <div class="sheet-table__actions-inner split-sheet-actions">
-                <button type="button" class="button button--ghost" @click="openSplitManager(row, $event)">수정</button>
+                <button type="button" class="button button--ghost" aria-haspopup="dialog" @click="openSplitManager(row, $event)">관리</button>
                 <button v-if="row.parts.some(part => !part.financiallyExcluded && !part.adjustmentType)" type="button" class="button button--ghost" @click="openSplit(row, $event, 'share')">공유</button>
                 <button type="button" class="button button--ghost split-sheet-actions__view" @click="openSplit(row, $event)"><span>분할 결제</span> <span>보기</span></button>
               </div>
@@ -346,8 +305,8 @@ function updatePage(offset) {
                 class="sheet-table__checkbox"
                 type="checkbox"
                 :aria-label="`${entry.title || '제목 없음'} 선택`"
-                :title="entry.hasAdjustmentHistory || entry.adjustmentType ? '처리 이력이 있어 일괄 작업에서 제외됩니다' : null"
-                :disabled="entry.hasAdjustmentHistory || !!entry.adjustmentType"
+                :title="caps && !caps.bulkSelectable || entry.adjustmentType ? '처리 이력이 있어 일괄 작업에서 제외됩니다' : null"
+                :disabled="!(caps?.bulkSelectable)"
                 :checked="selection.isSelected(entry)"
                 @change="selection.toggleItem(entry)"
               />
@@ -394,8 +353,8 @@ function updatePage(offset) {
             </td>
             <td class="sheet-table__actions">
               <div class="sheet-table__actions-inner household-sheet-actions--adjustment">
-                <button type="button" class="button button--ghost" @click="openManager(row, $event)">{{ entry.hasAdjustmentHistory || entry.adjustmentType || row.adjustments.length ? '관리' : '수정' }}</button>
-                <button v-if="!entry.financiallyExcluded && !entry.adjustmentType" type="button" class="button button--ghost" @click="emit('share-entry', entry)">공유</button>
+                <button type="button" class="button button--ghost" aria-haspopup="dialog" @click="openManager(row, $event)">관리</button>
+                <button v-if="caps ? caps.canShare : (!entry.financiallyExcluded && !entry.adjustmentType)" type="button" class="button button--ghost" @click="emit('share-entry', entry)">공유</button>
               </div>
             </td>
           </tr>
@@ -421,9 +380,9 @@ function updatePage(offset) {
             <button ref="splitCloseButton" type="button" class="button button--ghost" data-modal-close @click="closeSplit()">닫기</button>
           </header>
           <p class="split-detail-total">표시된 수단 금액 합계 <strong>{{ money(splitDisplayedAmount(activeSplit.parts)) }}</strong></p>
-          <p v-if="splitIntent === 'edit'" class="split-detail-note" role="status">수정하거나 처리할 결제수단의 수정·처리 버튼을 선택하세요. 각 수단은 별도로 변경됩니다.</p>
+          <p v-if="splitIntent === 'edit'" class="split-detail-note" role="status">수정하거나 처리할 결제수단의 관리 버튼을 선택하세요. 각 수단은 별도로 변경됩니다.</p>
           <p v-else-if="splitIntent === 'share'" class="split-detail-note" role="status">공유할 결제수단의 공유 버튼을 선택하세요. 각 수단은 별도로 공유됩니다.</p>
-          <p v-else-if="['refund', 'cancel', 'delete'].includes(splitIntent)" class="split-detail-note" role="status">처리할 결제수단을 선택하세요. 선택한 수단에만 적용됩니다.</p>
+          <p v-else-if="splitIntent in SPLIT_INTENT_LABELS" class="split-detail-note" role="status">처리할 결제수단을 선택하세요. 선택한 수단에만 적용됩니다.</p>
           <p class="split-detail-note">각 결제수단은 별도 거래입니다. 합계는 표시된 원거래 금액이며 환불·취소를 차감한 금액이 아닙니다.</p>
           <p v-if="splitExpectedCount(activeSplit.parts) > activeSplit.parts.length" class="split-detail-note">현재 날짜와 필터에 해당하는 수단만 표시합니다. 다른 수단은 날짜 변경, 필터 또는 삭제로 보이지 않을 수 있습니다.</p>
           <dl class="split-detail-fields split-detail-common">
@@ -448,79 +407,34 @@ function updatePage(offset) {
                 <li v-for="item in partAdjustments(part)" :key="item.id">{{ item.label }} · {{ item.entryDate }}<template v-if="item.entryTime"> {{ clock(item.entryTime) }}</template> · {{ money(item.amount) }}</li>
               </ul>
               <div class="split-detail-actions">
-                <button v-if="splitIntent === 'refund' && canRefund(part)" type="button" class="button button--ghost" @click="managerAction('adjust-entry', { entry: part, mode: 'REFUND' })">이 수단 환불</button>
-                <button v-else-if="splitIntent === 'cancel' && canCancel(part)" type="button" class="button button--ghost" @click="managerAction('adjust-entry', { entry: part, mode: 'PAYMENT_CANCELLATION' })">이 수단 결제 취소</button>
-                <button v-else-if="splitIntent === 'delete' && !part.hasAdjustmentHistory && !part.adjustmentType" type="button" class="button button--danger" @click="managerAction('delete-entry', part)">이 수단 삭제</button>
-                <template v-else-if="!['refund', 'cancel', 'delete'].includes(splitIntent)"><button type="button" class="button button--ghost" @click="openPartManager(part, $event)">{{ part.hasAdjustmentHistory || part.adjustmentType ? '관리' : '수정·처리' }}</button>
+                <template v-if="splitIntent in SPLIT_INTENT_LABELS">
+                  <button v-if="partIntentAvailable(part, splitIntent)" type="button" :class="['button', splitIntent === 'delete' ? 'button--danger' : 'button--ghost']" @click="openPartManager(part, $event, splitIntent)">이 수단 {{ SPLIT_INTENT_LABELS[splitIntent] }}</button>
+                </template>
+                <template v-else><button type="button" class="button button--ghost" aria-haspopup="dialog" @click="openPartManager(part, $event)">관리</button>
                 <button v-if="!part.financiallyExcluded && !part.adjustmentType" type="button" class="button button--ghost" @click="shareSplitPart(part)">공유</button></template>
               </div>
             </article>
           </div>
         </section>
       </div>
-      <div v-if="managedRow" class="ledger-manage-overlay" role="dialog" aria-modal="true" aria-labelledby="ledger-manage-title" @click.self="closeManager()" @keydown.esc.stop="closeManager()">
-        <section class="ledger-manage-dialog panel">
-          <header class="ledger-manage-header">
-            <div><h2 id="ledger-manage-title">거래 관리</h2><p>원거래와 취소·환불 처리 이력을 함께 확인하고 처리합니다.</p></div>
-            <button ref="managerCloseButton" type="button" class="button button--ghost" data-modal-close @click="closeManager()">닫기</button>
-          </header>
-          <div v-if="managedOrigin || managedPending" class="ledger-manage-summary">
-            <template v-if="managedOrigin">
-              <div class="ledger-manage-summary__title"><strong>{{ managedOrigin.title }}</strong><span v-if="!managedSplit && managedBadge" class="adjustment-status">{{ managedBadge }}</span></div>
-              <span>{{ managedOrigin.entryDate }} · {{ managedOrigin.entryTime ? formatTime(managedOrigin.entryTime) : '시간 미지정' }} · {{ managedOrigin.entryType === 'INCOME' ? '수입' : '지출' }}</span>
-              <span>{{ managedOrigin.categoryGroupName }}<template v-if="managedOrigin.categoryDetailName"> / {{ managedOrigin.categoryDetailName }}</template> · {{ managedSplit ? splitCount(managedSplit) : formatPaymentMethod(managedOrigin) }}</span>
-              <strong v-if="managedSplit">{{ money(splitDisplayedAmount(managedSplit.parts)) }}</strong>
-              <strong v-else><span :class="{ 'sheet-table__amount-main is-struck': managedOrigin.financiallyExcluded }">{{ formatAmountMain(managedOrigin) }}</span> <small v-if="formatAmountSub(managedOrigin)" :class="{ 'is-struck': managedOrigin.financiallyExcluded }">{{ formatAmountSub(managedOrigin) }}</small> <small v-if="managedOrigin.financiallyExcluded">{{ managedOrigin.cancelledAt ? '결제 취소 · 합계 제외' : '합계 제외' }}</small></strong>
-              <span v-if="managedSplit">분할 결제 · {{ splitCount(managedSplit) }} · 표시 금액 {{ money(splitDisplayedAmount(managedSplit.parts)) }}</span>
-              <span v-else-if="managedOrigin.splitPaymentGroupId">분할 {{ managedOrigin.splitPaymentIndex }}/{{ managedOrigin.splitPaymentCount }} · 이 결제수단만 처리됩니다.</span>
-              <span v-if="!managedSplit && managedOrigin.installmentMonths">{{ managedOrigin.installmentMonths }}개월 {{ managedOrigin.installmentInterestType === 'FREE' ? '무이자 ' : managedOrigin.installmentInterestType === 'INTEREST' ? '유이자 ' : '' }}할부</span>
-              <span v-if="managedOrigin.visibleMemo || managedOrigin.memo">메모: {{ managedOrigin.visibleMemo || managedOrigin.memo }}</span>
-            </template>
-            <template v-else>
-              <div class="ledger-manage-summary__title"><strong>{{ managedRow.parts[0].title }}</strong><span class="adjustment-status">{{ managedBadge }}</span></div>
-              <span>{{ managedRow.parts[0].entryDate }} · {{ managedRow.parts[0].entryTime ? formatTime(managedRow.parts[0].entryTime) : '시간 미지정' }} · {{ managedRow.parts[0].entryType === 'INCOME' ? '수입' : '지출' }}</span>
-              <span>원거래 #{{ managedRow.parts[0].adjustmentOriginId }}</span>
-              <span v-if="manageGroup.loading" role="status">원거래 정보를 불러오는 중입니다…</span>
-              <span v-else-if="manageGroup.error">원거래 정보를 불러오지 못했습니다.</span>
-            </template>
-          </div>
-          <section v-if="managedShowHistory" class="ledger-manage-history" aria-labelledby="ledger-manage-history-title">
-            <h3 id="ledger-manage-history-title">처리 이력</h3>
-            <p v-if="manageGroup.loading" role="status">처리 이력을 불러오는 중입니다…</p>
-            <div v-else-if="manageGroup.error" role="alert" class="ledger-manage-history__error">
-              <p>처리 이력을 모두 불러오지 못했습니다. 이 날짜의 기록만 표시합니다.</p>
-              <button type="button" class="button button--ghost" @click="retryManageGroup()">다시 시도</button>
-            </div>
-            <p v-if="!managedSummary.items.length">{{ managedSummary.hiddenHistory && (manageGroup.loading || manageGroup.error) ? '다른 날짜에 처리 기록이 있습니다.' : '표시할 처리 기록이 없습니다.' }}</p>
-            <ol v-if="managedSummary.items.length" class="ledger-manage-history__list">
-              <li v-for="item in managedSummary.items" :key="item.id" class="ledger-manage-history__item">
-                <div><strong>{{ item.label }}</strong> · {{ item.entryDate }}<template v-if="item.entryTime"> {{ clock(item.entryTime) }}</template></div>
-                <span v-if="item.type === 'REFUND'">기준 {{ money(item.principal) }} − 차감 {{ money(item.deduction) }} + 추가 {{ money(item.extra) }} = 수령 {{ money(item.amount) }}<template v-if="item.paymentMethodName"> · {{ item.paymentMethodName }}</template></span>
-                <span v-else>결제 취소 금액 {{ money(item.principal ?? item.amount) }}</span>
-                <span v-if="item.memo">{{ item.memo }}</span>
-                <span v-if="item.voided">되돌림 {{ stamp(item.voidedAt) }}</span>
-                <span v-else class="ledger-manage-history__active">적용 중</span>
-                <button v-if="!item.voided" type="button" class="button button--ghost" @click="managerAction('revert-adjustment', item.source)">이 처리 되돌리기</button>
-              </li>
-            </ol>
-          </section>
-          <div v-if="managedOrigin" class="ledger-manage-actions">
-            <template v-if="managedSplit">
-              <button type="button" class="button button--secondary" @click="managerAction('edit-entry', { splitGroupId: managedOrigin.splitPaymentGroupId })"><strong>거래 내용 수정</strong><small>분할 결제 전체 수정</small></button>
-              <button type="button" class="button button--secondary" @click="chooseSplitAction('refund')"><strong>환불</strong><small>처리할 결제수단 선택</small></button>
-              <button type="button" class="button button--secondary" @click="chooseSplitAction('cancel')"><strong>결제 취소</strong><small>처리할 결제수단 선택</small></button>
-              <button type="button" class="button button--danger" @click="chooseSplitAction('delete')"><strong>삭제</strong><small>삭제할 결제수단 선택</small></button>
-            </template><template v-else>
-            <button v-if="!managedOrigin.hasAdjustmentHistory && !managedOrigin.adjustmentType" type="button" class="button button--secondary" @click="managerAction('edit-entry', managedOrigin)"><strong>거래 내용 수정</strong><small>금액, 날짜, 분류 등 변경</small></button>
-            <button v-if="canRefund(managedOrigin)" type="button" class="button button--secondary" @click="managerAction('adjust-entry', { entry: managedOrigin, mode: 'REFUND' })"><strong>환불</strong><small>받은 금액과 차감·추가 금액 기록</small></button>
-            <button v-if="canCancel(managedOrigin)" type="button" class="button button--secondary" @click="managerAction('adjust-entry', { entry: managedOrigin, mode: 'PAYMENT_CANCELLATION' })"><strong>결제 취소</strong><small>청구되지 않은 결제를 취소 기록</small></button>
-            <button v-if="!managedOrigin.hasAdjustmentHistory && !managedOrigin.adjustmentType" type="button" class="button button--danger" @click="managerAction('delete-entry', managedOrigin)"><strong>삭제</strong></button>
-            </template>
-          </div>
-          <p v-if="!managedSplit && managedOrigin?.hasAdjustmentHistory && !managedOrigin.adjustmentType" class="ledger-manage-note">처리 이력이 있는 거래는 기록 보존을 위해 일반 수정·삭제할 수 없습니다.</p>
-          <p v-if="managedOrigin?.travelRecordId && !managedOrigin.adjustmentType && !managedOrigin.financiallyExcluded" class="ledger-manage-note">여행 연결 거래의 결제 취소는 지원하지 않습니다.</p>
-        </section>
-      </div>
+      <LedgerManageDialog
+        v-if="managedRow"
+        :key="managedRow.key"
+        :row="managedRow"
+        :split="Boolean(managedSplit)"
+        :initial-step="managedInitialStep"
+        :category-groups="categoryGroups"
+        :payment-methods="paymentMethods"
+        :format-time="formatTime"
+        :format-payment-method="formatPaymentMethod"
+        :format-amount-main="formatAmountMain"
+        :format-amount-sub="formatAmountSub"
+        @close="closeManager($event !== false)"
+        @edit-entry="managerAction('edit-entry', $event)"
+        @delete-entry="manageDelete"
+        @choose-split-action="chooseSplitAction"
+        @ledger-changed="emit('ledger-changed', $event)"
+      />
     </Teleport>
   </section>
 </template>
@@ -555,30 +469,7 @@ function updatePage(offset) {
 :global(:root[data-layout-mode='mobile'] .household-sheet-panel .adjustment-title-line) { justify-content: flex-end; }
 .sheet-table__actions-inner.household-sheet-actions--adjustment { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 :global(:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__actions-inner.household-sheet-actions--adjustment) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-.ledger-manage-overlay { position: fixed; inset: 0; z-index: 2700; display: grid; place-items: center; padding: 1rem; background: rgb(0 0 0 / 65%); }
-.ledger-manage-dialog { box-sizing: border-box; width: min(100%, 40rem); max-height: calc(100dvh - 2rem); overflow-y: auto; background: var(--panel-bg); color: var(--text); text-align: left; }
-.ledger-manage-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
-.ledger-manage-header > div { min-width: 0; }
-.ledger-manage-header .button { flex: 0 0 auto; width: auto; min-width: 4rem; white-space: nowrap; }
-.ledger-manage-header h2 { margin: 0; }
-.ledger-manage-header p, .ledger-manage-note { margin: .4rem 0; line-height: 1.45; }
-.ledger-manage-summary { display: grid; gap: .35rem; margin: 1rem 0; padding: .8rem; border: 1px solid var(--border); overflow-wrap: anywhere; }
-.ledger-manage-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: .5rem; }
-.ledger-manage-actions .button { display: flex; flex-direction: column; align-items: flex-start; gap: .2rem; min-height: 3.25rem; text-align: left; white-space: normal; }
-.ledger-manage-actions .button--danger { background: #8b2735 !important; border-color: #8b2735 !important; color: #fff !important; }
-.ledger-manage-actions .button--danger * { color: #fff !important; -webkit-text-fill-color: #fff !important; text-shadow: none !important; }
-.ledger-manage-actions small { font-weight: 400; }
-.ledger-manage-note { font-size: .85rem; }
-.ledger-manage-summary__title { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
-.ledger-manage-history { display: grid; gap: .5rem; margin: 0 0 1rem; }
-.ledger-manage-history h3 { margin: 0; }
-.ledger-manage-history p { margin: 0; line-height: 1.45; }
-.ledger-manage-history__list { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
-.ledger-manage-history__item { display: grid; gap: .25rem; min-width: 0; padding: .65rem .8rem; border: 1px solid var(--border); overflow-wrap: anywhere; }
-.ledger-manage-history__item .button { width: auto; justify-self: start; min-height: 2.75rem; }
-.ledger-manage-history__error { display: grid; gap: .4rem; }
-.ledger-manage-history__error .button { width: auto; justify-self: start; min-height: 2.75rem; }
-.sheet-table__amount-main.is-struck, .sheet-table__amount-sub.is-struck, .ledger-manage-summary .is-struck { text-decoration: line-through; }
+.sheet-table__amount-main.is-struck, .sheet-table__amount-sub.is-struck { text-decoration: line-through; }
 .split-detail-adjustments { display: grid; gap: .2rem; margin: 0; padding-left: 1.1rem; font-size: .85rem; }
 .split-sheet-row__memo { max-width: 12rem; overflow-wrap: anywhere; }
 .split-sheet-row__clip { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }

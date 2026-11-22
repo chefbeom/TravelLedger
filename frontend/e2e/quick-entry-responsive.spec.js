@@ -159,7 +159,7 @@ test('editing an existing entry keeps its status and controls visible at a narro
   await panel(page).getByLabel('거래 날짜', { exact: true }).fill('2026-10-22')
   await page.getByRole('button', { name: '거래 시트 열기', exact: true }).click()
   const sheet = page.getByRole('dialog', { name: '거래 시트', exact: true })
-  await sheet.getByRole('button', { name: '수정', exact: true }).click()
+  await sheet.getByRole('button', { name: '관리', exact: true }).click()
   await page.getByRole('dialog', { name: '거래 관리', exact: true }).getByRole('button', { name: /거래 내용 수정/ }).click()
   await expect(panel(page).getByText('거래 수정 중', { exact: true })).toBeVisible()
   await expect(panel(page).getByRole('textbox', { name: '거래 제목', exact: true })).toHaveValue('검증용 식사')

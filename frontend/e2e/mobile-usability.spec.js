@@ -212,7 +212,7 @@ for (const [width, height] of sizes) {
       await expect(first.locator('.household-sheet-memo p')).toHaveText(memo)
       await summary.tap()
       // Check all action bounds, not only document overflow.
-      for (const name of ['수정', '공유', '삭제']) {
+      for (const name of ['관리', '공유']) {
         const button = first.getByRole('button', { name, exact: true })
         await button.scrollIntoViewIfNeeded()
         await expect.poll(() => canTouch(button)).toBe(true)

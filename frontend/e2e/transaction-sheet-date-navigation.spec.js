@@ -146,7 +146,7 @@ test('moving again while the new month loads does not reset the selected day aft
 test('sheet navigation does not overwrite an unsaved edit', async ({ page }) => {
   const state = await setup(page)
   const sheet = await openSheet(page)
-  await sheet.getByRole('row').filter({ hasText: '30일 지출' }).getByRole('button', { name: '수정', exact: true }).click()
+  await sheet.getByRole('row').filter({ hasText: '30일 지출' }).getByRole('button', { name: '관리', exact: true }).click()
   await page.getByRole('dialog', { name: '거래 관리' }).getByRole('button', { name: /거래 내용 수정/ }).click()
   const title = page.locator('.household-entry-panel').getByRole('textbox', { name: '거래 제목', exact: true })
   await expect(title).toHaveValue('30일 지출')

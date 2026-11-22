@@ -7,6 +7,7 @@ import DonutChartCard from './DonutChartCard.vue'
 import SummaryCard from './SummaryCard.vue'
 import { useTableSelection } from '../lib/tableSelection'
 import { ledgerEntryStatusLabel } from '../lib/ledgerSheetGroups'
+import { ledgerEntryCapabilities } from '../lib/ledgerEntryCapabilities'
 
 const chartPalette = ['#3182f6', '#12b886', '#f59f00', '#ff6b6b', '#7c5cff', '#00b8d9', '#fd7e14', '#5c7cfa']
 const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
@@ -223,7 +224,7 @@ const analysisScope = computed(() => {
 })
 
 const searchResultSelection = useTableSelection(computed(() => props.searchResults.filter(
-  entry => !entry.hasAdjustmentHistory && !entry.adjustmentType,
+  entry => ledgerEntryCapabilities(entry).bulkSelectable,
 )))
 const adjustmentLabel = ledgerEntryStatusLabel
 function paymentInfoLabel(entry) {
@@ -2502,7 +2503,7 @@ watch(
                   <input
                     class="sheet-table__checkbox"
                     type="checkbox"
-                    :disabled="entry.hasAdjustmentHistory || !!entry.adjustmentType"
+                    :disabled="!ledgerEntryCapabilities(entry).bulkSelectable"
                     :checked="searchResultSelection.isSelected(entry)"
                     @change="searchResultSelection.toggleItem(entry)"
                   />
@@ -2587,10 +2588,10 @@ watch(
                       <button type="button" class="button button--ghost" @click="cancelSearchEntryEdit">취소</button>
 </template>
                     <template v-else>
-                      <button v-if="!entry.hasAdjustmentHistory && !entry.adjustmentType" type="button" class="button button--ghost" @click="startSearchEntryEdit(entry)">수정</button>
+                      <button v-if="ledgerEntryCapabilities(entry).editMode === 'FULL'" type="button" class="button button--ghost" @click="startSearchEntryEdit(entry)">수정</button>
                       <button type="button" class="button button--ghost" @click="emit('move-search-entry', entry)">이동</button>
 </template>
-                    <button v-if="!entry.hasAdjustmentHistory && !entry.adjustmentType" type="button" class="button button--danger" @click="emit('delete-search-entry', entry)">삭제</button>
+                    <button v-if="ledgerEntryCapabilities(entry).canDelete" type="button" class="button button--danger" @click="emit('delete-search-entry', entry)">삭제</button>
                   </div>
                   <p v-if="editingSearchEntryId === entry.id && searchEditErrors.length" class="stats-search-edit__hint">
                     {{ searchEditErrors.join(', ') }} 값을 확인해 주세요.

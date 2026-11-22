@@ -344,7 +344,7 @@ test('recipient selection starts empty, resets across groups and shares only the
   expect(state.writes[0].body).toEqual({ kind: 'LEDGER', sourceId: 100, groupId: 6, recipientIds: [4], shareMemo: null })
 })
 
-test('transaction sheet keeps edit, share and delete reachable beside long memos', async ({ page }, testInfo) => {
+test('transaction sheet keeps manage, share and delete reachable beside long memos', async ({ page }, testInfo) => {
   const entries = Array.from({ length: 4 }, (_, index) => ({ ...snapshot, id: 100 + index, categoryGroupId: 101, categoryDetailId: 102, paymentMethodId: 103, entryTime: '13:07', memo: '긴 메모와 사용처 설명 '.repeat(20) }))
   const state = await fixture(page, 'LEDGER', true, { entries, groups: [ownedGroup] })
   await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
@@ -354,7 +354,7 @@ test('transaction sheet keeps edit, share and delete reachable beside long memos
   const actions = sheet.locator('.sheet-table__actions-inner').first()
   for (const theme of ['default', 'toss']) {
     await page.evaluate((value) => { document.documentElement.dataset.theme = value }, theme)
-    for (const name of ['수정', '공유']) {
+    for (const name of ['관리', '공유']) {
       const button = actions.getByRole('button', { name, exact: true })
       await button.scrollIntoViewIfNeeded()
       await expect(button).toBeVisible()
@@ -368,10 +368,11 @@ test('transaction sheet keeps edit, share and delete reachable beside long memos
     expect(await sheet.evaluate((element) => element.getBoundingClientRect().height <= window.innerHeight)).toBe(true)
     await sheet.screenshot({ path: testInfo.outputPath(`transaction-actions-${theme}.png`) })
   }
-  await actions.getByRole('button', { name: '수정', exact: true }).click()
+  await actions.getByRole('button', { name: '관리', exact: true }).click()
   const manager = page.getByRole('dialog', { name: '거래 관리', exact: true })
-  const remove = manager.getByRole('button', { name: /^삭제/ })
+  const remove = manager.getByRole('button', { name: '삭제', exact: true })
   await expect(remove).toBeVisible()
+  await remove.scrollIntoViewIfNeeded()
   expect(await remove.evaluate((element) => {
     const box = element.getBoundingClientRect()
     return box.top >= 0 && box.bottom <= window.innerHeight && box.left >= 0 && box.right <= window.innerWidth

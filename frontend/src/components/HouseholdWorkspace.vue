@@ -103,6 +103,7 @@ import LedgerAdjustmentHistoryDialog from './LedgerAdjustmentHistoryDialog.vue'
 import { useRecordShareNotifications } from '../lib/useRecordShareNotifications'
 import { createReceiptSelectionRequestIds } from '../lib/receiptHistoryGroups'
 import { summarizeReceiptBatch } from '../lib/receiptReview'
+import { ledgerEntryCapabilities } from '../lib/ledgerEntryCapabilities'
 import { normalizeReceiptConcurrency, runReceiptRequestBatches } from '../lib/receiptRequestQueue'
 import { newSplitRequestId, normalizeInstallmentMonths, normalizeInstallmentInterest, prepareSplitPayment } from '../lib/splitPayment'
 
@@ -143,6 +144,15 @@ async function submitLedgerAdjustment(payload) {
     if (saved) setFeedback('기록은 저장되었습니다.', `화면 새로고침 실패: ${error.message}`)
     else adjustmentDialog.error = error?.message || '기록을 저장하지 못했습니다.'
   } finally { adjustmentDialog.busy = false }
+}
+
+async function handleLedgerManageChanged({ message } = {}) {
+  try {
+    await refreshLedgerViews({ forceStatistics: true })
+    setFeedback(message || '')
+  } catch (error) {
+    setFeedback('처리는 저장되었습니다.', `화면 새로고침 실패: ${error.message}`)
+  }
 }
 
 async function undoLedgerAdjustment(entry) {
@@ -3259,11 +3269,18 @@ async function viewTravelLedgerEntryDate(entry) {
   await calendarWorkspaceRef.value?.scrollToLedgerSheet?.()
 }
 
+const MANAGE_ONLY_NOTICE = "결제 취소·환불이 적용 중인 거래입니다. 거래 시트의 '관리'에서 수정해 주세요."
+
 async function editTravelLedgerEntry(entry) {
   householdTab.value = 'calendar'
   calendarAnchorDate.value = entry.entryDate
   await nextTick()
   calendarWorkspaceRef.value?.setSelectedDate?.(entry.entryDate)
+  if (ledgerEntryCapabilities(entry).editMode !== 'FULL') {
+    await calendarWorkspaceRef.value?.scrollToLedgerSheet?.()
+    setFeedback(MANAGE_ONLY_NOTICE)
+    return
+  }
   await fillEntryFormAndScroll(entry)
 }
 
@@ -5186,6 +5203,11 @@ async function moveEntryFromSearch(entry) {
   calendarAnchorDate.value = entry.entryDate
   await nextTick()
   calendarWorkspaceRef.value?.setSelectedDate?.(entry.entryDate)
+  if (ledgerEntryCapabilities(entry).editMode !== 'FULL') {
+    await calendarWorkspaceRef.value?.scrollToLedgerSheet?.()
+    setFeedback(MANAGE_ONLY_NOTICE)
+    return
+  }
   await fillEntryFormAndScroll(entry)
 }
 
@@ -5289,11 +5311,13 @@ async function emptyTrash() {
   }
 }
 
-async function removeEntry(entry) {
+async function removeEntry(payload) {
+  const entry = payload?.entry ?? payload
+  const confirmed = payload?.confirmed === true
   if (!entry?.id || isSubmitting.value) {
     return
   }
-  if (!window.confirm(`'${entry.title || '선택한 거래'}' 내역을 삭제하고 휴지통으로 이동할까요?`)) {
+  if (!confirmed && !window.confirm(`'${entry.title || '선택한 거래'}' 내역을 삭제하고 휴지통으로 이동할까요?`)) {
     return
   }
 
@@ -5302,11 +5326,12 @@ async function removeEntry(entry) {
   setFeedback()
   try {
     await deleteEntry(entry.id)
-    monthEntries.value = monthEntries.value.filter((item) => item.id !== entry.id)
-    statsEntries.value = statsEntries.value.filter((item) => item.id !== entry.id)
+    const removedWithEntry = (item) => item.id === entry.id || (item.adjustmentType && String(item.adjustmentOriginId) === String(entry.id))
+    monthEntries.value = monthEntries.value.filter((item) => !removedWithEntry(item))
+    statsEntries.value = statsEntries.value.filter((item) => !removedWithEntry(item))
     dashboard.value = {
       ...dashboard.value,
-      recentEntries: (dashboard.value.recentEntries ?? []).filter((item) => item.id !== entry.id),
+      recentEntries: (dashboard.value.recentEntries ?? []).filter((item) => !removedWithEntry(item)),
       calendar: (dashboard.value.calendar ?? []).map((day) => {
         if (day.date !== entry.entryDate) {
           return day
@@ -5901,6 +5926,7 @@ async function activatePayment(paymentId) {
       @adjust-entry="openLedgerAdjustment"
       @revert-adjustment="undoLedgerAdjustment"
       @show-adjustments="loadAdjustmentHistory"
+      @ledger-changed="handleLedgerManageChanged"
       @apply-entry-suggestion="applyEntrySuggestion"
       @apply-title-suggestion="applyEntryTitleSuggestion"
       @change-anchor-month="handleChangeCalendarMonth"

@@ -8,7 +8,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Entity @Table(name = "record_map_visits")
+@Entity
+@Table(name = "record_map_visits", indexes = {
+        @Index(name = "idx_record_map_visit_owner_place_date", columnList = "owner_id, place_id, visit_date, id"),
+        @Index(name = "idx_record_map_visit_owner_date", columnList = "owner_id, visit_date, visit_time, id")
+})
 @Getter @Setter @NoArgsConstructor
 public class PlaceVisit {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;

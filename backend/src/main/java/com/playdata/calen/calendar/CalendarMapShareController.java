@@ -52,12 +52,14 @@ public class CalendarMapShareController {
     }
     @GetMapping("/{id}/photos/{kind}/{photoId}") public ResponseEntity<Resource> photo(@AuthenticationPrincipal AppUserPrincipal user,
             @PathVariable Long id, @PathVariable String kind, @PathVariable Long photoId,
-            @RequestParam(defaultValue = "false") boolean thumbnail, @RequestParam(required = false) Integer width) {
+            @RequestParam(defaultValue = "false") boolean thumbnail, @RequestParam(required = false) Integer width,
+            @RequestParam(name = "w", required = false) Integer w) {
         var source = maps.photo(user.userId(), id, kind, photoId);
-        var prepared = thumbnail ? storage.loadThumbnail(source.path(), source.contentType(), width) : null;
+        var prepared = thumbnail ? storage.loadThumbnail(source.path(), source.contentType(), requestedWidth(width, w)) : null;
         Resource resource = prepared == null ? storage.loadAsResource(source.path()) : prepared.resource();
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).header("X-Content-Type-Options", "nosniff").header("Referrer-Policy", "no-referrer")
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(source.fileName(), StandardCharsets.UTF_8).build().toString())
                 .contentType(MediaType.parseMediaType(prepared == null ? source.contentType() : prepared.contentType())).body(resource);
     }
+    private static Integer requestedWidth(Integer width, Integer w) { return width != null ? width : w; }
 }

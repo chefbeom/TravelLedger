@@ -1,4 +1,4 @@
-import exifr from 'exifr'
+import { loadExifr } from './exifrLoader.js'
 import {
   buildOrientationExifSegment,
   drawOrientedImage,
@@ -92,6 +92,7 @@ function resolveWidthBoundedSize(width, height, maxWidth) {
 
 async function resolveImageOrientation(file) {
   try {
+    const exifr = await loadExifr()
     return normalizeExifOrientation(await exifr.orientation(file))
   } catch {
     return 1
@@ -100,6 +101,7 @@ async function resolveImageOrientation(file) {
 
 async function resolveImageGps(file) {
   try {
+    const exifr = await loadExifr()
     const gps = await exifr.gps(file)
     return {
       latitude: normalizeCoordinate(gps?.latitude),

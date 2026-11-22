@@ -407,6 +407,29 @@ class RecordMapIntegrationTest {
             .andExpect(status().isOk()).andExpect(jsonPath("$[0].photos.length()").value(20));
     }
 
+    @Test void ownedPhotoThumbnailHonorsShortWidthParameter() throws Exception {
+        long v = visit("hana", place("hana", List.of()), "2026-10-13");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(1000, 500, BufferedImage.TYPE_INT_RGB), "png", out);
+        JsonNode result = json.readTree(mvc.perform(multipart("/api/record-map/visits/{id}/photos", v)
+            .file(new MockMultipartFile("file", "wide.png", "image/png", out.toByteArray())).with(as("hana")).with(csrf()))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        long photo = Long.parseLong(result.path("id").asText().split(":")[1]);
+
+        assertThat(thumbnailWidth(photo, "w", "240")).isEqualTo(240);
+        assertThat(thumbnailWidth(photo, null, null)).isEqualTo(480);
+        assertThat(thumbnailWidth(photo, "width", "96")).isEqualTo(96);
+        mvc.perform(get("/api/record-map/photos/{id}/content", photo).param("thumbnail", "true").param("w", "240").with(as("minsu")))
+            .andExpect(status().isNotFound());
+    }
+
+    private int thumbnailWidth(long photo, String name, String value) throws Exception {
+        var request = get("/api/record-map/photos/{id}/content", photo).param("thumbnail", "true").with(as("hana"));
+        if (name != null) request = request.param(name, value);
+        byte[] body = mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        return ImageIO.read(new java.io.ByteArrayInputStream(body)).getWidth();
+    }
+
     private RequestPostProcessor as(String login) { return user(AppUserPrincipal.from(users.findByLoginId(login).orElseThrow())); }
     private long userId(String login) { return users.findByLoginId(login).orElseThrow().getId(); }
     private long travelMemory() throws Exception {

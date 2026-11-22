@@ -6,7 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Entity @Table(name = "record_map_collections")
+@Entity
+@Table(name = "record_map_collections", indexes = @Index(name = "idx_record_map_collection_owner", columnList = "owner_id, created_at, id"))
 @Getter @Setter @NoArgsConstructor
 public class PlaceCollection {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;

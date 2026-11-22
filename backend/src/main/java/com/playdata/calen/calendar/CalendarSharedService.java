@@ -79,7 +79,7 @@ public class CalendarSharedService {
         layouts.saveLayoutSetting(viewer, SCOPE, new UserLayoutSettingRequest(1, state));
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public SharedSummary summary(Long viewer, String type, Long shareId, LocalDate from, LocalDate to) {
         validateType(type);
         if (!contains(selections(viewer).path(type), shareId)) throw new NotFoundException("선택한 공유 자료를 찾을 수 없습니다.");
@@ -93,7 +93,7 @@ public class CalendarSharedService {
         return new SharedSummary(type, shareId, plan.getId(), plan.getName(), safeData);
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public SharedDay day(Long viewer, String type, Long shareId, LocalDate date) {
         validateType(type);
         if (date == null || !contains(selections(viewer).path(type), shareId)) throw new NotFoundException("선택한 공유 자료를 찾을 수 없습니다.");

@@ -89,8 +89,9 @@ public class RecordMapController {
     public void deletePhoto(@AuthenticationPrincipal AppUserPrincipal user, @PathVariable Long id) { media.delete(user.userId(), id); }
     @GetMapping("/photos/{id}/content")
     public ResponseEntity<Resource> photo(@AuthenticationPrincipal AppUserPrincipal user, @PathVariable Long id,
-        @RequestParam(defaultValue="false") boolean thumbnail, @RequestParam(required=false) Integer width) {
-        return content(media.getOwned(user.userId(), id), thumbnail, width);
+        @RequestParam(defaultValue="false") boolean thumbnail, @RequestParam(required=false) Integer width,
+        @RequestParam(name = "w", required = false) Integer w) {
+        return content(media.getOwned(user.userId(), id), thumbnail, requestedWidth(width, w));
     }
 
     @GetMapping("/travel-candidates")
@@ -121,14 +122,17 @@ public class RecordMapController {
     }
     @GetMapping("/public/{token}/photos/{id}/content")
     public ResponseEntity<Resource> sharedPhoto(@PathVariable String token, @PathVariable Long id,
-        @RequestParam(defaultValue="false") boolean thumbnail, @RequestParam(required=false) Integer width) {
-        return content(media.getShared(token, id), thumbnail, width);
+        @RequestParam(defaultValue="false") boolean thumbnail, @RequestParam(required=false) Integer width,
+        @RequestParam(name = "w", required = false) Integer w) {
+        return content(media.getShared(token, id), thumbnail, requestedWidth(width, w));
     }
     @GetMapping("/public/{token}/travel-photos/{id}/content")
     public ResponseEntity<Resource> sharedTravelPhoto(@PathVariable String token, @PathVariable Long id,
-        @RequestParam(defaultValue="false") boolean thumbnail, @RequestParam(required=false) Integer width) {
-        return content(media.getSharedTravel(token, id), thumbnail, width);
+        @RequestParam(defaultValue="false") boolean thumbnail, @RequestParam(required=false) Integer width,
+        @RequestParam(name = "w", required = false) Integer w) {
+        return content(media.getSharedTravel(token, id), thumbnail, requestedWidth(width, w));
     }
+    private static Integer requestedWidth(Integer width, Integer w) { return width != null ? width : w; }
     private ResponseEntity<Resource> content(RecordMapMediaService.Media source, boolean thumbnail, Integer width) {
         var prepared = thumbnail ? storage.loadThumbnail(source.path(), source.contentType(), width) : null;
         Resource resource = prepared == null ? storage.loadAsResource(source.path()) : prepared.resource();

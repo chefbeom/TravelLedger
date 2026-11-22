@@ -99,8 +99,10 @@ public class DriveAdminService {
     public DriveDtos.StorageAnalyticsResponse getStorageAnalytics(boolean admin) {
         ensureAdmin(admin);
         List<DriveItem> items = driveItemRepository.findAll();
+        Map<Long, List<DriveItem>> itemsByUser = items.stream()
+                .collect(Collectors.groupingBy(item -> item.getOwner().getId()));
         List<DriveDtos.AdminUserResponse> users = appUserRepository.findAllByOrderByIdAsc().stream()
-                .map(user -> toAdminUserResponse(user, driveItemRepository.findAllByOwner_Id(user.getId())))
+                .map(user -> toAdminUserResponse(user, itemsByUser.getOrDefault(user.getId(), List.of())))
                 .sorted(Comparator.comparing(DriveDtos.AdminUserResponse::usedBytes).reversed())
                 .toList();
 

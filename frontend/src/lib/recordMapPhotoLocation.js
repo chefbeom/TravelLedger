@@ -1,4 +1,4 @@
-import exifr from 'exifr'
+import { loadExifr } from './exifrLoader.js'
 
 // Compare locally read GPS only; do not send every photo's coordinates to a geocoder.
 export function hasDistantPhotoLocations(points, thresholdMeters = 250) {
@@ -18,7 +18,7 @@ export function hasDistantPhotoLocations(points, thresholdMeters = 250) {
 export async function photosHaveDistantLocations(files) {
   if (files.length < 2) return false
   const positions = await Promise.all(files.map(async file => {
-    try { return await exifr.gps(file) } catch { return null }
+    try { return await (await loadExifr()).gps(file) } catch { return null }
   }))
   return hasDistantPhotoLocations(positions)
 }

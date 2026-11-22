@@ -1,4 +1,4 @@
-import exifr from 'exifr'
+import { loadExifr } from './exifrLoader.js'
 
 const REVERSE_GEOCODE_CACHE_LIMIT = 300
 
@@ -102,6 +102,7 @@ export async function extractPhotoMetadata(file, options = {}) {
     return null
   }
 
+  const exifr = await loadExifr()
   const metadata = await exifr.parse(file, {
     gps: true,
     tiff: true,

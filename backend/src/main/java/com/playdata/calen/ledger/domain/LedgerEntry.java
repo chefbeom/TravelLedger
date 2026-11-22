@@ -29,7 +29,9 @@ import lombok.Setter;
         @Index(name = "idx_ledger_entries_owner_title", columnList = "owner_id, title"),
         @Index(name = "idx_ledger_entries_owner_memo", columnList = "owner_id, memo"),
         @Index(name = "idx_ledger_entries_owner_category_date", columnList = "owner_id, category_group_id, category_detail_id, entry_date"),
-        @Index(name = "idx_ledger_entries_owner_payment_date", columnList = "owner_id, payment_method_id, entry_date")
+        @Index(name = "idx_ledger_entries_owner_payment_date", columnList = "owner_id, payment_method_id, entry_date"),
+        @Index(name = "idx_ledger_adjustment_origin", columnList = "owner_id, adjustment_origin_id"),
+        @Index(name = "idx_ledger_entries_owner_travel_record", columnList = "owner_id, travel_record_id")
 })
 @Getter
 @Setter

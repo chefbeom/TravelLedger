@@ -27,17 +27,25 @@ export function createRequestCoordinator(performRequest) {
     if (!plainGet) return performRequest(path, options)
 
     const key = `${generation}:${path}`
-    let promise = pending.get(key)
-    if (!promise) {
-      promise = Promise.resolve().then(() => performRequest(path, options))
-      pending.set(key, promise)
+    let entry = pending.get(key)
+    if (!entry) {
+      entry = { promise: Promise.resolve().then(() => performRequest(path, options)), waiters: 0 }
+      pending.set(key, entry)
     }
+    entry.waiters += 1
     try {
-      const response = await promise
+      const response = await entry.promise
+      // A response is only shared while it is in flight; later calls start a new request.
+      if (pending.get(key) === entry) pending.delete(key)
+      entry.waiters -= 1
+      if (response == null) return response
       // Widgets may modify their DTOs; sharing the network request must not share mutable state.
-      return response == null ? response : structuredClone(response)
-    } finally {
-      if (pending.get(key) === promise) pending.delete(key)
+      // The last caller to resume receives the original, so a single caller never pays for a clone.
+      return entry.waiters === 0 ? response : structuredClone(response)
+    } catch (error) {
+      entry.waiters -= 1
+      if (pending.get(key) === entry) pending.delete(key)
+      throw error
     }
   }
 }

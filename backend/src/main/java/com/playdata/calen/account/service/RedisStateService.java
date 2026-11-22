@@ -15,6 +15,11 @@ import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +57,12 @@ public class RedisStateService {
 
     private final Object redisMonitor = new Object();
     private final AtomicInteger redisConnectionAvailable = new AtomicInteger(0);
+    private final AtomicBoolean reconnecting = new AtomicBoolean();
+    private final ExecutorService reconnectExecutor = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "redis-state-reconnect");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
@@ -61,7 +72,8 @@ public class RedisStateService {
     private RedisClient redisClient;
     private StatefulRedisConnection<String, String> redisConnection;
     private RedisCommands<String, String> redisCommands;
-    private long nextRedisReconnectAt = 0L;
+    private volatile long nextRedisReconnectAt = 0L;
+    private volatile boolean stopped;
     private int redisReconnectFailures = 0;
 
     @PostConstruct
@@ -76,12 +88,23 @@ public class RedisStateService {
                 redisStateHost, redisStatePort, redisStateDatabase,
                 redisStateUsername, redisStatePassword, redisStateSsl
         ));
-        tryConnectRedis(false);
+        // The startup connection stays synchronous so the first login after boot already uses Redis.
+        connectOnce();
     }
 
     @PreDestroy
     void shutdown() {
-        closeRedisConnection();
+        stopped = true;
+        reconnectExecutor.shutdown();
+        try {
+            if (!reconnectExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                reconnectExecutor.shutdownNow();
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            reconnectExecutor.shutdownNow();
+        }
+        closeQuietly(detachConnection());
         if (redisClient != null) {
             redisClient.shutdown();
         }
@@ -96,7 +119,7 @@ public class RedisStateService {
         try {
             return commands.get(RedisConnectionSupport.key(redisStateKeyPrefix, key));
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
             return null;
         }
     }
@@ -110,7 +133,7 @@ public class RedisStateService {
         try {
             commands.setex(RedisConnectionSupport.key(redisStateKeyPrefix, key), ttl.getSeconds(), value);
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
         }
     }
 
@@ -123,7 +146,7 @@ public class RedisStateService {
         try {
             return commands.set(RedisConnectionSupport.key(redisStateKeyPrefix, key), value, SetArgs.Builder.nx().ex(ttl.getSeconds())) != null;
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
             return null;
         }
     }
@@ -141,7 +164,7 @@ public class RedisStateService {
             }
             return commands.del(RedisConnectionSupport.key(redisStateKeyPrefix, key)) > 0;
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
             return null;
         }
     }
@@ -159,7 +182,7 @@ public class RedisStateService {
             }
             return nextValue;
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
             return -1L;
         }
     }
@@ -173,7 +196,7 @@ public class RedisStateService {
         try {
             return commands.del(RedisConnectionSupport.keys(redisStateKeyPrefix, keys));
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
             return -1L;
         }
     }
@@ -199,7 +222,7 @@ public class RedisStateService {
 
             return keys;
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
             return List.of();
         }
     }
@@ -210,65 +233,84 @@ public class RedisStateService {
                 return redisCommands;
             }
         }
-
-        tryConnectRedis(false);
-
-        synchronized (redisMonitor) {
-            if (redisCommands != null && redisConnection != null && redisConnection.isOpen()) {
-                return redisCommands;
-            }
-            return null;
-        }
+        requestReconnect();
+        return null;
     }
 
-    private void tryConnectRedis(boolean force) {
-        if (redisClient == null) {
+    private void requestReconnect() {
+        if (stopped || redisClient == null || System.currentTimeMillis() < nextRedisReconnectAt
+                || !reconnecting.compareAndSet(false, true)) {
             return;
         }
-
-        long now = System.currentTimeMillis();
-        synchronized (redisMonitor) {
-            if (redisCommands != null && redisConnection != null && redisConnection.isOpen()) {
-                return;
-            }
-            if (!force && now < nextRedisReconnectAt) {
-                return;
-            }
-
-            closeRedisConnection();
-
-            try {
-                redisConnection = redisClient.connect();
-                redisCommands = redisConnection.sync();
-                redisConnectionAvailable.set(1);
-                redisReconnectFailures = 0;
-                nextRedisReconnectAt = 0L;
-            } catch (Exception ignored) {
-                redisConnectionAvailable.set(0);
-                redisCommands = null;
-                redisConnection = null;
-                redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
-                long backoffMultiplier = 1L << Math.max(0, redisReconnectFailures - 1);
-                long backoff = Math.min(
-                        REDIS_RECONNECT_MIN_BACKOFF_MS * backoffMultiplier,
-                        REDIS_RECONNECT_MAX_BACKOFF_MS
-                );
-                nextRedisReconnectAt = now + backoff;
-            }
+        try {
+            reconnectExecutor.execute(this::connectInBackground);
+        } catch (RejectedExecutionException ignored) {
+            reconnecting.set(false);
         }
     }
 
-    private void markRedisUnavailable() {
-        synchronized (redisMonitor) {
-            closeRedisConnection();
-            redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
-            long backoffMultiplier = 1L << Math.max(0, redisReconnectFailures - 1);
-            long backoff = Math.min(
-                    REDIS_RECONNECT_MIN_BACKOFF_MS * backoffMultiplier,
-                    REDIS_RECONNECT_MAX_BACKOFF_MS
-            );
-            nextRedisReconnectAt = System.currentTimeMillis() + backoff;
+    private void connectInBackground() {
+        try {
+            if (stopped) {
+                return;
+            }
+            closeQuietly(detachConnection());
+            connectOnce();
+        } finally {
+            reconnecting.set(false);
         }
+    }
+
+    private void connectOnce() {
+        StatefulRedisConnection<String, String> candidate = null;
+        try {
+            // Network connect/close must never hold the monitor used by request threads.
+            candidate = redisClient.connect();
+            RedisCommands<String, String> commands = candidate.sync();
+            synchronized (redisMonitor) {
+                if (!stopped) {
+                    redisConnection = candidate;
+                    redisCommands = commands;
+                    candidate = null;
+                    redisConnectionAvailable.set(1);
+                    redisReconnectFailures = 0;
+                    nextRedisReconnectAt = 0L;
+                }
+            }
+        } catch (Exception ignored) {
+            synchronized (redisMonitor) {
+                scheduleBackoff();
+            }
+        } finally {
+            closeQuietly(candidate);
+        }
+    }
+
+    private void markRedisUnavailable(RedisCommands<String, String> failedCommands) {
+        StatefulRedisConnection<String, String> failedConnection;
+        synchronized (redisMonitor) {
+            if (redisCommands != failedCommands) {
+                return;
+            }
+            failedConnection = detachConnection();
+            scheduleBackoff();
+        }
+        try {
+            reconnectExecutor.execute(() -> closeQuietly(failedConnection));
+        } catch (RejectedExecutionException ignored) {
+            // Shutdown owns the Redis client and closes all remaining channels.
+        }
+    }
+
+    private void scheduleBackoff() {
+        redisConnectionAvailable.set(0);
+        redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
+        long backoffMultiplier = 1L << Math.max(0, redisReconnectFailures - 1);
+        long backoff = Math.min(
+                REDIS_RECONNECT_MIN_BACKOFF_MS * backoffMultiplier,
+                REDIS_RECONNECT_MAX_BACKOFF_MS
+        );
+        nextRedisReconnectAt = System.currentTimeMillis() + backoff;
     }
 
     private void registerRedisAvailabilityGauge() {
@@ -282,12 +324,24 @@ public class RedisStateService {
         redisAvailabilityGaugeRegistered = true;
     }
 
-    private void closeRedisConnection() {
-        if (redisConnection != null) {
-            redisConnection.close();
+    private StatefulRedisConnection<String, String> detachConnection() {
+        synchronized (redisMonitor) {
+            StatefulRedisConnection<String, String> previous = redisConnection;
+            redisConnectionAvailable.set(0);
+            redisConnection = null;
+            redisCommands = null;
+            return previous;
         }
-        redisConnectionAvailable.set(0);
-        redisConnection = null;
-        redisCommands = null;
+    }
+
+    private void closeQuietly(StatefulRedisConnection<String, String> connection) {
+        if (connection == null) {
+            return;
+        }
+        try {
+            connection.close();
+        } catch (Exception ignored) {
+            // Redis availability must not prevent application shutdown or reconnect.
+        }
     }
 }

@@ -80,6 +80,7 @@ Updated: 2026-10-11
 | `V20261105_056__withdrawal_recovery_request_limits.sql` | Adds expiring keyed fingerprints for withdrawal recovery request throttling. |
 | `V20261114_061__calendar_events.sql` | Adds owner-scoped personal calendar events with optimistic versioning. |
 | `V20261114_062__calendar_map_grants.sql` | Adds per-viewer selected map-share grants without storing share tokens. |
+| `V20261122_063__performance_indexes.sql` | Adds entity-matched record-map and ledger lookup indexes with IF NOT EXISTS for ddl-auto and baselined databases. |
 
 ## Legacy Schema Updater Inventory
 
@@ -181,6 +182,7 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 | `V20261105_056__withdrawal_recovery_request_limits.sql` | Pending MariaDB/Flyway and rate-limit rehearsal; recovery remains disabled in production. | Preserve active rate-limit entries during rollback; do not reconstruct raw identities. | Adds a bounded request-limit table; no legacy updater retired. |
 | `V20261114_061__calendar_events.sql` | Pending MariaDB/Flyway rehearsal; verify account isolation and create/update/delete across sessions. | Preserve event rows and version values; restoring an old application must not discard user schedules. | Adds a calendar table; no legacy updater retired. |
 | `V20261114_062__calendar_map_grants.sql` | Pending MariaDB/Flyway rehearsal; verify selection and revocation of shared maps across sessions. | Preserve grant rows or require explicit re-selection after recovery; no raw link tokens are stored. | Adds a calendar grant table; no legacy updater retired. |
+| `V20261122_063__performance_indexes.sql` | H2 migration and schema tests passed; MariaDB/Flyway rehearsal remains required. Online index creation on large tables should run in a quiet window. | Indexes only; drop the new indexes to roll back. No data change. | Adds indexes; no legacy updater retired. |
 
 ## Operating Rules
 

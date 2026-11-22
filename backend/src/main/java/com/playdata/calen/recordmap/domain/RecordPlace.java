@@ -10,7 +10,7 @@ import lombok.Setter;
 import org.hibernate.annotations.BatchSize;
 
 @Entity
-@Table(name = "record_map_places", uniqueConstraints = @UniqueConstraint(name = "uk_record_map_travel_source", columnNames = {"owner_id", "source_travel_record_id"}))
+@Table(name = "record_map_places", indexes = @Index(name = "idx_record_map_place_owner_updated", columnList = "owner_id, updated_at, id"), uniqueConstraints = @UniqueConstraint(name = "uk_record_map_travel_source", columnNames = {"owner_id", "source_travel_record_id"}))
 @Getter @Setter @NoArgsConstructor
 public class RecordPlace {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;

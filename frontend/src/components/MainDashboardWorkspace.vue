@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { GridStack } from 'gridstack'
 import 'gridstack/dist/gridstack.min.css'
 import {
@@ -21,8 +21,9 @@ import {
 import { DASHBOARD_GRID_COLUMNS } from '../features/palette/types'
 import { normalizeCompactLayouts } from '../lib/mainPaletteResponsive'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
-import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
+const TravelMiniLocationMap = defineAsyncComponent(() => import('./TravelMiniLocationMap.vue'))
 import { formatDateTime } from '../lib/uiFormat'
+import { selectPhotoFrameDisplayItems } from '../lib/photoFrameSelection'
 
 const props = defineProps({
   currentUser: {
@@ -620,26 +621,6 @@ function photoFramePhotosForOptions(options = {}) {
   return photoFrameItems.value
 }
 
-function sortPhotoFramePhotos(items, options = {}) {
-  const normalized = normalizePhotoFrameOptions(options)
-  const nextItems = [...(items || [])]
-  if (normalized.mode === 'name' || normalized.sort === 'name') {
-    return nextItems.sort((left, right) => String(left.title || '').localeCompare(String(right.title || ''), 'ko-KR'))
-  }
-  return nextItems.sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')))
-}
-
-function photoFrameRandomIndex(length, seed) {
-  if (!length) return -1
-  let hash = 0
-  const text = String(seed || '')
-  for (let index = 0; index < text.length; index += 1) {
-    hash = ((hash << 5) - hash) + text.charCodeAt(index)
-    hash |= 0
-  }
-  return Math.abs(hash) % length
-}
-
 function configuredPhotoFrameIntervalMs() {
   const intervals = visiblePalettes.value
     .filter((palette) => palette.type === 'photo-frame')
@@ -711,22 +692,23 @@ function photoFrameInfoLine(photo) {
 }
 function photoFrameDisplayItemsFor(palette) {
   const options = normalizePhotoFrameOptions(palette?.options)
-  const items = sortPhotoFramePhotos(photoFramePhotosForOptions(options), options)
-  if (!items.length) return []
-  if (options.mode === 'fixed') {
-    const fixed = items.find((photo) => String(photo.id) === options.fixedPhotoId)
-    return [fixed || items[0]].filter(Boolean)
-  }
-  if (options.mode === 'random') {
-    const index = photoFrameRandomIndex(items.length, photoFrameRandomSeed(palette, options))
-    const selected = items[index]
-    return [selected || items[0]].filter(Boolean)
-  }
-  return [items[0]].filter(Boolean)
+  return selectPhotoFrameDisplayItems(photoFramePhotosForOptions(options), options, photoFrameRandomSeed(palette, options))
 }
 
+// Computed once per dependency change instead of sorting the full photo list on every render call.
+const photoFrameHeroByPaletteKey = computed(() => {
+  const heroes = new Map()
+  for (const palette of visiblePalettes.value) {
+    if (palette.type !== 'photo-frame') continue
+    heroes.set(String(palette.id), photoFrameDisplayItemsFor(palette)[0] || null)
+  }
+  return heroes
+})
+
 function photoFrameHeroFor(palette) {
-  return photoFrameDisplayItemsFor(palette)[0] || null
+  const key = String(palette?.id ?? '')
+  const heroes = photoFrameHeroByPaletteKey.value
+  return heroes.has(key) ? heroes.get(key) : (photoFrameDisplayItemsFor(palette)[0] || null)
 }
 
 function photoFrameDashboardImageUrl(photo) {

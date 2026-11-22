@@ -9,9 +9,12 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import com.playdata.calen.common.cache.BoundedExpiringCache;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -21,18 +24,40 @@ public class ExchangeRateService {
 
     private static final String KRW = "KRW";
     private static final String PROVIDER = "Frankfurter";
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
+    private static final int MAX_CACHE_ENTRIES = 512;
+    private static final Duration STALE_RETENTION = Duration.ofDays(7);
+    private static final Duration PAST_DATE_FRESHNESS = Duration.ofHours(24);
 
     private final RestClient restClient;
     private final Duration cacheDuration;
-    private final Map<String, CachedRate> cache = new ConcurrentHashMap<>();
+    private final BoundedExpiringCache<String, CachedRate> cache = new BoundedExpiringCache<>(MAX_CACHE_ENTRIES);
 
+    @Autowired
     public ExchangeRateService(
             RestClient.Builder restClientBuilder,
             @Value("${app.travel.exchange-rate-base-url:https://api.frankfurter.dev/v1}") String exchangeRateBaseUrl,
             @Value("${app.travel.exchange-rate-cache-minutes:30}") long cacheMinutes
     ) {
-        this.restClient = restClientBuilder.baseUrl(exchangeRateBaseUrl).build();
-        this.cacheDuration = Duration.ofMinutes(Math.max(cacheMinutes, 1));
+        this(restClientBuilder, exchangeRateBaseUrl, Duration.ofMinutes(Math.max(cacheMinutes, 1)));
+    }
+
+    ExchangeRateService(RestClient.Builder restClientBuilder, String exchangeRateBaseUrl, Duration cacheDuration) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
+        this.restClient = restClientBuilder.requestFactory(requestFactory).baseUrl(exchangeRateBaseUrl).build();
+        this.cacheDuration = cacheDuration;
+    }
+
+    @Scheduled(fixedDelay = 600_000)
+    void evictExpiredRates() {
+        cache.evictExpired();
+    }
+
+    int cacheSizeForTest() {
+        return cache.size();
     }
 
     public List<TravelExchangeRateResponse> getLatestRates(Collection<String> currencyCodes) {
@@ -96,7 +121,8 @@ public class ExchangeRateService {
                     true,
                     PROVIDER
             );
-            cache.put(cacheKey, new CachedRate(quote, Instant.now().plus(cacheDuration)));
+            Duration freshness = rateDate != null && resolvedRateDate.isBefore(LocalDate.now()) ? PAST_DATE_FRESHNESS : cacheDuration;
+            cache.put(cacheKey, new CachedRate(quote, Instant.now().plus(freshness)), STALE_RETENTION);
             return quote;
         } catch (Exception exception) {
             log.warn("Failed to fetch exchange rate for {}", normalizedCurrency, exception);

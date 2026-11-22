@@ -6,7 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Entity @Table(name = "record_map_shares")
+@Entity
+@Table(name = "record_map_shares", indexes = @Index(name = "idx_record_map_share_owner_collection", columnList = "owner_id, collection_id"))
 @Getter @Setter @NoArgsConstructor
 public class RecordMapShare {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;

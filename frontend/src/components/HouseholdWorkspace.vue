@@ -95,11 +95,12 @@ import {
   shiftRange,
 } from '../lib/analytics'
 import PaletteContainer from '../features/palette/components/PaletteContainer.vue'
-import CalendarWorkspace from './CalendarWorkspace.vue'
-import RecurringLedgerWorkspace from './RecurringLedgerWorkspace.vue'
+const loadCalendarWorkspace = () => import('./CalendarWorkspace.vue')
+const CalendarWorkspace = defineAsyncComponent(loadCalendarWorkspace)
+const RecurringLedgerWorkspace = defineAsyncComponent(() => import('./RecurringLedgerWorkspace.vue'))
 import RecordShareDialog from './RecordShareDialog.vue'
-import LedgerAdjustmentDialog from './LedgerAdjustmentDialog.vue'
-import LedgerAdjustmentHistoryDialog from './LedgerAdjustmentHistoryDialog.vue'
+const LedgerAdjustmentDialog = defineAsyncComponent(() => import('./LedgerAdjustmentDialog.vue'))
+const LedgerAdjustmentHistoryDialog = defineAsyncComponent(() => import('./LedgerAdjustmentHistoryDialog.vue'))
 import { useRecordShareNotifications } from '../lib/useRecordShareNotifications'
 import { createReceiptSelectionRequestIds } from '../lib/receiptHistoryGroups'
 import { summarizeReceiptBatch } from '../lib/receiptReview'
@@ -583,6 +584,12 @@ const editingSplitRevision = ref('')
 const amountInput = ref('')
 const isEntryTimeEnabled = ref(false)
 const calendarWorkspaceRef = ref(null)
+
+async function ensureCalendarWorkspaceMounted() {
+  await loadCalendarWorkspace()
+  for (let attempt = 0; attempt < 5 && !calendarWorkspaceRef.value; attempt += 1) await nextTick()
+  return calendarWorkspaceRef.value
+}
 const titleSuggestionSearchResults = ref([])
 const householdTravelPlans = ref([])
 const selectedHouseholdTravelPlanId = ref('')
@@ -1498,9 +1505,7 @@ onMounted(async () => {
   window.addEventListener('pointerdown', handleGlobalPointerDown)
   isLoading.value = true
   try {
-    await loadMetadata()
-    await loadEntryDateRange()
-    await loadAggregatePreferences()
+    await Promise.all([loadMetadata(), loadEntryDateRange(), loadAggregatePreferences()])
     await loadCalendarData()
     if (shouldLoadStatisticsForTab()) {
       await loadStatisticsData()
@@ -1516,6 +1521,9 @@ onMounted(async () => {
   } finally {
     isLoading.value = false
   }
+  const prefetchCalendarWorkspace = () => { loadCalendarWorkspace().catch(() => {}) }
+  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(prefetchCalendarWorkspace)
+  else window.setTimeout(prefetchCalendarWorkspace, 1500)
 })
 
 onBeforeUnmount(() => {
@@ -3172,14 +3180,14 @@ async function handleSheetEdit(entry) {
     amountInput.value = entryForm.amount
     entryForm.splitPayments = parts.map(part => ({ paymentMethodId: String(part.paymentMethodId), amount: String(part.amount), installmentEnabled: Boolean(part.installmentMonths), installmentMonths: part.installmentMonths ? String(part.installmentMonths) : '', installmentInterestType: part.installmentInterestType || '', installmentInterestUnknown: Boolean(part.installmentMonths && !part.installmentInterestType) }))
     entryForm.installmentEnabled = parts.some(part => part.installmentMonths)
-    await nextTick()
+    await ensureCalendarWorkspaceMounted()
     calendarWorkspaceRef.value?.scrollToEntryEditor?.()
   } catch (error) { setFeedback('', error.message) }
 }
 
 async function fillEntryFormAndScroll(entry) {
   fillEntryForm(entry)
-  await nextTick()
+  await ensureCalendarWorkspaceMounted()
   calendarWorkspaceRef.value?.scrollToEntryEditor?.()
 }
 
@@ -3236,7 +3244,7 @@ async function startTravelLedgerEntry(payload = 'EXPENSE') {
   }
 
   syncEntryDefaults({ preferLatest: false, force: false })
-  await nextTick()
+  await ensureCalendarWorkspaceMounted()
   calendarWorkspaceRef.value?.scrollToEntryEditor?.()
 }
 
@@ -3264,7 +3272,7 @@ async function openTravelLedgerSearch(payload = '여행') {
 async function viewTravelLedgerEntryDate(entry) {
   householdTab.value = 'calendar'
   calendarAnchorDate.value = entry.entryDate
-  await nextTick()
+  await ensureCalendarWorkspaceMounted()
   calendarWorkspaceRef.value?.setSelectedDate?.(entry.entryDate)
   await calendarWorkspaceRef.value?.scrollToLedgerSheet?.()
 }
@@ -3274,7 +3282,7 @@ const MANAGE_ONLY_NOTICE = "결제 취소·환불이 적용 중인 거래입니�
 async function editTravelLedgerEntry(entry) {
   householdTab.value = 'calendar'
   calendarAnchorDate.value = entry.entryDate
-  await nextTick()
+  await ensureCalendarWorkspaceMounted()
   calendarWorkspaceRef.value?.setSelectedDate?.(entry.entryDate)
   if (ledgerEntryCapabilities(entry).editMode !== 'FULL') {
     await calendarWorkspaceRef.value?.scrollToLedgerSheet?.()
@@ -4835,7 +4843,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
 
   receiptOcr.isOpen = false
   receiptOcr.activeView = ''
-  await nextTick()
+  await ensureCalendarWorkspaceMounted()
   calendarWorkspaceRef.value?.scrollToEntryEditor?.()
   setFeedback('영수증 분석 결과를 빠른 거래 입력칸에 적용했습니다. 일자와 시간, 분류를 확인해 주세요.')
 }
@@ -5012,10 +5020,12 @@ function resolveCsvExportRange(preset) {
   }
 }
 async function refreshLedgerViews({ forceStatistics = false } = {}) {
-  await loadEntryDateRange()
+  const dateRange = loadEntryDateRange()
   const tasks = [loadCalendarData()]
   if (forceStatistics || shouldLoadStatisticsForTab()) {
-    tasks.push(loadStatisticsData())
+    tasks.push(dateRange.then(() => loadStatisticsData()))
+  } else {
+    tasks.push(dateRange)
   }
   await Promise.all(tasks)
   if (householdTab.value === 'stats-search') {
@@ -5188,7 +5198,7 @@ async function undoLastEntryAction() {
     setFeedback(action.type === 'update'
       ? '방금 수정한 내역을 취소하고 수정 전 값으로 복구했습니다.'
       : '방금 등록한 내역을 취소하고 입력값을 빠른 거래 입력에 복구했습니다.')
-    await nextTick()
+    await ensureCalendarWorkspaceMounted()
     calendarWorkspaceRef.value?.scrollToEntryEditor?.()
   } catch (error) {
     setFeedback('', error.message)
@@ -5201,7 +5211,7 @@ async function undoLastEntryAction() {
 async function moveEntryFromSearch(entry) {
   householdTab.value = 'calendar'
   calendarAnchorDate.value = entry.entryDate
-  await nextTick()
+  await ensureCalendarWorkspaceMounted()
   calendarWorkspaceRef.value?.setSelectedDate?.(entry.entryDate)
   if (ledgerEntryCapabilities(entry).editMode !== 'FULL') {
     await calendarWorkspaceRef.value?.scrollToLedgerSheet?.()

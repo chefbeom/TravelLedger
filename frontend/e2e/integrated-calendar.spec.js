@@ -260,15 +260,17 @@ test('refund, cancellation and reversed records retain their original status and
   state.adjustments = true
   await reload(page)
   await openDayPanel(page)
+  await expect(page.locator('.integrated-calendar__entry[data-layer="ledger"]')).toHaveCount(1)
   const cancelled = entries(page).filter({ hasText: '취소된 구매' })
   await expect(cancelled).toContainText('결제 취소됨')
   await expect(cancelled).toContainText('합계 제외')
-  const refund = entries(page).filter({ hasText: '환불 입금' })
-  await expect(refund).toContainText('₩25,000')
-  await refund.getByText('거래 상세').click()
-  await expect(refund).toContainText('기준 ₩30,000')
-  await expect(refund).toContainText('차감 ₩5,000')
-  await expect(entries(page).filter({ hasText: '되돌린 환불' })).toContainText('처리 되돌림')
+  await expect(cancelled).toContainText('처리 2건')
+  await cancelled.getByText('거래 상세').click()
+  await expect(cancelled).toContainText('환불 입금')
+  await expect(cancelled).toContainText('₩25,000')
+  await expect(cancelled).toContainText('기준 ₩30,000')
+  await expect(cancelled).toContainText('차감 ₩5,000')
+  await expect(cancelled).toContainText('환불 되돌림')
 })
 
 test('a failed share source and filter metadata do not hide independently successful data', async ({ page }) => {

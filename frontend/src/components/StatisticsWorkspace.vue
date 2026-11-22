@@ -6,6 +6,7 @@ import ComparisonTable from './ComparisonTable.vue'
 import DonutChartCard from './DonutChartCard.vue'
 import SummaryCard from './SummaryCard.vue'
 import { useTableSelection } from '../lib/tableSelection'
+import { ledgerEntryStatusLabel } from '../lib/ledgerSheetGroups'
 
 const chartPalette = ['#3182f6', '#12b886', '#f59f00', '#ff6b6b', '#7c5cff', '#00b8d9', '#fd7e14', '#5c7cfa']
 const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
@@ -224,14 +225,7 @@ const analysisScope = computed(() => {
 const searchResultSelection = useTableSelection(computed(() => props.searchResults.filter(
   entry => !entry.hasAdjustmentHistory && !entry.adjustmentType,
 )))
-function adjustmentLabel(entry) {
-  if (entry.adjustmentVoidedAt) return '처리 되돌림'
-  if (entry.adjustmentType === 'PAYMENT_CANCELLATION') return '결제 취소 기록'
-  if (entry.adjustmentType === 'REFUND') return '환불 입금'
-  if (entry.cancelledAt) return '결제 취소됨'
-  if (Number(entry.refundedPrincipal || 0) > 0) return Number(entry.refundedPrincipal) >= Number(entry.amount) ? '환불 완료' : '부분 환불'
-  return entry.hasAdjustmentHistory ? '처리 이력 있음' : ''
-}
+const adjustmentLabel = ledgerEntryStatusLabel
 function paymentInfoLabel(entry) {
   const labels = []
   if (entry.splitPaymentGroupId) labels.push(`분할 ${entry.splitPaymentIndex}/${entry.splitPaymentCount} · 묶음 ${entry.splitPaymentGroupId.slice(0, 8)}`)

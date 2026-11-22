@@ -36,6 +36,9 @@ test('refund details, linked history, reversal and payment cancellation remain u
       adjustmentType: 'PAYMENT_CANCELLATION', adjustmentOriginId: 7, adjustmentPrincipal: 100000 })
     return route.fulfill({ json: { id: 9 } })
   })
+  await page.route(/\/api\/entries\/(7|8|9)\/adjustment-group$/, route => route.fulfill({
+    json: { origin: original, adjustments: records.filter(item => item.adjustmentOriginId === 7) },
+  }))
   await page.route('**/api/entries/8/adjustments/revert', route => {
     original.refundedPrincipal = 0
     records.find(item => item.id === 8).adjustmentVoidedAt = '2026-10-22T12:35:00'
@@ -76,19 +79,25 @@ test('refund details, linked history, reversal and payment cancellation remain u
   await refund.getByRole('button', { name: '환불 기록 저장' }).click()
   await expect(refund).toHaveCount(0)
   await expect(originalRow.getByText('환불 완료')).toBeVisible()
-  await expect(sheet.getByText('환불 입금')).toBeVisible()
+  await expect(originalRow.getByText('환불 입금 +₩93,000')).toBeVisible()
+  await expect(sheet.getByRole('row').filter({ hasText: '환불: 검증용 결제' })).toHaveCount(0)
+  await expect(sheet).toContainText('1건 · 세부 기록 2건')
   await sheet.screenshot({ path: testInfo.outputPath('refund-sheet.png') })
   expect(sent[0]).toMatchObject({ type: 'REFUND', receivingPaymentMethodId: 104 })
   expect([sent[0].principal, sent[0].deduction, sent[0].extra].map(Number)).toEqual([100000, 10000, 3000])
 
   await originalRow.getByRole('button', { name: '관리' }).click()
-  await manage.getByRole('button', { name: /처리 내역/ }).click()
-  const history = page.getByRole('dialog', { name: '취소·환불 처리 내역' })
-  await expect(history.getByText(/수령 ₩93,000/)).toBeVisible()
+  await expect(manage.getByRole('heading', { name: '처리 이력' })).toBeVisible()
+  await expect(manage.getByText(/수령 ₩93,000/)).toBeVisible()
+  await expect(manage.getByRole('button', { name: /처리 내역/ })).toHaveCount(0)
   page.once('dialog', dialog => dialog.accept())
-  await history.getByRole('button', { name: '이 처리 되돌리기' }).click()
-  await expect(history.getByText('환불 · 되돌림')).toBeVisible()
-  await history.getByRole('button', { name: '닫기' }).click()
+  await manage.getByRole('button', { name: '이 처리 되돌리기' }).click()
+  await expect(manage).toHaveCount(0)
+  await expect(originalRow.getByText('환불 되돌림').first()).toBeVisible()
+  await originalRow.getByRole('button', { name: '관리' }).click()
+  await expect(manage.getByText('환불 되돌림').first()).toBeVisible()
+  await expect(manage.getByRole('button', { name: '이 처리 되돌리기' })).toHaveCount(0)
+  await manage.getByRole('button', { name: '닫기' }).click()
   await originalRow.getByRole('button', { name: '관리' }).click()
   await manage.getByRole('button', { name: /^결제 취소/ }).click()
   const cancellation = page.getByRole('dialog', { name: '결제 취소 기록' })

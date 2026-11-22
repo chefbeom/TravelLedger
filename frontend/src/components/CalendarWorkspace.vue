@@ -5,7 +5,7 @@ import 'gridstack/dist/gridstack.min.css'
 import { formatCompactNumber } from '../lib/format'
 import { resolveRange, shiftRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
-import { groupLedgerSheetEntries } from '../lib/ledgerSheetGroups'
+import { groupLedgerSheetEntries, rowContainsEntryId } from '../lib/ledgerSheetGroups'
 import { fetchLayoutSetting, fetchHouseholdPersonalization, saveHouseholdPersonalization } from '../lib/api'
 import { clonePersonalization, personalizationChanged, packDashboardPanels, orderedMobilePanels, reorderMobilePanels, normalizeMobileWidgetOrder, normalizeMobileWidgetRows, reorderMobileWidgets, remapMobileWidgets } from '../lib/calendarPersonalization'
 import { widgetFrame, reorderItem } from '../lib/calendarDirectEditing'
@@ -1140,7 +1140,7 @@ let positionedCalendarFocusId = ''
 watch(() => [props.focusEntryId, groupedSelectedDateEntries.value], ([id, rows]) => {
   if (!id) return
   if (String(id) === positionedCalendarFocusId) return
-  const index = rows.findIndex(row => row.parts.some(part => String(part.id) === String(id)))
+  const index = rows.findIndex(row => rowContainsEntryId(row, id))
   if (index >= 0) { positionedCalendarFocusId = String(id); selectedDayEntryPage.value = Math.floor(index / SELECTED_DAY_ENTRY_PAGE_SIZE) }
 })
 const selectableDayEntries = computed(() => pagedSelectedDateRows.value.flatMap(row => row.parts).filter(
@@ -1172,7 +1172,7 @@ const hasSelectedForeignEntries = computed(() =>
 )
 const selectedDateCountLabel = computed(() => groupedSelectedDateEntries.value.length === normalizedSelectedDateEntries.value.length
   ? `${groupedSelectedDateEntries.value.length}건`
-  : `${groupedSelectedDateEntries.value.length}건 · 세부 거래 ${normalizedSelectedDateEntries.value.length}건`)
+  : `${groupedSelectedDateEntries.value.length}건 · 세부 기록 ${normalizedSelectedDateEntries.value.length}건`)
 const formattedAmountInput = computed(() => {
   if (!props.amountInput) {
     return ''

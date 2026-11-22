@@ -24,12 +24,12 @@ test('split payments are grouped only within their actual date, while excluded c
     { id: 6, entryDate: '2024-03-01', entryType: 'EXPENSE', amount: 100000 },
   ]
   const day = calendarLedgerDay(entries, '2024-02-01')
-  assert.equal(day.rows.length, 3)
+  assert.equal(day.rows.length, 2)
   assert.equal(day.rows[0].paymentMethodCount, 2)
   assert.equal(day.rows[0].expectedPaymentMethodCount, 3)
   assert.equal(day.rows[0].displayedAmount, 45000)
   assert.equal(day.rows[0].parts[1].installmentMonths, 5)
-  assert.equal(day.rows[2].parts[0].adjustmentDeduction, 5000)
+  assert.equal(day.rows[0].adjustments[0].adjustmentDeduction, 5000)
   assert.deepEqual(calendarLedgerMonth(entries, 2024, 2), { income: 25000, expense: 50000, balance: -25000 })
 })
 

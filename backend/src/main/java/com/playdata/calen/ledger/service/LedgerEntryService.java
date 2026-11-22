@@ -19,6 +19,7 @@ import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.domain.LedgerAdjustmentType;
 import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.domain.PaymentMethodKind;
+import com.playdata.calen.ledger.dto.LedgerAdjustmentGroupResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryChangeFieldResponse;
@@ -660,6 +661,20 @@ public class LedgerEntryService {
         if (original.getAdjustmentType() != null) throw new BadRequestException("원거래에서 처리 내역을 확인해 주세요.");
         return ledgerEntryRepository.findAllByOwnerIdAndAdjustmentOriginIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(userId, entryId)
                 .stream().map(this::toResponse).toList();
+    }
+
+    /** Read-only: resolves any group member (original or adjustment record) to the original plus its full history. */
+    public LedgerAdjustmentGroupResponse getAdjustmentGroup(Long userId, Long entryId) {
+        appUserService.getRequiredUser(userId);
+        LedgerEntry entry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
+                .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다."));
+        LedgerEntry origin = entry.getAdjustmentType() == null ? entry
+                : ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entry.getAdjustmentOriginId(), userId)
+                    .orElseThrow(() -> new NotFoundException("원거래를 찾을 수 없습니다."));
+        var items = ledgerEntryRepository
+                .findAllByOwnerIdAndAdjustmentOriginIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(userId, origin.getId())
+                .stream().map(this::toResponse).toList();
+        return new LedgerAdjustmentGroupResponse(toResponse(origin), items);
     }
 
     /** Validate a sender's edited share without modifying a managed ledger entity. */

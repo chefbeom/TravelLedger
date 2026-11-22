@@ -19,6 +19,7 @@ import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerAdjustmentType;
 import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.dto.LedgerAdjustmentRequest;
+import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
@@ -155,6 +156,25 @@ class LedgerAdjustmentIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].adjustmentType").value("REFUND"))
                 .andExpect(jsonPath("$[0].amount").value(93.0));
         mvc.perform(get("/api/entries/{id}/adjustments", original).with(user(AppUserPrincipal.from(other.owner()))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test void adjustmentGroupResolvesFromOriginOrAdjustmentAndRequiresTheOwner() throws Exception {
+        Fixture f = fixture(); Fixture other = fixture(); Long original = purchase(f);
+        Long first = adjustments.create(f.ownerId(), original, cancel(UUID.randomUUID()));
+        adjustments.revert(f.ownerId(), first);
+        Long second = adjustments.create(f.ownerId(), original, cancel(UUID.randomUUID()));
+        var byOrigin = entryService.getAdjustmentGroup(f.ownerId(), original);
+        assertThat(byOrigin.origin().id()).isEqualTo(original);
+        assertThat(byOrigin.origin().cancelledAt()).isNotNull();
+        assertThat(byOrigin.adjustments()).extracting(LedgerEntryResponse::id).containsExactly(first, second);
+        assertThat(byOrigin.adjustments().get(0).adjustmentVoidedAt()).isNotNull();
+        assertThat(entryService.getAdjustmentGroup(f.ownerId(), second).origin().id()).isEqualTo(original);
+        assertThat(entryService.getAdjustmentGroup(f.ownerId(), purchase(f)).adjustments()).isEmpty();
+        mvc.perform(get("/api/entries/{id}/adjustment-group", second).with(user(AppUserPrincipal.from(f.owner()))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.origin.id").value(original))
+                .andExpect(jsonPath("$.adjustments.length()").value(2));
+        mvc.perform(get("/api/entries/{id}/adjustment-group", second).with(user(AppUserPrincipal.from(other.owner()))))
                 .andExpect(status().isNotFound());
     }
 

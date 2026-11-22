@@ -354,7 +354,7 @@ test('transaction sheet keeps edit, share and delete reachable beside long memos
   const actions = sheet.locator('.sheet-table__actions-inner').first()
   for (const theme of ['default', 'toss']) {
     await page.evaluate((value) => { document.documentElement.dataset.theme = value }, theme)
-    for (const name of ['수정', '공유', '삭제']) {
+    for (const name of ['수정', '공유']) {
       const button = actions.getByRole('button', { name, exact: true })
       await button.scrollIntoViewIfNeeded()
       await expect(button).toBeVisible()
@@ -368,6 +368,16 @@ test('transaction sheet keeps edit, share and delete reachable beside long memos
     expect(await sheet.evaluate((element) => element.getBoundingClientRect().height <= window.innerHeight)).toBe(true)
     await sheet.screenshot({ path: testInfo.outputPath(`transaction-actions-${theme}.png`) })
   }
+  await actions.getByRole('button', { name: '수정', exact: true }).click()
+  const manager = page.getByRole('dialog', { name: '거래 관리', exact: true })
+  const remove = manager.getByRole('button', { name: /^삭제/ })
+  await expect(remove).toBeVisible()
+  expect(await remove.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    return box.top >= 0 && box.bottom <= window.innerHeight && box.left >= 0 && box.right <= window.innerWidth
+  })).toBe(true)
+  await manager.getByRole('button', { name: '닫기', exact: true }).click()
+  await expect(manager).toHaveCount(0)
   await actions.getByRole('button', { name: '공유', exact: true }).click()
   await expect(sheet).not.toBeVisible()
   const share = page.getByRole('dialog', { name: '기록 공유', exact: true })

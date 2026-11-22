@@ -162,3 +162,27 @@ test('formatters', () => {
   assert.equal(formatCellAmount(12000), '+12,000')
   assert.equal(formatCellAmount(-1200000), '−120만')
 })
+
+const adjustedEntries = [
+  { id: 4, title: '취소된 구매', entryDate: '2024-02-15', entryTime: '09:00', entryType: 'EXPENSE', amount: 30000, paymentMethodName: '카드', financiallyExcluded: true, cancelledAt: '2024-02-15T10:00:00', hasAdjustmentHistory: true, refundedPrincipal: 0 },
+  { id: 5, title: '환불: 취소된 구매', entryDate: '2024-02-15', entryTime: '11:00', entryType: 'INCOME', amount: 25000, paymentMethodName: '현금', adjustmentType: 'REFUND', adjustmentOriginId: 4, adjustmentPrincipal: 30000, adjustmentDeduction: 5000, adjustmentExtra: 0 },
+  { id: 6, title: '환불: 취소된 구매', entryDate: '2024-02-15', entryTime: '12:00', entryType: 'INCOME', amount: 1000, paymentMethodName: '현금', financiallyExcluded: true, adjustmentType: 'REFUND', adjustmentOriginId: 4, adjustmentVoidedAt: '2024-02-15T13:00:00' },
+]
+
+test('adjustments fold into the original timeline row with status, refund and strike markers', () => {
+  const rows = timeline({ ledgerRows: calendarLedgerDay(adjustedEntries, '2024-02-15').rows })
+  assert.equal(rows.length, 1)
+  assert.ok(rows[0].badges.includes('결제 취소됨'))
+  assert.ok(rows[0].badges.includes('합계 제외'))
+  assert.ok(rows[0].badges.includes('환불 입금 +₩25,000'))
+  assert.equal(rows[0].amount.struck, true)
+  assert.equal(rows[0].data.adjustments.length, 2)
+  assert.ok(timeline({ ledgerRows: calendarLedgerDay(adjustedEntries, '2024-02-15').rows, formatCurrency: () => '금액 숨김' })[0].badges.includes('환불 입금 +금액 숨김'))
+})
+
+test('an adjustment whose original is missing keeps a linked badge', () => {
+  const rows = timeline({ ledgerRows: calendarLedgerDay([adjustedEntries[1]], '2024-02-15').rows })
+  assert.equal(rows.length, 1)
+  assert.ok(rows[0].badges.includes('환불 입금 · 원거래 #4'))
+  assert.equal(rows[0].amount.struck, false)
+})

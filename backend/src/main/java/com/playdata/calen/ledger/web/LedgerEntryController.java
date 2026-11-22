@@ -11,6 +11,7 @@ import com.playdata.calen.ledger.dto.LedgerEntryChangeHistoryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
+import com.playdata.calen.ledger.dto.LedgerAdjustmentGroupResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.dto.LedgerSplitPaymentRequest;
 import com.playdata.calen.ledger.dto.LedgerSplitPaymentUpdateRequest;
@@ -244,6 +245,13 @@ public class LedgerEntryController {
             @AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id
     ) {
         return ledgerEntryService.getAdjustmentHistory(currentUser.userId(), id);
+    }
+
+    @GetMapping("/{id}/adjustment-group")
+    public LedgerAdjustmentGroupResponse getAdjustmentGroup(
+            @AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id
+    ) {
+        return ledgerEntryService.getAdjustmentGroup(currentUser.userId(), id);
     }
 
     @PostMapping("/{id}/adjustments/revert")

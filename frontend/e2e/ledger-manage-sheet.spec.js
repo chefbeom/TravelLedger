@@ -59,6 +59,7 @@ test('management options reflect transaction type and prior processing', async (
     { ...common, id: 44, entryType: 'EXPENSE', title: '부분 환불 지출', hasAdjustmentHistory: true, refundedPrincipal: 3000 },
   ]
   const state = await mockPersonalization(page, { entries })
+  await page.route('**/api/entries/44/adjustment-group', route => route.fulfill({ json: { origin: entries[3], adjustments: [] } }))
   await page.waitForLoadState('networkidle')
   await page.getByRole('region', { name: '달력 조회', exact: true }).getByRole('button', { name: '거래 시트 열기' }).click()
   const sheet = page.getByRole('dialog', { name: '거래 시트' })
@@ -91,7 +92,9 @@ test('management options reflect transaction type and prior processing', async (
 
   await sheet.getByRole('row').filter({ hasText: '부분 환불 지출' }).getByRole('button', { name: '관리', exact: true }).click()
   await expect(manager.getByRole('button', { name: /^환불/ })).toBeVisible()
-  await expect(manager.getByRole('button', { name: /^처리 내역/ })).toBeVisible()
+  await expect(manager.getByRole('heading', { name: '처리 이력' })).toBeVisible()
+  await expect(manager.getByText('표시할 처리 기록이 없습니다.')).toBeVisible()
+  await expect(manager.getByRole('button', { name: /^처리 내역/ })).toHaveCount(0)
   await expect(manager.getByRole('button', { name: /거래 내용 수정|^삭제|^결제 취소/ })).toHaveCount(0)
   await expect(manager).toContainText('처리 이력이 있는 거래는 기록 보존을 위해 일반 수정·삭제할 수 없습니다.')
   expect(state.errors).toEqual([])

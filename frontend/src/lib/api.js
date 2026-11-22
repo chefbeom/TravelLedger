@@ -764,6 +764,10 @@ export function fetchLedgerAdjustments(entryId) {
   return request(`/entries/${encodeURIComponent(entryId)}/adjustments`)
 }
 
+export function fetchLedgerAdjustmentGroup(entryId) {
+  return request(`/entries/${encodeURIComponent(entryId)}/adjustment-group`)
+}
+
 export function revertLedgerAdjustment(adjustmentId) {
   return request(`/entries/${encodeURIComponent(adjustmentId)}/adjustments/revert`, { method: 'POST' })
 }

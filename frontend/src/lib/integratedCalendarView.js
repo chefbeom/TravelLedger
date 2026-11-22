@@ -1,4 +1,5 @@
 import { calendarWeekday, overlapsCalendarDate } from './integratedCalendarCore.js'
+import { ledgerEntryStatusLabel, summarizeLedgerAdjustments, splitAdjustmentLabel } from './ledgerSheetGroups.js'
 
 export const LAYERS = ['ledger', 'places', 'travel', 'routes', 'events']
 export const LAYER_LABELS = { ledger: '가계부', places: '장소·기록', travel: '여행', routes: '경로', events: '개인 일정' }
@@ -21,12 +22,7 @@ function periodRole(start, end, date) {
 }
 
 export function ledgerStatus(entry) {
-  if (entry.adjustmentVoidedAt) return '처리 되돌림'
-  if (entry.adjustmentType === 'PAYMENT_CANCELLATION') return '결제 취소 기록'
-  if (entry.adjustmentType === 'REFUND') return '환불 입금'
-  if (entry.cancelledAt) return '결제 취소됨'
-  if (Number(entry.refundedPrincipal || 0) > 0) return Number(entry.refundedPrincipal) >= Number(entry.amount) ? '환불 완료' : '부분 환불'
-  return entry.hasAdjustmentHistory ? '처리 이력 있음' : ''
+  return ledgerEntryStatusLabel(entry)
 }
 
 // ---- formatters -----------------------------------------------------------
@@ -209,8 +205,14 @@ export function buildDayTimeline({ date, isVisible, includeShared, hideAmounts =
     if (row.parts.some(part => part.financiallyExcluded)) {
       badges.push(row.isSplit ? `일부 수단 합계 제외 · 집계 금액 ${formatCurrency(row.parts.filter(part => !part.financiallyExcluded).reduce((sum, part) => sum + Number(part.amount || 0), 0))}` : '합계 제외')
     }
-    const status = ledgerStatus(first)
-    if (status) badges.push(`${status}${first.adjustmentOriginId ? ` · 원거래 ${first.adjustmentOriginId}` : ''}`)
+    if (row.kind === 'adjustment') {
+      badges.push(`${ledgerEntryStatusLabel(first)} · 원거래 #${first.adjustmentOriginId}`)
+    } else {
+      const summary = row.isSplit ? null : summarizeLedgerAdjustments(first, row.adjustments)
+      const status = row.isSplit ? splitAdjustmentLabel(row) : summary.label
+      if (status) badges.push(status)
+      if (summary && summary.activeRefundReceived > 0) badges.push(`환불 입금 +${formatCurrency(summary.activeRefundReceived)}`)
+    }
     if (first.travelRecordId) badges.push('여행 지출과 연결된 가계부 거래')
     const income = first.entryType === 'INCOME'
     const notes = []
@@ -221,7 +223,7 @@ export function buildDayTimeline({ date, isVisible, includeShared, hideAmounts =
       key: row.key, kind: 'ledger', layer: 'ledger', shared: false, ...timedFields(time), timeNote: notes.join(' '),
       title: first.title,
       subtitle: [income ? '수입' : '지출', method].filter(Boolean).join(' · '),
-      badges, amount: amountOf(row.displayedAmount, income ? '+' : MINUS, income ? 'income' : 'expense'),
+      badges, amount: { ...amountOf(row.displayedAmount, income ? '+' : MINUS, income ? 'income' : 'expense'), struck: row.parts.every(part => part.financiallyExcluded) },
       primary: { label: '가계부 원본 보기', action: { type: 'ledger', payload: { date, entryId: first.id } } },
       secondary: first.travelPlanId && first.travelRecordId ? [{ label: '연결된 여행 지출 보기', action: { type: 'travel', payload: { sourceType: 'ledger', planId: first.travelPlanId, recordId: first.travelRecordId } } }] : [],
       data: row,

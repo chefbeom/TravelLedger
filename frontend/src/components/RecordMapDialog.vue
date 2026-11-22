@@ -1,6 +1,8 @@
 <script setup>
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-const props = defineProps({ open: Boolean, title: String, busy: Boolean })
+let dialogCount = 0
+const props = defineProps({ open: Boolean, title: String, busy: Boolean, wide: { type: Boolean, default: false } })
+const titleId = 'record-map-dialog-title-' + (++dialogCount)
 const emit = defineEmits(['close'])
 const dialog = ref(null)
 let trigger = null
@@ -24,8 +26,8 @@ function outside(event) {
 onBeforeUnmount(() => { dialog.value?.close(); trigger?.isConnected && trigger.focus() })
 </script>
 <template>
-  <dialog ref="dialog" class="record-map-dialog" data-map-photo-detail="true" role="dialog" aria-modal="true" aria-labelledby="record-map-dialog-title" @cancel.prevent="close" @keydown.esc.stop @click="outside">
-    <header><h2 id="record-map-dialog-title">{{ title }}</h2><button class="button button--ghost" data-modal-close type="button" :disabled="busy" aria-label="창 닫기" @click="close">닫기</button></header>
+  <dialog ref="dialog" :class="['record-map-dialog', { 'record-map-dialog--wide': wide }]" data-map-photo-detail="true" role="dialog" aria-modal="true" :aria-labelledby="titleId" @cancel.prevent="close" @keydown.esc.stop @click="outside">
+    <header><h2 :id="titleId">{{ title }}</h2><button class="button button--ghost" data-modal-close type="button" :disabled="busy" aria-label="창 닫기" @click="close">닫기</button></header>
     <fieldset class="record-map-dialog__body" :disabled="busy"><slot /></fieldset>
   </dialog>
 </template>
@@ -37,4 +39,6 @@ h2 { margin: 0; font-size: 1.15rem; overflow-wrap: anywhere; min-width: 0; }
 header button { flex-shrink: 0; }
 .record-map-dialog__body { display: block; min-width: 0; margin: 0; border: 0; padding: 18px; }
 @media(max-width: 600px) { .record-map-dialog__body { padding: 12px; } }
+.record-map-dialog--wide { width: min(1200px, calc(100vw - 24px)); max-height: min(92dvh, 900px); }
+@media (max-width: 760px) { .record-map-dialog--wide { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; } }
 </style>

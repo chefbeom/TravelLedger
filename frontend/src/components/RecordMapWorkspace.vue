@@ -38,6 +38,7 @@ const rootClass = computed(() => ({
 const selectedPlaceId = ref(null), selectedPhotoId = ref(null), selectedMarkerId = ref(null)
 const mapRef = ref(null), focusTarget = ref(null), fitKey = ref(0)
 const modal = ref(''), dirty = ref(false), photoInput = ref(null)
+const recordNowTouched = ref(false), visitDateFromPhoto = ref(''), pendingPreviews = ref([])
 const photosPending = ref([]), selectedPhoto = ref(null), gpsLoading = ref(false), metadataLoading = ref(false)
 const placeForm = reactive({ id: null, name: '', memo: '', country: '', region: '', latitude: '', longitude: '', visited: false, collectionIds: [], recordNow: false, sourceTravelRecordId: null })
 const visitForm = reactive({ id: null, placeId: null, title: '', memo: '', date: todayIso(), time: '' })
@@ -227,6 +228,7 @@ function resetVisit(placeId = null) {
   photosPending.value = []
 }
 function beginPlace(point = null, recordNow = false) {
+  recordNowTouched.value = false; visitDateFromPhoto.value = ''
   metadataSequence++; metadataLoading.value = false; gpsLoading.value = false; dirty.value = false; error.value = ''
   inlineCategoryName.value = ''
   Object.assign(placeForm, { id: null, name: '', memo: '', country: '', region: '', latitude: point?.latitude ?? '', longitude: point?.longitude ?? '',
@@ -234,6 +236,7 @@ function beginPlace(point = null, recordNow = false) {
   resetVisit(); modal.value = 'place'; pickMode.value = false
 }
 function editPlace(place) {
+  recordNowTouched.value = false; visitDateFromPhoto.value = ''
   metadataSequence++; metadataLoading.value = false; gpsLoading.value = false; dirty.value = false
   Object.assign(placeForm, { ...place, recordNow: false, collectionIds: [...place.collectionIds] })
   inlineCategoryName.value = ''
@@ -267,12 +270,25 @@ async function photoPicked(event) {
         if (metadata.placeName && placeForm.name === originalName) placeForm.name = metadata.placeName
       }
     }
-    if (metadata.date && visitForm.date === originalDate) visitForm.date = metadata.date
+    if (metadata.date && visitForm.date === originalDate) {
+      visitForm.date = metadata.date
+      if (!recordNowTouched.value) { placeForm.recordNow = true; visitDateFromPhoto.value = metadata.date }
+    }
     if (metadata.time && visitForm.time === originalTime) visitForm.time = metadata.time
   } catch { if (sequence === metadataSequence) feedback.value = '사진의 위치를 읽을 수 없습니다. 지도에서 장소를 찍거나 좌표를 입력해 주세요.' }
   finally { if (sequence === metadataSequence) metadataLoading.value = false }
 }
-function visitFilesPicked(event) { photosPending.value = [...(event.target.files || [])]; dirty.value = true }
+function visitFilesPicked(event) {
+  const files = [...(event.target.files || [])]
+  event.target.value = ''
+  if (!files.length) return
+  photosPending.value = [...photosPending.value, ...files]; dirty.value = true
+}
+function removePendingPhoto(file) { photosPending.value = photosPending.value.filter(item => item !== file); dirty.value = true }
+watch(photosPending, files => {
+  pendingPreviews.value.forEach(item => URL.revokeObjectURL(item.url))
+  pendingPreviews.value = files.map(file => ({ file, url: URL.createObjectURL(file) }))
+})
 function useGps() {
   if (!navigator.geolocation) { error.value = '현재 위치를 지원하지 않는 브라우저입니다.'; return }
   gpsLoading.value = true
@@ -505,6 +521,7 @@ function onAddMenuToggle() {
 function leaveGuard(event) { if (dirty.value) { event.preventDefault(); event.returnValue = '' } }
 window.addEventListener('beforeunload', leaveGuard)
 onBeforeUnmount(() => {
+  pendingPreviews.value.forEach(item => URL.revokeObjectURL(item.url))
   requestSequence++; listSequence++; locationSequence++; detailSequence++; metadataSequence++
   clearTimeout(searchTimer); locationAbort?.abort(); frameObserver?.disconnect(); window.removeEventListener('resize', refreshFrame)
   window.removeEventListener('beforeunload', leaveGuard)
@@ -575,7 +592,11 @@ onBeforeUnmount(() => {
               <label class="checkbox-row"><input v-model="placeForm.visited" type="checkbox" /><span>이미 방문한 곳으로 표시</span></label>
               <label class="field">사진 · 선택<input type="file" accept="image/*" multiple @change="visitFilesPicked" /></label>
               <span class="record-map-note">선택한 사진 {{ photosPending.length }}장 · 모두 이 장소에 첨부됩니다. 방문 날짜는 선택 사항입니다. 한 장당 15MB, 최대 20장</span>
-              <label class="checkbox-row"><input v-model="placeForm.recordNow" type="checkbox" /><span>방문 날짜와 이야기도 기록</span></label>
+              <ul v-if="pendingPreviews.length" class="record-map-pending-photos">
+                <li v-for="item in pendingPreviews" :key="item.url"><img :src="item.url" :alt="item.file.name" width="56" height="56" decoding="async" /><span>{{ item.file.name }}</span><button type="button" class="button button--ghost" :aria-label="item.file.name + ' 빼기'" @click="removePendingPhoto(item.file)">×</button></li>
+              </ul>
+              <label class="checkbox-row"><input v-model="placeForm.recordNow" type="checkbox" @change="recordNowTouched = true" /><span>방문 날짜와 이야기도 기록</span></label>
+              <p v-if="visitDateFromPhoto && placeForm.recordNow" class="record-map-note" role="status">사진 촬영일({{ visitDateFromPhoto }})로 방문 날짜를 채웠습니다. 날짜 없이 저장하려면 ‘방문 날짜와 이야기도 기록’을 해제하세요.</p>
               <div v-if="placeForm.recordNow" class="record-map-form">
                 <div class="record-map-form-grid"><label class="field">방문 날짜<input v-model="visitForm.date" type="date" required /></label><label class="field">시간 · 선택<input v-model="visitForm.time" type="time" /></label></div>
                 <label class="field">방문 제목<input v-model="visitForm.title" maxlength="160" :placeholder="placeForm.name || '방문 제목'" /></label>
@@ -593,6 +614,9 @@ onBeforeUnmount(() => {
             <div class="record-map-form-grid"><label class="field">날짜{{ visitForm.id ? ' · 선택' : '' }}<input v-model="visitForm.date" type="date" :required="!visitForm.id" /></label><label class="field">시간 · 선택<input v-model="visitForm.time" type="time" :disabled="!visitForm.date" /></label></div>
             <label class="field">메모<textarea v-model="visitForm.memo" maxlength="4000" rows="5" /></label>
             <label class="field">첨부 사진<input type="file" accept="image/*" multiple @change="visitFilesPicked" /></label><span>업로드할 사진 {{ photosPending.length }}장 · 한 장당 15MB 이하</span>
+            <ul v-if="pendingPreviews.length" class="record-map-pending-photos">
+              <li v-for="item in pendingPreviews" :key="item.url"><img :src="item.url" :alt="item.file.name" width="56" height="56" decoding="async" /><span>{{ item.file.name }}</span><button type="button" class="button button--ghost" :aria-label="item.file.name + ' 빼기'" @click="removePendingPhoto(item.file)">×</button></li>
+            </ul>
             <div class="record-map-form__footer"><button class="button button--primary" :disabled="busy">{{ busy ? '저장 중...' : '방문 기록 저장' }}</button></div>
           </form>
 
@@ -727,6 +751,11 @@ onBeforeUnmount(() => {
 .record-map-form input[type="checkbox"] { width: auto; }
 .record-map-form input[type="color"] { width: 72px; height: 42px; padding: 4px; }
 fieldset { display: flex; gap: 10px; flex-wrap: wrap; border: 1px solid var(--rm-line); padding: 12px; }
+.record-map-pending-photos { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.record-map-pending-photos li { display: flex; align-items: center; gap: 8px; min-width: 0; list-style: none; }
+.record-map-pending-photos img { width: 56px; height: 56px; object-fit: cover; border: 1px solid var(--rm-line); flex-shrink: 0; }
+.record-map-pending-photos span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: .82rem; }
+.record-map-pending-photos .button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
 .record-map-note { font-size: .85rem; line-height: 1.6; opacity: .85; margin: 0; }
 .record-map-collection-list { display: grid; gap: 8px; }
 .record-map-collection-list article { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid var(--rm-line); }

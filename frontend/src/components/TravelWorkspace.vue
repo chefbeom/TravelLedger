@@ -1,8 +1,11 @@
 <script setup>
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue'
 import { fetchTravelPortfolio } from '../lib/api'
+import { formatImportNotice } from '../lib/travelImport'
 const TravelHubWorkspace = defineAsyncComponent(() => import('./TravelHubWorkspace.vue'))
 const TravelMyMapWorkspace = defineAsyncComponent(() => import('./TravelMyMapWorkspace.vue'))
+const TravelImportDialog = defineAsyncComponent(() => import('./travel-import/TravelImportDialog.vue'))
+const TravelRecordEditDialog = defineAsyncComponent(() => import('./travel-import/TravelRecordEditDialog.vue'))
 
 const props = defineProps({
   route: {
@@ -34,6 +37,11 @@ const hubPhotoFocusRequest = ref(null)
 const hubRouteFocusRequest = ref(null)
 const hubRecordFocusRequest = ref(null)
 const appliedRecordFocusToken = ref('')
+const importDialog = reactive({ open: false, planId: '' })
+const recordEditor = reactive({ open: false, planId: '', recordId: '' })
+const mapReloadKey = ref(0)
+const hubRefreshKey = ref(0)
+const importNotice = ref('')
 
 const travelModes = [
   {
@@ -279,10 +287,59 @@ function openPhotos(focusRequest = null) {
 }
 
 async function handleWorkflowComplete(payload) {
+  const knownPlanIds = new Set((travelPortfolio.value?.plans || []).map((plan) => String(plan.id)))
   if (payload?.planId) currentPlanId.value = String(payload.planId)
   hubPlaceFocusRequest.value = null
   await loadTravelSummary()
   openMap()
+  if (payload?.planId && !knownPlanIds.has(String(payload.planId))) {
+    const created = (travelPortfolio.value?.plans || []).find((plan) => String(plan.id) === String(payload.planId))
+    importNotice.value = `‘${created?.name || '새 여행'}’ 여행을 만들었습니다. ‘＋ 사진·GPX·장소 추가’로 채워 보세요.`
+  }
+}
+
+function openImport(payload = {}) {
+  importDialog.planId = String(payload?.planId || '')
+  importDialog.open = true
+}
+
+// loadTravelSummary() reopens the setup screen on the travel-log route, so only the portfolio is refreshed here.
+async function refreshTravelPortfolio() {
+  try {
+    travelPortfolio.value = await fetchTravelPortfolio()
+  } catch (error) {
+    travelSummaryError.value = error.message || '여행 요약을 불러오지 못했습니다.'
+  }
+}
+
+async function handleImportSaved(result) {
+  importDialog.open = false
+  importNotice.value = formatImportNotice(result)
+  // Refresh the plan list first: the map drops a plan filter whose plan it does not know yet.
+  await refreshTravelPortfolio()
+  if (result?.planId) currentPlanId.value = String(result.planId)
+  mapReloadKey.value += 1
+  hubRefreshKey.value += 1
+}
+
+function openRecordEditor({ planId, recordId } = {}) {
+  if (!planId || !recordId) return
+  recordEditor.planId = String(planId)
+  recordEditor.recordId = String(recordId)
+  recordEditor.open = true
+}
+
+async function handleRecordEdited(kind, payload) {
+  recordEditor.open = false
+  importNotice.value = kind === 'deleted' ? '기록을 삭제했습니다.' : '기록을 수정했습니다.'
+  await refreshTravelPortfolio()
+  mapReloadKey.value += 1
+  hubRefreshKey.value += 1
+}
+
+function openRouteEditorFromImport({ planId }) {
+  importDialog.open = false
+  openRoutes({ planId })
 }
 
 async function closeTravelSetup() {
@@ -434,6 +491,8 @@ onMounted(loadTravelSummary)
         :active="primaryTab === 'map'"
         :plans="travelPortfolio?.plans || []"
         :preferred-plan-id="currentPlanId"
+        :reload-key="mapReloadKey"
+        :notice="importNotice"
         @select-plan="currentPlanId = $event"
         @create-travel="createTravel"
         @open-memories="openMemories"
@@ -441,6 +500,9 @@ onMounted(loadTravelSummary)
         @open-photos="openPhotos"
         @open-travel-manager="openTravelManager"
         @open-photo-editor="openPhotoEditor"
+        @open-import="openImport"
+        @open-record-editor="openRecordEditor"
+        @dismiss-notice="importNotice = ''"
       />
     </div>
 
@@ -494,9 +556,30 @@ onMounted(loadTravelSummary)
         @request-open-finance="handleRequestOpenFinance"
         @request-open-log="handleRequestOpenLog"
         @workflow-complete="handleWorkflowComplete"
+        :external-refresh-key="hubRefreshKey"
+        @request-open-import="openImport"
         @workflow-close="closeTravelSetup"
         @record-focus-consumed="emit('record-focus-consumed', $event)"
       />
     </div>
+
+    <TravelImportDialog
+      v-if="importDialog.open"
+      :open="importDialog.open"
+      :plans="travelPortfolio?.plans || []"
+      :plan-id="importDialog.planId"
+      @close="importDialog.open = false"
+      @saved="handleImportSaved"
+      @open-route-editor="openRouteEditorFromImport"
+    />
+    <TravelRecordEditDialog
+      v-if="recordEditor.open"
+      :open="recordEditor.open"
+      :plan-id="recordEditor.planId"
+      :record-id="recordEditor.recordId"
+      @close="recordEditor.open = false"
+      @saved="handleRecordEdited('saved', $event)"
+      @deleted="handleRecordEdited('deleted', $event)"
+    />
   </div>
 </template>

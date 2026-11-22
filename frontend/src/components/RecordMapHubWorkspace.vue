@@ -50,6 +50,7 @@ const legacyRoute = computed(() => props.route === 'travel' ? 'my-map' : props.r
 .record-map-mode-switch { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 6px 8px; min-height: 0; }
 .record-map-mode-switch .button { min-height: 40px !important; }
 .record-map-mode-switch .record-share-badge { margin-left: 6px; }
+:global(html body .app-shell .record-map-hub .record-map-mode-switch .button[aria-pressed="true"]) { box-shadow: inset 0 -3px 0 var(--rm-accent) !important; font-weight: 700; }
 @media (max-width: 760px) {
   .record-map-mode-switch { flex-wrap: nowrap; padding: 2px 8px !important; }
   .record-map-mode-switch .button { flex: 1 1 0; min-width: 0 !important; min-height: 44px !important; padding: 4px 6px !important; font-size: 12px !important; white-space: nowrap; width: auto !important; }
@@ -61,10 +62,10 @@ const legacyRoute = computed(() => props.route === 'travel' ? 'my-map' : props.r
   :global(body:has(.record-map-hub) .topbar__copy) { flex: 1; min-width: 0; }
   :global(body:has(.record-map-hub) .topbar__copy :is(.topbar__eyebrow,.topbar__title,.topbar__description,.topbar__context)) { display: none !important; }
   :global(body:has(.record-map-hub) .topbar__brand) { font-size: 14px !important; }
-  :global(body:has(.record-map-hub) .topbar__actions) { width: auto !important; gap: 4px !important; }
-  :global(html body:has(.record-map-hub) .app-shell .topbar__actions) { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; }
-  :global(body:has(.record-map-hub) .topbar__actions .button) { min-height: 30px !important; min-width: 0 !important; padding: 4px 7px !important; font-size: 11px !important; }
-  :global(html body:has(.record-map-hub) .app-shell .topbar__actions .button) { width: auto !important; flex: 0 0 auto !important; }
+  :global(body:has(.record-map-hub) .topbar > .topbar__actions) { width: auto !important; gap: 4px !important; }
+  :global(html body:has(.record-map-hub) .app-shell .topbar > .topbar__actions) { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; }
+  :global(body:has(.record-map-hub) .topbar > .topbar__actions .button) { min-height: 30px !important; min-width: 0 !important; padding: 4px 7px !important; font-size: 11px !important; }
+  :global(html body:has(.record-map-hub) .app-shell .topbar > .topbar__actions .button) { width: auto !important; flex: 0 0 auto !important; }
   :global(body:has(.record-map-hub) .topbar__nav) { width: 100% !important; gap: 3px !important; padding: 0 !important; }
   :global(body:has(.record-map-hub) .topbar__nav-button) { min-height: 34px !important; padding: 5px 8px !important; font-size: 12px !important; }
 }

@@ -34,9 +34,11 @@ const props = defineProps({
   },
   plans: { type: Array, default: () => [] },
   preferredPlanId: { type: [String, Number], default: '' },
+  reloadKey: { type: Number, default: 0 },
+  notice: { type: String, default: '' },
 })
 
-const emit = defineEmits(['open-travel-manager', 'open-memories', 'open-routes', 'open-photos', 'open-photo-editor', 'create-travel', 'select-plan'])
+const emit = defineEmits(['open-travel-manager', 'open-memories', 'open-routes', 'open-photos', 'open-photo-editor', 'create-travel', 'select-plan', 'open-import', 'open-record-editor', 'dismiss-notice'])
 
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
@@ -58,7 +60,6 @@ const viewMode = ref('cluster')
 const detailRecoveryClusterId = ref(null)
 const mapFilterMode = ref('all')
 const selectedPlanFilterKeys = ref([])
-const travelPickMode = ref(false)
 const selectedCountryKey = ref('all')
 const selectedRegionKey = ref('all')
 const mapFitRequestKey = ref(0)
@@ -81,6 +82,7 @@ let journeyRouteFollowSequence = 0
 let journeyPlaybackStartedAt = 0
 let mapFocusSequence = 0
 let clusterDetailRequestSequence = 0
+let overviewSequence = 0
 const shareDialog = reactive({
   open: false,
   title: '',
@@ -279,11 +281,15 @@ async function loadClusterDetail(
 }
 
 async function loadOverview({ autoSelect = false, preferredClusterId = null, reloadDetail = false } = {}) {
+  const sequence = ++overviewSequence
   isLoading.value = true
   setOverviewError('')
 
   try {
     const nextOverview = await fetchTravelMyMapOverview()
+    if (sequence !== overviewSequence) {
+      return
+    }
     overview.value = nextOverview
 
     const clusters = nextOverview?.photoClusters ?? []
@@ -320,9 +326,13 @@ async function loadOverview({ autoSelect = false, preferredClusterId = null, rel
       }
     }
   } catch (error) {
-    setOverviewError(error.message)
+    if (sequence === overviewSequence) {
+      setOverviewError(error.message)
+    }
   } finally {
-    isLoading.value = false
+    if (sequence === overviewSequence) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -467,6 +477,10 @@ function handleEditPhoto(photo) {
   pauseJourneyPlayback()
   pauseJourneyRoutePlayback()
   lightboxPhoto.value = null
+  if (String(photo.recordType || '').toUpperCase() === 'MEMORY' && photo.planId) {
+    emit('open-record-editor', { planId: photo.planId, recordId: photo.recordId })
+    return
+  }
   emit('open-photo-editor', photo)
 }
 
@@ -971,15 +985,9 @@ const selectedSinglePlanId = computed(() => mapFilterMode.value === 'plans' && s
 watch(selectedSinglePlanId, id => emit('select-plan', id))
 function choosePlan(event) {
   const id = event.target.value
-  travelPickMode.value = false
   mapFilterMode.value = id ? 'plans' : 'all'
   selectedPlanFilterKeys.value = id ? [`plan:${id}`] : []
   emit('select-plan', id)
-}
-function pickTravelLocation(point) {
-  if (!travelPickMode.value || !selectedSinglePlanId.value) return
-  travelPickMode.value = false
-  emit('open-memories', { planId: selectedSinglePlanId.value, create: true, point })
 }
 
 const planLocationIndex = computed(() => {
@@ -1087,6 +1095,7 @@ const activeJourneyPhotoId = computed(() => journeyPhotoPins.value[journeyPhotoI
 const journeyRouteDistanceKm = computed(() => journeyRoutePath.value.totalDistanceKm ?? 0)
 const mapPhotoClusters = computed(() => selectedJourneyDay.value ? [] : visiblePhotoClusters.value)
 const mapPhotoPins = computed(() => selectedJourneyDay.value ? journeyPhotoPins.value : visiblePhotoPins.value)
+const selectedMarkerRecord = computed(() => markers.value.find((marker) => String(marker.id) === String(selectedMarkerId.value ?? '')) || null)
 const mapMarkers = computed(() => selectedJourneyDay.value
   ? visibleMarkers.value.filter((marker) => matchesTravelJourneyDay(marker, selectedJourneyDay.value))
   : visibleMarkers.value)
@@ -1434,6 +1443,10 @@ onMounted(async () => {
   await loadOverview({ autoSelect: false, reloadDetail: false })
 })
 watch(() => props.active, active => { if (active) loadOverview({ autoSelect: false, reloadDetail: false }) })
+watch(() => props.reloadKey, async () => {
+  await loadOverview({ autoSelect: false, reloadDetail: true })
+  mapFitRequestKey.value += 1
+})
 watch(() => props.preferredPlanId, id => {
   if (!id) return
   mapFilterMode.value = 'plans'
@@ -1522,9 +1535,8 @@ watch(journeyRoutePath, (path) => {
           </div>
           <div class="travel-my-map-actions__group" role="group" aria-label="기록">
             <span class="travel-my-map-actions__label" aria-hidden="true">기록</span>
-            <button class="button button--primary travel-my-map-actions__main" type="button" @click="emit('open-memories', { planId: selectedSinglePlanId, create: true })">장소·사진 추가</button>
-            <button class="button button--secondary" type="button" :disabled="!selectedSinglePlanId" :aria-pressed="travelPickMode" @click="travelPickMode = !travelPickMode">{{ travelPickMode ? '위치 선택 취소' : '지도에 장소 찍기' }}</button>
-            <button class="button button--secondary" type="button" @click="emit('open-routes', { planId: selectedSinglePlanId })">경로 추가</button>
+            <button class="button button--primary travel-my-map-actions__main" type="button" @click="emit('open-import', { planId: selectedSinglePlanId })">＋ 사진·GPX·장소 추가</button>
+            <button class="button button--secondary" type="button" @click="emit('open-memories', { planId: selectedSinglePlanId })">기록 목록·편집</button>
           </div>
           <div class="travel-my-map-actions__group" role="group" aria-label="공유">
             <span class="travel-my-map-actions__label" aria-hidden="true">공유</span>
@@ -1533,7 +1545,7 @@ watch(journeyRoutePath, (path) => {
         </div>
       </div>
       <label class="field travel-map-trip-select"><span class="field__label">여행 선택</span><select :value="selectedSinglePlanId" @change="choosePlan"><option value="">전체 여행</option><option v-for="plan in plans" :key="plan.id" :value="String(plan.id)">{{ plan.name }}{{ !plan.startDate && !plan.endDate ? ' · 기간 없음' : '' }}</option></select></label>
-      <p class="travel-map-pick-hint" role="status">{{ travelPickMode ? '지도에서 추가할 위치를 눌러 주세요.' : !selectedSinglePlanId ? '지도에 장소를 찍으려면 먼저 여행 하나를 선택하세요.' : '' }}</p>
+      <p v-if="notice" class="feedback feedback--success travel-map-import-notice" role="status">{{ notice }} <button class="button button--ghost" type="button" @click="emit('dismiss-notice')">알림 닫기</button></p>
       <details class="travel-map-advanced"><summary>지도 필터와 요약</summary>
       <div class="travel-summary-grid">
         <article class="travel-stat-card">
@@ -1632,8 +1644,10 @@ watch(journeyRoutePath, (path) => {
       </div>
 
       <p v-if="overviewErrorMessage" class="panel__empty">{{ overviewErrorMessage }}</p>
-      <p v-else-if="isLoading" class="panel__empty">사진 지도 데이터를 불러오는 중입니다...</p>
+      <p v-else-if="isLoading && !overview" class="panel__empty">사진 지도 데이터를 불러오는 중입니다...</p>
       <div v-else class="travel-map-workbench">
+      <p v-if="isLoading" class="travel-map-reloading" role="status">지도 갱신 중…</p>
+      <p v-if="selectedMarkerRecord" class="travel-map-selected-record" role="status" @pointerdown.stop @mousedown.stop @touchstart.stop>선택: {{ selectedMarkerRecord.title || selectedMarkerRecord.placeName || '기록' }}<template v-if="selectedMarkerRecord.memoryDate || selectedMarkerRecord.visitedDate"> · {{ selectedMarkerRecord.memoryDate || selectedMarkerRecord.visitedDate }}</template> <button class="button button--secondary" type="button" @click="emit('open-record-editor', { planId: selectedMarkerRecord.planId, recordId: selectedMarkerRecord.id })">이 기록 수정</button></p>
       <TravelMyMapClusterPanel
         ref="mapPanelRef"
         :photo-clusters="mapPhotoClusters"
@@ -1641,8 +1655,8 @@ watch(journeyRoutePath, (path) => {
         :markers="mapMarkers"
         :routes="mapRoutes"
         :active="props.active"
-        :enable-pick-location="travelPickMode"
         :display-mode="mapDisplayMode"
+        :include-record-markers="true"
         :selected-cluster-id="selectedClusterSummary?.id ?? null"
         :selected-photo-id="selectedPhotoId ?? null"
         :journey-photo-id="activeJourneyPhotoId"
@@ -1653,7 +1667,6 @@ watch(journeyRoutePath, (path) => {
         @select-cluster="handleSelectCluster"
         @select-marker="handleSelectMarker"
         @select-photo-pin="handleSelectPhotoPin"
-        @pick-location="pickTravelLocation"
         @preview-cluster="handlePreviewClusterFromMap"
         @fullscreen-change="handleMapFullscreenChange"
         @clear-selection="clearSelection"
@@ -1943,7 +1956,11 @@ watch(journeyRoutePath, (path) => {
 :global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .travel-my-map-actions__label) { display:none; }
 :global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .button) { width:auto !important; flex:none !important; min-width:0 !important; min-height:44px !important; }
 :global(:root[data-layout-mode='mobile'] .workspace-stack .travel-my-map-actions .travel-my-map-actions__main) { grid-column:1 / -1; }
-.travel-map-pick-hint { margin:.4rem 0; font-size:.8rem; }
+.travel-map-selected-record { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:0 0 8px; font-size:.88rem; font-weight:600; }
+.travel-map-selected-record .button { min-height:40px; }
+.travel-map-import-notice { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:.4rem 0; font-size:.88rem; }
+.travel-map-import-notice .button { min-height:40px; }
+.travel-map-reloading { position:absolute; top:8px; left:50%; z-index:1003; transform:translateX(-50%); margin:0; padding:4px 12px; font-size:.8rem; font-weight:600; background:var(--rm-panel, var(--panel-bg)); color:var(--rm-text, var(--text)); border:1px solid var(--rm-line, var(--line)); pointer-events:none; }
 .travel-map-advanced { border:1px solid var(--line); padding:.7rem; margin-top:.5rem; }
 .travel-map-advanced summary { cursor:pointer; font-weight:700; }
 .travel-map-advanced .travel-summary-grid { margin-top:.75rem; }

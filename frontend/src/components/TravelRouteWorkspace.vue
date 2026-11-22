@@ -1,6 +1,5 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { useTableSelection } from '../lib/tableSelection'
 import { formatDate, formatTime, safeNumber, todayIso, toIsoDate } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
@@ -363,7 +362,12 @@ const pagedRoutesForActiveDay = computed(() => {
   const start = activeDayRoutePage.value * ROUTE_TABLE_PAGE_SIZE
   return routesForActiveDay.value.slice(start, start + ROUTE_TABLE_PAGE_SIZE)
 })
-const routeTableSelection = useTableSelection(pagedRoutesForActiveDay)
+const gpxMessage = ref('')
+const saveBlockReason = computed(() => {
+  if (draftPoints.value.length < 2) return '경로 점이 2개 이상 필요합니다.'
+  if (!draft.title.trim()) return '경로 제목을 입력해 주세요.'
+  return ''
+})
 
 watch(
   () => props.travelPlan?.id,
@@ -967,6 +971,7 @@ function resetDraft() {
   setDraftPoints([], -1)
   gpxFileNames.value = []
   gpxSelectedFiles.value = []
+  gpxMessage.value = ''
   draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
 }
 
@@ -1050,10 +1055,21 @@ async function handleGpxSelection(event) {
     return
   }
 
-  const parsedTracks = (await Promise.all(files.map((file) => parseGpxFile(file)))).filter(Boolean)
+  const parseResults = await Promise.all(files.map(async (file) => {
+    try {
+      return { file, track: await parseGpxFile(file) }
+    } catch {
+      return { file, track: null }
+    }
+  }))
+  const parsedTracks = parseResults.map((result) => result.track).filter(Boolean)
+  const failedNames = parseResults.filter((result) => !result.track).map((result) => result.file.name)
   if (!parsedTracks.length) {
+    gpxMessage.value = `경로 점을 찾지 못한 파일: ${failedNames.join(', ')}`
+    event.target.value = ''
     return
   }
+  gpxMessage.value = failedNames.length ? `경로 점을 찾지 못한 파일은 제외했습니다: ${failedNames.join(', ')}` : ''
 
   const orderedTracks = parsedTracks
     .map((track, index) => ({ ...track, orderIndex: index }))
@@ -1081,16 +1097,15 @@ async function handleGpxSelection(event) {
     draft.durationMinutes = String(totalDurationMinutes)
   }
 
-  const selectedRouteDate = activeDayDate.value || draft.routeDate || props.travelPlan?.startDate || todayIso()
   const firstTrackDate = orderedTracks.find((track) => track.startTimestamp)?.startTimestamp
-  if (selectedRouteDate) {
-    draft.routeDate = selectedRouteDate
-  } else if (firstTrackDate) {
+  if (firstTrackDate) {
     const detectedRouteDate = toIsoDate(firstTrackDate)
     draft.routeDate = detectedRouteDate
     if (tripDays.value.some((day) => day.date === detectedRouteDate)) {
       activeDayDate.value = detectedRouteDate
     }
+  } else {
+    draft.routeDate = activeDayDate.value || draft.routeDate || props.travelPlan?.startDate || todayIso()
   }
 
   draft.stepCount = String(Math.round(draftDistanceKm.value * 1400))
@@ -1285,6 +1300,7 @@ function routeSummary(route) {
             <button class="button button--primary" :disabled="isSubmitting || draftPoints.length < 2 || !draft.title.trim()" @click="submitRoute">
               {{ isSubmitting && activeSubmit === 'route' ? '저장 중...' : editingRouteId ? '경로 수정' : '경로 저장' }}
             </button>
+            <small v-if="saveBlockReason" role="status">{{ saveBlockReason }}</small>
           </div>
         </article>
       </div>
@@ -1311,13 +1327,6 @@ function routeSummary(route) {
           <span class="field__label">이동 수단</span>
           <select v-model="draft.transportMode">
             <option v-for="option in transportOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span class="field__label">입력 방식</span>
-          <select v-model="draft.sourceType">
-            <option value="MANUAL">직접 그리기</option>
-            <option value="GPX">GPX 불러오기</option>
           </select>
         </label>
         <label class="field">
@@ -1353,9 +1362,7 @@ function routeSummary(route) {
         <p v-if="hasGpxGeometry" class="travel-map-note field field--full">
           GPX 여러 개를 한 번에 읽어 하루 경로로 합칩니다. 저장할 때는 렌더링이 무거워지지 않도록 포인트를 자동으로 줄여 보관합니다.
         </p>
-        <p v-else-if="draft.sourceType === 'GPX'" class="travel-map-note field field--full">
-          GPX 파일을 여러 개까지 올릴 수 있고, 시간과 거리, 걸음 수를 합산해 하나의 경로 선으로 그립니다.
-        </p>
+        <p v-if="gpxMessage" class="travel-map-note field field--full" role="alert">{{ gpxMessage }}</p>
         <label class="field field--full">
           <span class="field__label">메모</span>
           <textarea v-model="draft.memo" rows="3" placeholder="걷기 구간, 버스 환승, 택시 이동 이유 등을 적어두세요." />
@@ -1365,6 +1372,7 @@ function routeSummary(route) {
         <button class="button button--primary" :disabled="isSubmitting || draftPoints.length < 2 || !draft.title.trim()" @click="submitRoute">
           {{ isSubmitting && activeSubmit === 'route' ? '저장 중...' : editingRouteId ? '경로 수정' : '경로 저장' }}
         </button>
+        <small v-if="saveBlockReason" role="status">{{ saveBlockReason }}</small>
       </div>
     </section>
 
@@ -1459,7 +1467,7 @@ function routeSummary(route) {
         <span>{{ activeDayTimelinePage + 1 }} / {{ activeDayTimelinePageCount }}</span>
         <button class="button button--ghost" type="button" :disabled="activeDayTimelinePage + 1 >= activeDayTimelinePageCount" @click="activeDayTimelinePage += 1">다음</button>
       </div>
-      <p v-else class="panel__empty">선택한 날짜에는 아직 기록된 일정이 없습니다.</p>
+      <p v-if="!activeDayTimeline.length" class="panel__empty">선택한 날짜에는 아직 기록된 일정이 없습니다.</p>
     </section>
 
     <section class="panel">
@@ -1474,15 +1482,6 @@ function routeSummary(route) {
         <table class="sheet-table">
           <thead>
             <tr>
-              <th class="sheet-table__select">
-                <input
-                  class="sheet-table__checkbox"
-                  type="checkbox"
-                  :checked="routeTableSelection.allVisibleSelected"
-                  :indeterminate.prop="routeTableSelection.someVisibleSelected"
-                  @change="routeTableSelection.toggleAllVisible()"
-                />
-              </th>
               <th>날짜</th>
               <th>제목</th>
               <th>요약</th>
@@ -1497,14 +1496,6 @@ function routeSummary(route) {
               :key="route.id"
               :class="{ 'sheet-table__row--focused': isFocusedRoute(route) }"
             >
-              <td class="sheet-table__select">
-                <input
-                  class="sheet-table__checkbox"
-                  type="checkbox"
-                  :checked="routeTableSelection.isSelected(route)"
-                  @change="routeTableSelection.toggleItem(route)"
-                />
-              </td>
               <td>{{ formatDate(route.routeDate) }}</td>
               <td>{{ route.title }}</td>
               <td>{{ routeSummary(route) }}</td>
@@ -1516,7 +1507,7 @@ function routeSummary(route) {
               </td>
             </tr>
             <tr v-if="!routesForActiveDay.length">
-              <td colspan="7" class="sheet-table__empty">선택한 날짜에 저장된 이동 경로가 아직 없습니다.</td>
+              <td colspan="6" class="sheet-table__empty">선택한 날짜에 저장된 이동 경로가 아직 없습니다.</td>
             </tr>
           </tbody>
         </table>
@@ -1533,3 +1524,8 @@ function routeSummary(route) {
     <p class="panel__empty">먼저 여행을 만들거나 선택해 주세요.</p>
   </section>
 </template>
+
+<style scoped>
+:global(html body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active) { box-shadow: inset 0 -3px 0 var(--rm-accent) !important; border-color: var(--rm-accent) !important; }
+:global(html body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active :is(strong, small)) { color: var(--rm-text) !important; -webkit-text-fill-color: var(--rm-text) !important; }
+</style>

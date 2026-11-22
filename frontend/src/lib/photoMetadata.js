@@ -97,7 +97,7 @@ export async function reverseGeocode(latitude, longitude) {
   }
 }
 
-export async function extractPhotoMetadata(file) {
+export async function extractPhotoMetadata(file, options = {}) {
   if (!file) {
     return null
   }
@@ -122,8 +122,9 @@ export async function extractPhotoMetadata(file) {
 
   const latitude = normalizeCoordinate(metadata.latitude)
   const longitude = normalizeCoordinate(metadata.longitude)
+  const shouldGeocode = options.reverseGeocode !== false
   const locationDetails =
-    latitude !== null && longitude !== null ? await reverseGeocode(latitude, longitude) : {}
+    shouldGeocode && latitude !== null && longitude !== null ? await reverseGeocode(latitude, longitude) : {}
 
   return {
     ...toDateParts(takenAt),

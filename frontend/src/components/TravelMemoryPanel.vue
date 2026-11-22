@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { buildThumbnailUrl, createLocalImagePreview } from '../lib/mediaPreview'
+import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { extractPhotoMetadata, reverseGeocode } from '../lib/photoMetadata'
-import { useTableSelection } from '../lib/tableSelection'
+import { searchTravelLocations } from '../lib/useTravelImport'
+import { IMPORT_CATEGORIES } from '../lib/travelImport'
 import { formatDate, formatDateTime, toIsoDate, toNullableNumber, todayIso } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
@@ -19,8 +20,6 @@ const pinPresetOptions = [
   { key: 'shopping', label: '🛍 쇼핑', category: '쇼핑', iconText: '🛍' },
   { key: 'transit', label: '🚌 교통', category: '이동', iconText: '🚌' },
 ]
-const quickMemoryPresetKeys = new Set(['general', 'sightseeing', 'food', 'lodging', 'transit'])
-const quickMemoryPresets = pinPresetOptions.filter((preset) => quickMemoryPresetKeys.has(preset.key))
 
 const props = defineProps({
   travelPlan: {
@@ -53,7 +52,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['save-memory', 'delete-memory', 'delete-media'])
+const emit = defineEmits(['save-memory', 'delete-memory', 'delete-media', 'open-import'])
 
 const activeDayDate = ref('')
 const showGpxRoutes = ref(false)
@@ -97,8 +96,6 @@ const editingMemoryId = ref(null)
 const isEditorOpen = ref(false)
 const photoFiles = ref([])
 const photoCaption = ref('')
-const multiPhotoUploadEnabled = ref(false)
-const multiPhotoDrafts = ref([])
 const queuedCategory = ref('장소')
 const pendingPoint = ref(null)
 const locationFilter = reactive({
@@ -257,31 +254,8 @@ const pagedFilteredMemoryRecords = computed(() => {
   const start = memoryRecordPage.value * MEMORY_RECORD_PAGE_SIZE
   return filteredMemoryRecords.value.slice(start, start + MEMORY_RECORD_PAGE_SIZE)
 })
-const memoryRecordSelection = useTableSelection(pagedFilteredMemoryRecords)
 
-const multiPhotoLoading = ref(false)
-const multiPhotoLoadingCount = ref(0)
-const multiPhotoPreparationProgress = reactive({
-  active: false,
-  title: '사진의 정보를 추출중입니다.',
-  description: '선택한 사진의 메타데이터를 순서대로 확인하고 있습니다.',
-  current: 0,
-  total: 0,
-})
-const multiPhotoSkeletonItems = computed(() =>
-  Array.from({ length: Math.max(1, multiPhotoLoadingCount.value) }, (_, index) => `multi-photo-skeleton-${index}`),
-)
-const activeOperationProgress = computed(() => {
-  if (multiPhotoPreparationProgress.active) {
-    return multiPhotoPreparationProgress
-  }
-
-  if (props.uploadProgress?.active) {
-    return props.uploadProgress
-  }
-
-  return null
-})
+const activeOperationProgress = computed(() => (props.uploadProgress?.active ? props.uploadProgress : null))
 const shouldBlockNavigation = computed(() => Boolean(activeOperationProgress.value?.active))
 
 function dispatchRouteLeaveGuard(active) {
@@ -296,34 +270,6 @@ function dispatchRouteLeaveGuard(active) {
     },
   }))
 }
-
-function resetMultiPhotoPreparationProgress() {
-  multiPhotoPreparationProgress.active = false
-  multiPhotoPreparationProgress.title = '사진의 정보를 추출중입니다.'
-  multiPhotoPreparationProgress.description = '선택한 사진의 메타데이터를 순서대로 확인하고 있습니다.'
-  multiPhotoPreparationProgress.current = 0
-  multiPhotoPreparationProgress.total = 0
-}
-
-function startMultiPhotoPreparationProgress(total) {
-  multiPhotoPreparationProgress.active = total > 0
-  multiPhotoPreparationProgress.title = '사진의 정보를 추출중입니다.'
-  multiPhotoPreparationProgress.description = '선택한 사진의 메타데이터를 순서대로 확인하고 있습니다.'
-  multiPhotoPreparationProgress.current = 0
-  multiPhotoPreparationProgress.total = total
-}
-
-function updateMultiPhotoPreparationProgress(current, total, fileName = '') {
-  multiPhotoPreparationProgress.active = total > 0
-  multiPhotoPreparationProgress.current = current
-  multiPhotoPreparationProgress.total = total
-  multiPhotoPreparationProgress.description = fileName
-    ? `${fileName} 정보를 처리하고 있습니다.`
-    : '선택한 사진의 메타데이터를 순서대로 확인하고 있습니다.'
-}
-
-const isMultiPhotoMode = computed(() => multiPhotoUploadEnabled.value && !editingMemoryId.value)
-const hasMultiPhotoDrafts = computed(() => isMultiPhotoMode.value && multiPhotoDrafts.value.length > 0)
 
 const activePinPreset = computed(() => resolvePinPreset(isEditorOpen.value ? form.category : queuedCategory.value))
 const editorTitle = computed(() => (editingMemoryId.value ? '여행 기록 수정' : '새 여행 기록 작성'))
@@ -397,6 +343,8 @@ const mapRoutes = computed(() =>
     })),
 )
 
+const mergedCategoryOptions = computed(() => [...new Set([...(props.categoryOptions || []), ...IMPORT_CATEGORIES])])
+
 const editingPhotos = computed(() => memoryMediaMap.value.get(String(editingMemoryId.value)) ?? [])
 
 const pendingLocationLabel = computed(() => {
@@ -459,9 +407,19 @@ watch(
   { deep: true },
 )
 
+let appliedFocusToken = ''
 watch(
-  () => props.focusRequest?.token,
+  () => [props.focusRequest?.token, props.travelPlan?.id],
   () => {
+    const requestToken = String(props.focusRequest?.token || '')
+    if (!requestToken || requestToken === appliedFocusToken) {
+      return
+    }
+    const requestPlanId = props.focusRequest?.planId
+    if (requestPlanId && String(requestPlanId) !== String(props.travelPlan?.id)) {
+      return
+    }
+    appliedFocusToken = requestToken
     if (props.focusRequest?.type === 'create') {
       clearPendingPoint()
       openBlankEditor()
@@ -527,116 +485,15 @@ watch(
   { deep: true },
 )
 
-function revokeMultiPhotoPreviews() {
-  multiPhotoDrafts.value.forEach((item) => {
-    if (item?.previewUrl && item.previewUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(item.previewUrl)
-    }
-  })
-}
-
-function resetMultiPhotoDrafts() {
-  revokeMultiPhotoPreviews()
-  multiPhotoDrafts.value = []
-  multiPhotoLoading.value = false
-  multiPhotoLoadingCount.value = 0
-  resetMultiPhotoPreparationProgress()
-}
-
 function resetAutofillMessage() {
   autofillState.status = 'idle'
   autofillState.fileName = ''
   autofillState.message = defaultAutofillMessage
 }
 
-function extractDraftTitleSeed(fileName) {
-  const text = String(fileName || '').trim()
-  if (!text) {
-    return ''
-  }
-  return text.replace(/\.[^/.]+$/, '').trim()
-}
-
-function resolveMultiPhotoTitle(item) {
-  const explicitTitle = String(item?.title || '').trim()
-  if (explicitTitle) {
-    return explicitTitle
-  }
-
-  const placeName = String(item?.placeName || '').trim()
-  if (placeName) {
-    return placeName
-  }
-
-  const suggestedTitle = String(item?.suggestedTitle || '').trim()
-  if (suggestedTitle) {
-    return suggestedTitle
-  }
-
-  return String(item?.fileName || '').trim() || '사진 기록'
-}
-
-function buildMultiPhotoPayload(item) {
-  return {
-    memoryDate: item.memoryDate || form.memoryDate,
-    memoryTime: item.memoryTime || null,
-    category: (form.category || queuedCategory.value || '장소').trim(),
-    title: resolveMultiPhotoTitle(item),
-    country: item.country || null,
-    region: item.region || null,
-    placeName: item.placeName || null,
-    latitude: toNullableNumber(item.latitude),
-    longitude: toNullableNumber(item.longitude),
-    sharedWithCommunity: Boolean(form.sharedWithCommunity),
-    memo: form.memo.trim() || null,
-  }
-}
-
-async function buildMultiPhotoDrafts(files) {
-  const drafts = []
-  const total = files.length
-
-  for (const [index, file] of files.entries()) {
-    updateMultiPhotoPreparationProgress(index + 1, total, file.name)
-    let metadata = null
-    try {
-      metadata = await extractPhotoMetadata(file)
-    } catch {
-      metadata = null
-    }
-
-    drafts.push({
-      id: `${file.name}-${file.lastModified}-${index}`,
-      file,
-      fileName: file.name,
-      previewUrl: await createLocalImagePreview(file),
-      title: '',
-      suggestedTitle: extractDraftTitleSeed(file.name),
-      memoryDate: metadata?.date || form.memoryDate || resolveDefaultMemoryDate(),
-      memoryTime: metadata?.time || '',
-      country: metadata?.country || '',
-      region: metadata?.region || '',
-      placeName: metadata?.placeName || '',
-      latitude: metadata?.latitude != null ? String(metadata.latitude) : '',
-      longitude: metadata?.longitude != null ? String(metadata.longitude) : '',
-    })
-  }
-
-  return drafts
-}
-
-function handleMultiPhotoModeChange() {
-  resetMultiPhotoDrafts()
-  photoFiles.value = []
-  photoCaption.value = ''
-  resetAutofillMessage()
-}
-
 function resetPendingFiles() {
-  resetMultiPhotoDrafts()
   photoFiles.value = []
   photoCaption.value = ''
-  multiPhotoUploadEnabled.value = false
   autofillState.status = 'idle'
   autofillState.fileName = ''
   autofillState.message = '사진을 고르면 EXIF 정보가 있을 때 날짜, 시간, GPS 좌표를 자동으로 채워줍니다.'
@@ -744,18 +601,6 @@ function openMemoryForEdit(memory) {
   isEditorOpen.value = true
 }
 
-function applyPinPreset(preset) {
-  queuedCategory.value = preset.category
-  if (isEditorOpen.value) {
-    form.category = preset.category
-  }
-}
-
-function startMemoryWithPreset(preset) {
-  applyPinPreset(preset)
-  openBlankEditor()
-}
-
 async function populatePendingLocation(point) {
   pendingLocation.status = 'loading'
   pendingLocation.country = ''
@@ -838,41 +683,6 @@ async function handlePhotoSelection(event) {
 
   if (!files.length) {
     resetPendingFiles()
-    multiPhotoLoading.value = false
-    multiPhotoLoadingCount.value = 0
-    resetMultiPhotoPreparationProgress()
-    return
-  }
-
-  if (isMultiPhotoMode.value) {
-    resetMultiPhotoDrafts()
-    photoCaption.value = ''
-    multiPhotoLoading.value = true
-    multiPhotoLoadingCount.value = files.length
-    startMultiPhotoPreparationProgress(files.length)
-    autofillState.status = 'loading'
-    autofillState.fileName = ''
-    autofillState.message = `${files.length}장의 사진 정보를 불러오는 중입니다.`
-
-    try {
-      multiPhotoDrafts.value = await buildMultiPhotoDrafts(files)
-      const enrichedCount = multiPhotoDrafts.value.filter((item) =>
-        Boolean(item.memoryDate || item.memoryTime || item.country || item.region || item.placeName || item.latitude || item.longitude),
-      ).length
-      autofillState.status = enrichedCount ? 'filled' : 'manual'
-      autofillState.fileName = ''
-      autofillState.message = enrichedCount
-        ? `${multiPhotoDrafts.value.length}장의 사진 정보를 불러왔습니다. 각 사진 제목을 입력한 뒤 저장하세요.`
-        : `${multiPhotoDrafts.value.length}장의 사진을 불러왔지만 메타데이터가 부족한 항목은 빈 값으로 저장됩니다.`
-    } catch (error) {
-      resetMultiPhotoDrafts()
-      autofillState.status = 'manual'
-      autofillState.fileName = files[0]?.name || ''
-      autofillState.message = error?.message || '사진 메타데이터를 읽지 못했습니다.'
-    }
-    multiPhotoLoading.value = false
-    multiPhotoLoadingCount.value = 0
-    resetMultiPhotoPreparationProgress()
     return
   }
 
@@ -1015,7 +825,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   pendingLookupToken += 1
-  revokeMultiPhotoPreviews()
   dispatchRouteLeaveGuard(false)
   window.removeEventListener('keydown', handleWindowKeydown)
 })
@@ -1026,24 +835,6 @@ function submitMemory() {
   }
 
   queuedCategory.value = form.category.trim() || queuedCategory.value
-
-  if (hasMultiPhotoDrafts.value) {
-    const missingTitle = multiPhotoDrafts.value.find((item) => !resolveMultiPhotoTitle(item))
-    if (missingTitle) {
-      autofillState.status = 'manual'
-      autofillState.fileName = missingTitle.fileName || ''
-      autofillState.message = '복수 사진 기록에서는 모든 사진의 제목을 입력해야 합니다.'
-      return
-    }
-
-    emit('save-memory', {
-      batchItems: multiPhotoDrafts.value.map((item) => ({
-        payload: buildMultiPhotoPayload(item),
-        file: item.file,
-      })),
-    })
-    return
-  }
 
   emit('save-memory', {
     id: editingMemoryId.value,
@@ -1064,15 +855,6 @@ function submitMemory() {
         </div>
         <div class="topbar__actions">
           <span class="panel__badge">{{ mapMarkers.length }}개 핀</span>
-          <button
-            v-for="preset in quickMemoryPresets"
-            :key="`quick-memory-${preset.key}`"
-            class="button button--ghost"
-            type="button"
-            @click="startMemoryWithPreset(preset)"
-          >
-            {{ preset.category }}
-          </button>
           <button class="button button--primary" type="button" @click="openBlankEditor()">새 기록</button>
         </div>
       </div>
@@ -1108,6 +890,7 @@ function submitMemory() {
         :enable-draw-route="false"
         :draggable-markers="true"
         :draggable-selected-point="true"
+        :location-search="searchTravelLocations"
         :view-key="travelPlan.id || 'memory-map'"
         initial-map-size="expanded"
         :auto-fit="false"
@@ -1120,19 +903,6 @@ function submitMemory() {
         @select-marker="handleSelectMarker"
       >
         <template #toolbar>
-          <div class="travel-map__toolbar-group travel-map__toolbar-group--wrap">
-            <span class="travel-map__toolbar-label">핀 종류</span>
-            <button
-              v-for="preset in pinPresetOptions"
-              :key="preset.key"
-              class="travel-map__toolbar-button"
-              :class="{ 'is-active': activePinPreset.key === preset.key }"
-              type="button"
-              @click="applyPinPreset(preset)"
-            >
-              {{ preset.label }}
-            </button>
-          </div>
         <div class="travel-map__toolbar-group">
           <span class="travel-map__toolbar-label">GPX 경로</span>
           <button
@@ -1218,47 +988,28 @@ function submitMemory() {
         <table class="sheet-table">
           <thead>
             <tr>
-              <th class="sheet-table__select">
-                <input
-                  class="sheet-table__checkbox"
-                  type="checkbox"
-                  :checked="memoryRecordSelection.allVisibleSelected"
-                  :indeterminate.prop="memoryRecordSelection.someVisibleSelected"
-                  @change="memoryRecordSelection.toggleAllVisible()"
-                />
-              </th>
               <th>날짜</th>
               <th>분류</th>
               <th>제목</th>
               <th>위치</th>
               <th>사진</th>
-              <th>공유</th>
               <th>작업</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="memory in pagedFilteredMemoryRecords" :key="memory.id">
-              <td class="sheet-table__select">
-                <input
-                  class="sheet-table__checkbox"
-                  type="checkbox"
-                  :checked="memoryRecordSelection.isSelected(memory)"
-                  @change="memoryRecordSelection.toggleItem(memory)"
-                />
-              </td>
               <td>{{ formatDateTime(memory.memoryDate, memory.memoryTime) }}</td>
               <td>{{ memory.category }}</td>
               <td>{{ memory.title }}</td>
               <td>{{ [memory.country, memory.region, memory.placeName].filter(Boolean).join(' / ') || '-' }}</td>
               <td>{{ memory.photoCount }}</td>
-              <td>{{ memory.sharedWithCommunity ? '공유' : '비공개' }}</td>
               <td class="sheet-table__actions">
                 <button class="button button--ghost" @click="openMemoryForEdit(memory)">수정</button>
                 <button class="button button--danger" @click="emit('delete-memory', memory)">삭제</button>
               </td>
             </tr>
             <tr v-if="!filteredMemoryRecords.length">
-              <td colspan="8" class="sheet-table__empty">이 여행에 등록된 기록이 아직 없습니다.</td>
+              <td colspan="6" class="sheet-table__empty">이 여행에 등록된 기록이 아직 없습니다.</td>
             </tr>
           </tbody>
         </table>
@@ -1296,40 +1047,6 @@ function submitMemory() {
 
         <div class="travel-modal__body">
           <div class="travel-form-grid">
-            <label class="field field--full travel-memory-pin-picker">
-              <span class="field__label">핀 종류</span>
-              <div class="travel-map__toolbar-group travel-map__toolbar-group--wrap travel-memory-pin-picker__options">
-                <button
-                  v-for="preset in pinPresetOptions"
-                  :key="`editor-pin-${preset.key}`"
-                  class="travel-map__toolbar-button"
-                  :class="{ 'is-active': activePinPreset.key === preset.key }"
-                  type="button"
-                  @click="applyPinPreset(preset)"
-                >
-                  {{ preset.label }}
-                </button>
-              </div>
-            </label>
-            <template v-if="hasMultiPhotoDrafts">
-              <label class="field">
-                <span class="field__label">분류</span>
-                <input v-model="form.category" list="memory-category-options" type="text" placeholder="장소, 음식점, 박물관, 관광지" />
-              </label>
-              <div class="field travel-batch-memory-summary">
-                <span class="field__label">일괄 기록 안내</span>
-                <small class="field__hint">사진마다 날짜, 시간, 위치 정보는 자동으로 들어가고 제목만 개별 입력합니다.</small>
-              </div>
-              <label class="checkbox-row field--full">
-                <input v-model="form.sharedWithCommunity" type="checkbox" />
-                <span>이 기록을 커뮤니티 지도 월드에 공유하기</span>
-              </label>
-              <label class="field field--full">
-                <span class="field__label">메모</span>
-                <textarea v-model="form.memo" rows="4" placeholder="모든 사진 기록에 공통으로 남길 메모가 있다면 입력해 주세요." />
-              </label>
-            </template>
-            <template v-else>
             <label class="field">
               <span class="field__label">날짜</span>
               <input v-model="form.memoryDate" type="date" />
@@ -1344,19 +1061,19 @@ function submitMemory() {
             </label>
             <label class="field field--full">
               <span class="field__label">제목</span>
-              <input v-model="form.title" type="text" placeholder="이 장소에서 무엇을 했는지 적어보세요." />
+              <input v-model="form.title" type="text" maxlength="120" placeholder="이 장소에서 무엇을 했는지 적어보세요." />
             </label>
             <label class="field">
               <span class="field__label">국가</span>
-              <input v-model="form.country" list="memory-country-options" type="text" placeholder="일본" />
+              <input v-model="form.country" list="memory-country-options" type="text" placeholder="예: 일본" />
             </label>
             <label class="field">
               <span class="field__label">지역 / 도시</span>
-              <input v-model="form.region" list="memory-region-options" type="text" placeholder="오사카" />
+              <input v-model="form.region" list="memory-region-options" type="text" placeholder="예: 오사카" />
             </label>
             <label class="field field--full">
               <span class="field__label">장소명</span>
-              <input v-model="form.placeName" type="text" placeholder="우메다 스카이빌딩, 교토역, 서울역" />
+              <input v-model="form.placeName" type="text" placeholder="예: 우메다 스카이빌딩" />
             </label>
             <label class="field">
               <span class="field__label">위도</span>
@@ -1366,19 +1083,14 @@ function submitMemory() {
               <span class="field__label">경도</span>
               <input v-model="form.longitude" type="number" step="0.0000001" placeholder="126.9706" />
             </label>
-            <label class="checkbox-row field--full">
-              <input v-model="form.sharedWithCommunity" type="checkbox" />
-              <span>이 기록을 커뮤니티 지도 월드에 공유하기</span>
-            </label>
             <label class="field field--full">
-              <span class="field__label">메모</span>
-              <textarea v-model="form.memo" rows="4" placeholder="1~2줄 정도로 장소, 이동, 인상 등을 적어보세요." />
+              <span class="field__label">메모 <small>{{ form.memo.length }}/500</small></span>
+              <textarea v-model="form.memo" rows="4" maxlength="500" placeholder="1~2줄 정도로 장소, 이동, 인상 등을 적어보세요." />
             </label>
-            </template>
           </div>
 
           <datalist id="memory-category-options">
-            <option v-for="option in categoryOptions" :key="option" :value="option" />
+            <option v-for="option in mergedCategoryOptions" :key="option" :value="option" />
           </datalist>
           <datalist id="memory-country-options">
             <option v-for="option in countryOptions" :key="option" :value="option" />
@@ -1388,63 +1100,17 @@ function submitMemory() {
           </datalist>
 
           <div class="travel-form-grid travel-form-grid--compact">
-            <label v-if="!editingMemoryId" class="checkbox-row field--full travel-batch-toggle">
-              <input v-model="multiPhotoUploadEnabled" type="checkbox" @change="handleMultiPhotoModeChange" />
-              <span>여러 사진 받기</span>
-            </label>
+            <div v-if="!editingMemoryId" class="field field--full">
+              <button type="button" class="button button--ghost" @click="emit('open-import')">여러 장 한 번에 가져오기</button>
+            </div>
             <label class="field field--full">
               <span class="field__label">사진 업로드</span>
               <input accept="image/*" capture="environment" multiple type="file" @change="handlePhotoSelection" />
             </label>
-            <label v-if="!isMultiPhotoMode" class="field field--full">
+            <label class="field field--full">
               <span class="field__label">사진 설명</span>
               <input v-model="photoCaption" type="text" placeholder="업로드할 사진에 붙일 짧은 설명" />
             </label>
-          </div>
-
-          <div v-if="multiPhotoLoading" class="travel-batch-memory-list">
-            <article
-              v-for="item in multiPhotoSkeletonItems"
-              :key="item"
-              class="travel-batch-memory-card travel-batch-memory-card--skeleton"
-            >
-              <div class="travel-batch-memory-card__thumb travel-skeleton-block" aria-hidden="true" />
-              <div class="travel-batch-memory-card__meta">
-                <span class="travel-skeleton-line travel-skeleton-line--lg" aria-hidden="true" />
-                <span class="travel-skeleton-line travel-skeleton-line--md" aria-hidden="true" />
-                <span class="travel-skeleton-line travel-skeleton-line--sm" aria-hidden="true" />
-              </div>
-              <div class="travel-batch-memory-card__title travel-batch-memory-card__title--skeleton">
-                <span class="travel-skeleton-line travel-skeleton-line--label" aria-hidden="true" />
-                <span class="travel-skeleton-block travel-skeleton-block--input" aria-hidden="true" />
-              </div>
-            </article>
-          </div>
-
-          <div v-else-if="hasMultiPhotoDrafts" class="travel-batch-memory-list">
-            <article v-for="(item, index) in multiPhotoDrafts" :key="item.id" class="travel-batch-memory-card">
-              <img
-                :src="item.previewUrl"
-                :alt="item.fileName"
-                :loading="index < 4 ? 'eager' : 'lazy'"
-                :fetchpriority="index < 4 ? 'high' : 'auto'"
-                decoding="async"
-                class="travel-batch-memory-card__thumb"
-              />
-              <div class="travel-batch-memory-card__meta">
-                <strong>{{ item.fileName }}</strong>
-                <small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small>
-                <small>{{ [item.country, item.region, item.placeName].filter(Boolean).join(' / ') || '위치 정보 없음' }}</small>
-              </div>
-              <label class="field travel-batch-memory-card__title">
-                <span class="field__label">제목</span>
-                <input
-                  v-model="item.title"
-                  type="text"
-                  :placeholder="item.suggestedTitle || '사진마다 제목을 입력해 주세요.'"
-                />
-              </label>
-            </article>
           </div>
 
           <p
@@ -1503,3 +1169,8 @@ function submitMemory() {
     <p class="panel__empty">먼저 여행을 만들거나 선택해 주세요.</p>
   </section>
 </template>
+
+<style scoped>
+:global(html body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active) { box-shadow: inset 0 -3px 0 var(--rm-accent) !important; border-color: var(--rm-accent) !important; }
+:global(html body .app-shell .record-map-hub .travel-day-tabs .travel-day-tabs__button.is-active :is(strong, small)) { color: var(--rm-text) !important; -webkit-text-fill-color: var(--rm-text) !important; }
+</style>

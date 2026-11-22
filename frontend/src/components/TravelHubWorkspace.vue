@@ -47,6 +47,7 @@ import {
   todayIso,
 } from '../lib/uiFormat'
 import { reverseGeocode } from '../lib/photoMetadata'
+import { toImportErrorMessage } from '../lib/travelImport'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { useTableSelection } from '../lib/tableSelection'
 import RecordShareDialog from './RecordShareDialog.vue'
@@ -105,6 +106,7 @@ const props = defineProps({
     default: 1,
   },
   initialPlanId: { type: [String, Number], default: '' },
+  externalRefreshKey: { type: Number, default: 0 },
 })
 
 const emit = defineEmits([
@@ -114,6 +116,7 @@ const emit = defineEmits([
   'record-focus-consumed',
   'workflow-complete',
   'workflow-close',
+  'request-open-import',
 ])
 
 const fallbackCategories = {
@@ -301,7 +304,7 @@ const showPlanGate = computed(() =>
 const canShareTravelPlan = computed(() => Boolean(travelPlan.value) && travelPlan.value.status === 'COMPLETED')
 const isTravelSetupWorkflow = computed(() => ['create', 'edit'].includes(props.workflowMode))
 const workflowTitle = computed(() => planFormMode.value === 'create' ? '새 여행 만들기'
-  : ({ 1: '여행 정보', 2: '장소·사진 추가', 3: '이동 경로', 4: '여행 요약' }[workflowStep.value] || '여행 관리'))
+  : ({ 1: '여행 정보', 2: '장소·사진 목록', 3: '이동 경로', 4: '여행 요약' }[workflowStep.value] || '여행 관리'))
 const workflowDescription = computed(() => (
   planFormMode.value === 'edit'
     ? '필요한 항목을 선택해 수정하고 지도에서 확인하세요.'
@@ -1060,6 +1063,7 @@ function normalizeWorkflowStep(value) {
 }
 
 function selectWorkflowStep(step) {
+  setFeedback()
   const normalized = normalizeWorkflowStep(step)
   if (normalized > 1 && !travelPlan.value) {
     setFeedback('', '사진과 GPX를 등록하려면 먼저 여행 정보를 저장해주세요.')
@@ -1550,6 +1554,7 @@ watch(
     if (!['create', 'edit'].includes(workflowMode)) {
       return
     }
+    setFeedback()
     workflowStep.value = normalizeWorkflowStep(requestedStep)
     if (workflowMode === 'create') {
       resetPlanForm()
@@ -1574,6 +1579,10 @@ watch(
 watch(() => [props.workflowMode, props.initialPlanId], async ([mode, planId]) => {
   if (mode !== 'edit' || !planId || !travelPlans.value.length || String(selectedPlanId.value) === String(planId)) return
   await refreshTravelData(String(planId), props.route === 'photo-album')
+})
+
+watch(() => props.externalRefreshKey, () => {
+  refreshTravelData(props.initialPlanId || selectedPlanId.value, props.route === 'photo-album')
 })
 
 watch(
@@ -2015,6 +2024,7 @@ async function handleReflectRecordToLedger(record) {
 
 async function handleDeleteMedia(media) {
   if (!media?.id) return
+  if (!window.confirm('이 사진을 삭제할까요? 되돌릴 수 없습니다.')) return
   isSubmitting.value = true
   activeSubmit.value = 'media-delete'
   setFeedback()
@@ -2036,33 +2046,6 @@ async function handleSaveMemory(submission) {
   activeSubmit.value = 'memory'
   setFeedback()
   try {
-    if (submission.batchItems?.length) {
-      startMemoryUploadProgress(submission.batchItems.length, '선택한 사진을 순서대로 업로드하고 있습니다.')
-      for (const [index, item] of submission.batchItems.entries()) {
-        updateMemoryUploadProgress({
-          current: index + 1,
-          total: submission.batchItems.length,
-          description: `${index + 1} / ${submission.batchItems.length}번째 사진을 업로드하고 있습니다.`,
-        })
-        const savedBatchMemory = await createTravelMemory(selectedPlanId.value, item.payload)
-        await uploadTravelMemoryMedia(savedBatchMemory.id, [item.file], '', {
-          onProgress: ({ phase }) => {
-            if (phase === 'finalizing') {
-              updateMemoryUploadProgress({
-                current: index + 1,
-                total: submission.batchItems.length,
-                description: `${index + 1} / ${submission.batchItems.length}번째 사진을 기록에 연결하고 있습니다.`,
-              })
-            }
-          },
-        })
-      }
-      await refreshTravelData(selectedPlanId.value, true)
-      memoryRefreshKey.value += 1
-      setFeedback(`여행 기록 ${submission.batchItems.length}건을 저장했습니다.`)
-      return
-    }
-
     let saved
     if (submission.id) {
       saved = await updateTravelMemory(submission.id, submission.payload)
@@ -2097,7 +2080,7 @@ async function handleSaveMemory(submission) {
     await refreshTravelData(selectedPlanId.value, true)
     memoryRefreshKey.value += 1
   } catch (error) {
-    setFeedback('', error.message)
+    setFeedback('', toImportErrorMessage(error))
   } finally {
     resetMemoryUploadProgress()
     isSubmitting.value = false
@@ -2106,6 +2089,7 @@ async function handleSaveMemory(submission) {
 }
 
 async function handleDeleteMemory(memory) {
+  if (!window.confirm(`“${memory?.title || '이 기록'}” 기록과 첨부 사진을 삭제할까요? 되돌릴 수 없습니다.`)) return
   isSubmitting.value = true
   activeSubmit.value = 'memory-delete'
   setFeedback()
@@ -2148,6 +2132,7 @@ async function handleSaveRoute(payload) {
 }
 
 async function handleDeleteRoute(route) {
+  if (!window.confirm(`“${route?.title || '이 경로'}” 경로를 삭제할까요? 되돌릴 수 없습니다.`)) return
   isSubmitting.value = true
   activeSubmit.value = 'route-delete'
   setFeedback()
@@ -2203,7 +2188,7 @@ async function openPortfolioMemoryEditor(payload) {
             <p>{{ workflowDescription }}</p>
           </div>
           <div class="travel-setup-workflow__header-actions">
-            <span v-if="travelPlan" class="panel__badge">{{ travelPlan.name }}</span>
+            <span v-if="travelPlan && planFormMode !== 'create'" class="panel__badge">{{ travelPlan.name }}</span>
             <button v-if="travelPlans.length" class="button button--ghost" type="button" @click="emit('workflow-close')">종합 보기</button>
           </div>
         </div>
@@ -2301,6 +2286,7 @@ async function openPortfolioMemoryEditor(payload) {
             @save-memory="handleSaveMemory"
             @delete-memory="handleDeleteMemory"
             @delete-media="handleDeleteMedia"
+            @open-import="emit('request-open-import', { planId: selectedPlanId })"
           />
           <div class="entry-editor__actions travel-setup-workflow__stage-actions">
             <button class="button button--ghost" type="button" @click="selectWorkflowStep(1)">여행 정보</button>
@@ -2812,8 +2798,8 @@ async function openPortfolioMemoryEditor(payload) {
           <button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button>
         </div>
       </section>
-      <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />
-      <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
+      <TravelOverviewWorkspace v-if="logTab === 'overview' && !integratedMode" :travel-plan="travelPlan" />
+      <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" @open-import="emit('request-open-import', { planId: selectedPlanId })" />
       <TravelRouteWorkspace v-else :travel-plan="travelPlan" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="routeRefreshKey" :focus-request="externalRouteFocusRequest" @save-route="handleSaveRoute" @delete-route="handleDeleteRoute" />
     </template>
 
@@ -2832,7 +2818,7 @@ async function openPortfolioMemoryEditor(payload) {
         </div>
         <small v-if="integratedPhotoMode" class="field__hint">사진 업로드와 기록 편집은 여행 로그에서 하고, 여기서는 지도와 사진첩 중심으로 다시 모아 봅니다.</small>
       </section>
-      <TravelMemoryPanel v-if="showAlbumUploadTab && albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
+      <TravelMemoryPanel v-if="showAlbumUploadTab && albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" @open-import="emit('request-open-import', { planId: selectedPlanId })" />
       <TravelMyPhotosWorkspace v-else-if="albumTab === 'my-photos'" :portfolio="travelPortfolio" :plans="travelPlans" :is-loading="isLoading || isTravelPortfolioLoading" :focus-request="externalPhotoFocusRequest" @open-memory-editor="openPortfolioMemoryEditor" />
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>
@@ -2894,4 +2880,5 @@ async function openPortfolioMemoryEditor(payload) {
 .travel-setup-workflow__advanced { margin-top: 1rem; border:1px solid var(--line); padding:.75rem; }
 .travel-setup-workflow__advanced summary { cursor:pointer; font-weight:700; }
 .travel-setup-workflow__advanced .travel-form-grid { margin-top:.75rem; }
+.travel-setup-workflow .travel-setup-workflow__stage > .workspace-stack { grid-template-columns: minmax(0, 1fr) !important; min-width: 0; }
 </style>

@@ -27,7 +27,6 @@ Calen은 일상 지출, 여행 기록, 사진, 파일, AI 검수를 하나의 �
 </p>
 
 <p align="center">
-  <img src="docs/portfolio/ai-ocr-review.png" alt="AI OCR 거래 검수" width="48%" />
   <img src="docs/portfolio/travel-map-share.png" alt="여행 공개 지도 공유" width="48%" />
 </p>
 

@@ -10469,45 +10469,62 @@ textarea {
   scrollbar-gutter: stable;
 }
 
+/*
+ * Fixed layout that always fits the panel (the overflow guard below forbids horizontal scroll):
+ * - short columns (select, time, type, amount, actions) keep a fixed px width,
+ * - text columns (category, payment, memo) are percentages so they shrink with the window,
+ * - the title column has no width and receives the remaining space.
+ * Previously every column but the title was fixed px (1,230px with memo), so on a ~1,300px panel
+ * (e.g. RDP at 150% scaling) the title was left with ~40px and wrapped one character per line.
+ *   title = 100% - (44 + 80 + 88 + 128 + 212)px - (12% + 11.5% [+ 12% memo])
+ *         ~ 290px on a 1,300px panel with memo, ~ 450px without memo.
+ */
 .household-sheet-table {
   table-layout: fixed;
-  min-width: 1080px;
 }
 
 .household-sheet-col--select {
-  width: 46px;
+  width: 44px;
 }
 
 .household-sheet-col--time {
-  width: 96px;
+  width: 80px;
 }
 
 .household-sheet-col--type {
-  width: 104px;
+  width: 88px;
 }
 
-.household-sheet-col--title {
-  width: 26%;
-}
+/* .household-sheet-col--title has no width on purpose: it receives the remaining space. */
 
 .household-sheet-col--category {
-  width: 220px;
+  width: 12%;
 }
 
 .household-sheet-col--payment {
-  width: 200px;
+  width: 11.5%;
 }
 
 .household-sheet-col--amount {
-  width: 140px;
+  width: 128px;
 }
 
 .household-sheet-col--memo {
-  width: 220px;
+  width: 12%;
 }
 
 .household-sheet-col--actions {
-  width: 204px;
+  width: 212px;
+}
+
+/*
+ * The overflow guard further down sizes cells by position (th:nth-child(n) { width: … }) for an
+ * older column order; in a fixed-layout table those widths would apply to a column whose <col>
+ * has no width (the title). Let the <colgroup> above decide for this table.
+ */
+.household-sheet-panel .sheet-table.household-sheet-table th:nth-child(n),
+.household-sheet-panel .sheet-table.household-sheet-table td:nth-child(n) {
+  width: auto;
 }
 
 .household-sheet-panel .sheet-table th,
